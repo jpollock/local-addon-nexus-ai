@@ -285,3 +285,29 @@ describe('drill-in facts and lineage (Phase 2)', () => {
       .toContain('exists only on your machine');
   });
 });
+
+describe('round-6 model rulings', () => {
+  test('the banner statement explains its own two counts; the callout excludes capped places', () => {
+    const input = base({
+      graphRows: [
+        wpeRow('wpe-a1', 'auto1', { wpe_site_id: 'pa', account_id: 'acct-auto', wp_version: null, content_indexed_at: null }),
+        wpeRow('wpe-a2', 'auto2', { wpe_site_id: 'pb', account_id: 'acct-auto', wp_version: null, content_indexed_at: null }),
+        wpeRow('wpe-n', 'normie', { wpe_site_id: 'pc', wp_version: null, content_indexed_at: null }), // nothing-rung, NOT capped
+      ],
+      wpeSites: [
+        { id: 'pa', name: 'A', account_id: 'acct-auto' },
+        { id: 'pb', name: 'B', account_id: 'acct-auto' },
+        { id: 'pc', name: 'C', account_id: 'acct-1' },
+      ],
+      wpeAccounts: [{ id: 'acct-auto', name: 'esm', nickname: 'AutoscaleAlpha' }],
+      gatewaylessAccounts: new Map([['acct-auto', 'no SSH gateway']]),
+    });
+    const { header } = buildFleetCollapse(input);
+    expect(header.ceilings).toHaveLength(1);
+    expect(header.ceilings[0].statement)
+      .toBe('AutoscaleAlpha has no SSH gateway, so Nexus cannot index its 2 installs — 2 properties — over SSH.');
+    // The capped nothing-rung places belong to the banner; the callout counts
+    // only the syncable ones.
+    expect(header.neverLookedInside).toBe(1);
+  });
+});

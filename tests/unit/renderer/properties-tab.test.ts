@@ -119,9 +119,11 @@ describe('PropertiesTab', () => {
       rungs: ['basic'],
     });
     const t1 = rendered(collapse([auto]));
-    expect(t1).toContain('· capped');                  // folded into the rung — one fact, one cell
-    expect(t1).not.toContain('cannot go deeper');      // no second chip on the row
-    expect(t1).not.toContain('no SSH gateway');        // the verdict lives in the banner, once
+    // Round-6: the row carries NOTHING of the account's condition — the
+    // banner owns it entirely.
+    expect(t1).not.toContain('capped');
+    expect(t1).not.toContain('cannot go deeper');
+    expect(t1).not.toContain('no SSH gateway');
 
     const t2 = rendered(collapse([property({ collision: true })]));
     expect(t2).toContain('kept separate');
@@ -229,7 +231,8 @@ describe('designer round-2 findings', () => {
       oldest: { state: 'fail', finishedAt: iso(3), reason: 'ssh: connection refused' },
     });
     const t2 = rendered(collapse([theirs]));
-    expect(t2).toContain('failed 3h ago — ssh: connection refused');
+    expect(t2).toContain('failed 3h ago');              // the short cell
+    expect(t2).toContain('ssh: connection refused');    // the detail sub-row
     expect(t2).not.toContain('a Nexus storage error');
   });
 
@@ -269,7 +272,7 @@ describe('designer round-2 findings', () => {
     const t = rendered(collapse([property()]));
     expect(t).not.toContain('most actionable');
     expect(t).not.toContain('register D20');
-    expect(t).toContain('Search every property');
+    expect(t).toContain('Search sites by name or domain');
     expect(t).not.toContain('filters never hide');
   });
 });
@@ -282,14 +285,14 @@ describe('designer round-3 findings', () => {
   });
   const cappedHeader = {
     ceilings: [{ accountId: 'acct-auto', accountName: 'AutoscaleAlpha',
-      statement: 'AutoscaleAlpha has no SSH gateway, so Nexus cannot index its 73 installs over SSH.',
+      statement: 'AutoscaleAlpha has no SSH gateway, so Nexus cannot index its 73 installs — 1 property — over SSH.',
       placeCount: 73, propertyKeys: ['wpe:au'] }],
   };
 
   test('finding 1: the ceiling is ONE verdict with a door — never one alarm per row', () => {
     const t = rendered(collapse([capped(), property()], cappedHeader));
     expect(t.split('has no SSH gateway, so Nexus cannot index').length - 1).toBe(1); // said once
-    expect(t).toContain('Show the 1 properties');
+    expect(t).toContain('— 1 property —');           // the banner explains its own two counts
     expect(t).not.toContain('⛔');
     expect(t).not.toContain('🚫');
   });
@@ -334,8 +337,8 @@ describe('designer round-3 findings', () => {
       oldest: { state: 'fail', finishedAt: iso(6), reason: 'NOT NULL constraint failed: users.username' },
     });
     const t = rendered(collapse([failing]), (inst) => { inst.state.open = { 'wpe:q': true }; });
-    expect(t.split('NOT NULL constraint failed: users.username').length - 1).toBe(1); // once, on the place row
-    expect(t).toContain('record failed 6h ago');                                       // the short group form
+    expect(t.split('NOT NULL constraint failed: users.username').length - 1).toBe(1); // once, on the place sub-row
+    expect(t).toContain('record failed 6h ago');                                       // the short cell form
   });
 
   test('finding 6: no register references reach the screen', () => {
@@ -425,5 +428,57 @@ describe('designer round-5', () => {
     const t = rendered(collapse([property()]));
     expect(t).toContain('Searchable');
     expect(t).not.toContain('cannot go deeper');
+  });
+});
+
+describe('designer round-6', () => {
+  test('the screen has a name and the add door; the subtitle is one separator level', () => {
+    const t = rendered(collapse([property()]));
+    expect(t).toContain('Your sites');
+    expect(t).toContain('1 properties · 1 places');
+    const withDoor = JSON.stringify(serializeTree(
+      new (PropertiesTab as any)(props(collapse([property()]), { onAddSite: jest.fn() })).render()));
+    expect(withDoor).toContain('Add a site');
+  });
+
+  test('the partition note states the arithmetic that makes Where a partition', () => {
+    const t = rendered(collapse([
+      property(),
+      property({ key: 'local:L1', origin: 'local', name: 'solo',
+        places: [place({ rowId: 'L1', source: 'local', kind: 'local' })] }),
+    ]));
+    expect(t).toContain('1 + 1 + 0 = 2');
+    expect(t).toContain('Where');
+  });
+
+  test('a group row shows the host SET, not a count of it', () => {
+    const p = property({
+      key: 'wpe:p2', hasCopy: true,
+      places: [place({ rowId: 'wpe-1' }),
+               place({ rowId: 'L1', kind: 'copy', source: 'local', name: 'ben', address: '~/ben' })],
+    });
+    const t = rendered(collapse([p]));
+    expect(t).toContain('WP Engine · your machine');
+    expect(t).toContain('2 places incl. your copy');
+  });
+
+  test('search matches by domain too — the placeholder states the real boundary', () => {
+    const t = rendered(collapse([
+      property({ name: 'findme-not' }),
+      property({ key: 'wpe:p2', name: 'other', places: [place({ rowId: 'wpe-2', address: 'special-domain.com', domain: 'special-domain.com' })] }),
+    ]), (inst) => { inst.state.query = 'special-domain'; });
+    expect(t).toContain('other');
+    expect(t).not.toContain('findme-not');
+  });
+
+  test('the failure detail never repeats the short form, and never crosses a track', () => {
+    const failing = property({
+      oldest: { state: 'fail', finishedAt: iso(7), reason: 'ssh: connection refused' },
+    });
+    const t = rendered(collapse([failing]));
+    // short form once (the cell), detail once (the sub-row), no combined sentence
+    expect(t.split('failed 7h ago').length - 1).toBe(1);
+    expect(t.split('ssh: connection refused').length - 1).toBe(1);
+    expect(t).not.toContain('failed 7h ago — ssh');
   });
 });

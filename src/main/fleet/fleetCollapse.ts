@@ -443,7 +443,8 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
     const who = v.accountName ?? v.accountId;
     v.statement =
       `${who} has no SSH gateway, so Nexus cannot index its ` +
-      `${v.placeCount} install${v.placeCount === 1 ? '' : 's'} over SSH.`;
+      `${v.placeCount} install${v.placeCount === 1 ? '' : 's'} — ` +
+      `${v.propertyKeys.length} propert${v.propertyKeys.length === 1 ? 'y' : 'ies'} — over SSH.`;
   }
 
   return {
@@ -452,7 +453,10 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
       total: properties.length,
       byOrigin,
       placesTotal: allPlaces.length,
-      neverLookedInside: allPlaces.filter((pl) => pl.knowledge === 'nothing').length,
+      // Capped places are excluded: the callout is a door to syncing, and a
+      // capped place cannot be synced — it belongs to the banner's verdict.
+      // This also kills the two-adjacent-73s confusion (round-6).
+      neverLookedInside: allPlaces.filter((pl) => pl.knowledge === 'nothing' && pl.ceiling === null).length,
       onThisMachine: properties.filter((p) => p.origin === 'local' || p.hasCopy).length,
       ceilings: [...ceilingsByAccount.values()].sort((a, b) => b.placeCount - a.placeCount),
     },

@@ -33,6 +33,8 @@ interface PropertiesTabProps {
   failed: boolean;
   collapse: FleetCollapse | null;
   onRetry: () => void;
+  /** Door to adding a site (external host wizard in Settings). Optional. */
+  onAddSite?: () => void;
 }
 
 interface PropertiesTabState {
@@ -69,20 +71,29 @@ const SORT_LABELS: Record<SortBy, string> = {
   checked: 'oldest check first',
 };
 
-/** One column geometry, shared by the head row, group rows and place rows. */
-const GRID = '22px minmax(160px, 1.4fr) minmax(200px, 1.6fr) minmax(170px, 1.2fr) minmax(180px, 1.3fr)';
-const gridRow: React.CSSProperties = { display: 'grid', gridTemplateColumns: GRID, gap: 12, alignItems: 'baseline' };
+/**
+ * ONE column geometry — head row, group rows and place rows all use exactly
+ * this, with no per-row horizontal padding (round-6 break 3: an extra 12px
+ * inside the wrapper shifted every child track). Place rows indent inside
+ * the Site cell only. Widths are the sheet's: Site 300 / Where 290 /
+ * Knows 160 / Checked flex.
+ */
+const GRID = '22px 300px 290px 160px minmax(150px, 1fr)';
+const gridRow: React.CSSProperties = { display: 'grid', gridTemplateColumns: GRID, gap: 12, alignItems: 'flex-start' };
+const ellipsis: React.CSSProperties = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
 
 const mono: React.CSSProperties = { fontFamily: 'monospace', fontSize: 11, color: 'var(--nxai-card-sub)' };
 
 /**
- * The knows cell — plain text like Checked (round-5: depth and freshness are
- * facts of equal standing), with the ceiling folded into the rung as one
- * fact: `Never looked inside · capped`. The ACCOUNT's condition lives in the
- * banner; the row carries only this fold.
+ * The failure detail, WITHOUT the short form the Checked cell already
+ * carries (round-6 break 2): only the blame clause and the transport's own
+ * words live here.
  */
-function knowsText(rungLabel: string, capped: boolean): string {
-  return capped ? `${rungLabel} · capped` : rungLabel;
+function failDetail(c: CheckedView): string {
+  const detail = c.reason ?? 'no reason recorded';
+  return reasonBlame(c.reason) === 'nexus'
+    ? `a Nexus storage error, not the site: ${detail}`
+    : detail;
 }
 
 
@@ -170,7 +181,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       },
         h('span', { style: { minWidth: 110, color: 'var(--nxai-card-text)', fontWeight: 600 } }, pl.kind),
         h('span', { style: { ...mono, minWidth: 200 } }, pl.address ?? ''),
-        h('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } }, knowsText(KNOWLEDGE_LABELS[pl.knowledge], pl.ceiling !== null)),
+        h('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } }, KNOWLEDGE_LABELS[pl.knowledge]),
         h('span', { style: { fontSize: 12, color: pl.checked.state === 'fail' ? 'var(--nxai-danger-text)' : 'var(--nxai-card-sub)' } },
           checkedText(pl.checked, false)),
       );
@@ -199,7 +210,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
               h('span', { style: { fontWeight: 400, color: 'var(--nxai-card-sub)', marginLeft: 8 } }, copy.name)),
             copy.address ? h('div', { style: { ...mono, margin: '2px 0 8px' } }, copy.address) : null,
             h('div', { style: { marginBottom: 8, fontSize: 12, color: 'var(--nxai-card-sub)' } },
-              `${knowsText(KNOWLEDGE_LABELS[copy.knowledge], copy.ceiling !== null)} · ${checkedText(copy.checked, false)}`),
+              `${KNOWLEDGE_LABELS[copy.knowledge]} · ${checkedText(copy.checked, false)}`),
             ...p.lineage.map((line, i) =>
               h('p', { key: i, style: { margin: '0 0 4px', fontSize: 13, color: 'var(--nxai-card-text)' } }, line)),
           )
@@ -310,28 +321,34 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
   };
 
   private renderPlace(p: PropertyView, pl: PlaceView): React.ReactNode {
-    return h('div', {
+    const row = h('div', {
       key: pl.rowId,
       onClick: () => this.setState({ view: { screen: 'place', key: p.key, rowId: pl.rowId } }),
-      style: { ...gridRow, padding: '4px 12px', fontSize: 12, color: 'var(--nxai-card-sub)', cursor: 'pointer' },
+      style: { ...gridRow, padding: '4px 0', fontSize: 12, color: 'var(--nxai-card-sub)', cursor: 'pointer' },
     },
       h('span', null, ''),
-      h('span', { style: { paddingLeft: 14, color: 'var(--nxai-card-text)' } },
+      // The indent lives INSIDE the Site cell — the tracks never move.
+      h('span', { style: { ...ellipsis, paddingLeft: 14, color: 'var(--nxai-card-text)' } },
         pl.kind === 'copy' ? 'your copy' : pl.kind,
         h('span', { style: { color: 'var(--nxai-card-sub)', marginLeft: 8 } }, pl.name)),
-      h('span', { style: mono }, pl.address ?? '—'),
-      h('span', null, knowsText(KNOWLEDGE_LABELS[pl.knowledge], pl.ceiling !== null)),
+      h('span', null,
+        h('div', { style: { ...mono, ...ellipsis } }, pl.address ?? '—')),
+      h('span', null, KNOWLEDGE_LABELS[pl.knowledge]),
       pl.knowledge === 'nothing'
         ? h('span', null, '') // the rung already says it — one sentence per state
         : h('span', {
             style: pl.checked.state === 'fail' ? { color: 'var(--nxai-danger-text)' } : undefined,
-            // The cell stays short; the full sentence gets its own line below.
           }, checkedText(pl.checked, false, true)),
-      pl.checked.state === 'fail' && pl.checked.reason
-        ? h('span', { style: { gridColumn: '2 / -1', fontSize: 12, color: 'var(--nxai-danger-text)' } },
-            checkedText(pl.checked, false))
-        : null,
     );
+    // The detail is a SUB-ROW beneath the grid, inset to the Site cell — it
+    // never crosses a track, and it never repeats the cell's short form.
+    const detail = pl.checked.state === 'fail' && pl.checked.reason
+      ? h('div', {
+          key: `${pl.rowId}-detail`,
+          style: { paddingLeft: 34, fontSize: 12, color: 'var(--nxai-danger-text)' },
+        }, failDetail(pl.checked))
+      : null;
+    return h(React.Fragment, { key: pl.rowId }, row, detail);
   }
 
   private renderProperty(p: PropertyView, outsideFilter: boolean): React.ReactNode {
@@ -344,59 +361,56 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
 
     const sourceWord = (pl: PlaceView): string =>
       pl.source === 'local' ? 'your machine' : pl.source === 'wpe' ? 'WP Engine' : 'your server';
+    // The set, not a count of it: the distinct hosts, in place order.
+    const hostSet = [...new Set(p.places.map(sourceWord))].join(' · ');
 
     const headline = h('div', { style: gridRow },
       h('span', {
         style: { color: 'var(--nxai-card-sub)', fontSize: 11, cursor: multi ? 'pointer' : 'default' },
         onClick: multi ? () => this.toggleOpen(p.key) : undefined,
       }, multi ? (open ? '▾' : '▸') : ''),
-      // The name is the door: a multi-place property opens its screen; a
-      // single-place row goes straight to its one place.
       h('span', {
-        style: { fontWeight: 600, color: 'var(--nxai-card-text)', cursor: 'pointer' },
+        style: { ...ellipsis, fontWeight: 600, color: 'var(--nxai-card-text)', cursor: 'pointer' },
         onClick: () =>
           this.setState({
             view: multi
               ? { screen: 'property', key: p.key }
               : { screen: 'place', key: p.key, rowId: p.places[0].rowId },
           }),
+        title: p.name,
       }, p.name),
-      // Where it lives: the concrete address in mono for a single place; the
-      // shape of the set for a group.
-      p.places.length === 1
-        ? h('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } },
-            // "local · your machine · <path>" was three spellings of one fact —
-            // for a local-only site the machine IS the kind (round-5 pushback).
-            p.places[0].kind === 'local'
-              ? 'your machine '
-              : `${p.places[0].kind === 'copy' ? 'your copy' : p.places[0].kind} · ${sourceWord(p.places[0])} `,
-            h('span', { style: mono }, p.places[0].address ?? ''))
-        : h('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } },
-            `${p.places.length} places${p.hasCopy ? ' incl. your copy' : ''}`),
+      // Where it lives: address stacked over host (the sheet's shape). A
+      // group shows the HOST SET — a set may be rendered, a count hides it.
+      h('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub)' } },
+        p.places.length === 1
+          ? h(React.Fragment, null,
+              h('div', { style: { ...mono, ...ellipsis } }, p.places[0].address ?? ''),
+              h('div', null, p.places[0].kind === 'local' ? 'your machine' : `${p.places[0].kind === 'copy' ? 'your copy' : p.places[0].kind} · ${sourceWord(p.places[0])}`))
+          : h(React.Fragment, null,
+              h('div', null, hostSet),
+              h('div', null, `${p.places.length} places${p.hasCopy ? ' incl. your copy' : ''}`))),
       h('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } },
-        knowsText(p.rungs.map((r) => KNOWLEDGE_LABELS[r]).join(' / '), p.places.some((pl) => pl.ceiling))),
+        p.rungs.map((r) => KNOWLEDGE_LABELS[r]).join(' / ')),
       p.rungs.includes('nothing') && p.oldest.state === 'never'
-        ? h('span', null, '') // the rung already says it
+        ? h('span', null, '')
         : h('span', {
             style: {
               fontSize: 12,
               color: p.oldest.state === 'fail' ? 'var(--nxai-danger-text)' : 'var(--nxai-card-sub)',
             },
-            // The cell is always the short form — a 95-character sentence is
-            // longer than the column. The full reason renders once, on its
-            // own line: under the group when closed, under the failing place
-            // row when open.
           }, checkedText(p.oldest, multi && p.oldest.state !== 'fail' && p.oldest.state !== 'never', true)),
     );
 
     return h('div', {
       key: p.key,
-      style: { padding: '8px 12px', borderBottom: '1px solid var(--nxai-card-border)' },
+      style: { padding: '6px 12px', borderBottom: '1px solid var(--nxai-card-border)' },
     },
       headline,
+      // The full failure sentence renders ONCE: here when the group is
+      // closed, on the failing place's sub-row when it is open.
       !(multi && open) && p.oldest.state === 'fail' && p.oldest.reason
-        ? h('div', { style: { fontSize: 12, color: 'var(--nxai-danger-text)', paddingLeft: 34 } },
-            checkedText(p.oldest, false))
+        ? h('div', { style: { paddingLeft: 34, fontSize: 12, color: 'var(--nxai-danger-text)' } },
+            failDetail(p.oldest))
         : null,
       flags.length
         ? h('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', paddingLeft: 34 } }, flags.join(' · '))
@@ -417,8 +431,6 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       return h('div', { style: { padding: 24, color: 'var(--nxai-card-sub)' } }, 'Reading the fleet…');
     }
 
-    // Drill-ins: a stale key (fleet refreshed underneath) falls back to the
-    // list rather than rendering a ghost.
     if (this.state.view) {
       const prop = collapse.properties.find((pp) => pp.key === (this.state.view as { key: string }).key);
       if (prop && this.state.view.screen === 'property') return this.renderPropertyScreen(prop);
@@ -435,17 +447,16 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
     const inView: Array<{ p: PropertyView; outside: boolean }> = [];
     for (const p of collapse.properties) {
       const matchesQ =
-        !q || p.name.toLowerCase().includes(q) || p.places.some((pl) => pl.name.toLowerCase().includes(q));
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        p.places.some((pl) => pl.name.toLowerCase().includes(q) || (pl.address ?? '').toLowerCase().includes(q));
       if (!matchesQ) continue;
       const inCeiling = !this.state.ceilingAccount ||
         (p.accountId === this.state.ceilingAccount && p.places.some((pl) => pl.ceiling !== null));
       const inFilter = inCeiling && (origin === 'all' || p.origin === origin) && matchesState(p, state);
-      // Search never hides a hit: filters hide only when not searching.
       if (!inFilter && !q) continue;
       inView.push({ p, outside: !inFilter });
     }
-    // The default order is consequence-ranked; the heads switch it, and the
-    // labelled sort control states whichever is active.
     const rank = (p: PropertyView): number =>
       p.oldest.state === 'fail' ? 0 : p.rungs.includes('nothing') ? 1 : 2;
     const checkedKey = (p: PropertyView): string => p.oldest.finishedAt ?? '';
@@ -455,25 +466,25 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       return rank(a.p) - rank(b.p) || a.p.name.localeCompare(b.p.name);
     });
 
-    // SegmentedControl body: a recessed grey track, items lift when active.
+    // SegmentedControl: the recessed ground is what makes the white active
+    // item read as selected (round-6 break 5).
     const segTrack: React.CSSProperties = {
       display: 'inline-flex', gap: 1, padding: 2, borderRadius: 8,
-      background: 'var(--nxai-score-bg)',
+      background: 'var(--nxai-track-bg)',
     };
     const segItem = (active: boolean): React.CSSProperties => ({
       padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
       background: active ? 'var(--nxai-card-bg)' : 'transparent',
-      border: 'none',
-      boxShadow: active ? '0 1px 2px rgba(0,0,0,0.12)' : 'none',
+      boxShadow: active ? '0 1px 2px rgba(0,0,0,0.15)' : 'none',
       color: active ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
       fontWeight: active ? 600 : 400,
     });
-    // Button size=sm: primary when on, outline when off — a predicate, not a segment.
+    // Button size=sm: 6px radius, primary is ACTION blue — selection is not brand.
     const stateBtn = (active: boolean): React.CSSProperties => ({
-      padding: '4px 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12,
-      border: `1px solid ${active ? 'var(--nxai-accent)' : 'var(--nxai-card-border)'}`,
-      background: active ? 'var(--nxai-accent)' : 'var(--nxai-card-bg)',
-      color: active ? 'var(--nxai-accent-text)' : 'var(--nxai-card-text)',
+      padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+      border: `1px solid ${active ? 'var(--nxai-action)' : 'var(--nxai-card-border)'}`,
+      background: active ? 'var(--nxai-action)' : 'var(--nxai-card-bg)',
+      color: active ? 'var(--nxai-action-text)' : 'var(--nxai-card-text)',
     });
     const notice: React.CSSProperties = {
       margin: '0 12px 10px', padding: '8px 12px', fontSize: 13, borderRadius: 6,
@@ -484,28 +495,38 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       h('span', {
         key: label,
         onClick: by ? () => this.setState({ sortBy: by }) : undefined,
+        title: by ? 'Sort by this column' : undefined,
         style: {
           fontSize: 11, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase' as const,
           color: by && sortBy === by ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
           cursor: by ? 'pointer' : 'default',
-          textDecoration: by && sortBy === by ? 'underline' : 'none',
+          borderBottom: by ? (sortBy === by ? '2px solid var(--nxai-action)' : '1px dotted var(--nxai-card-sub)') : 'none',
+          paddingBottom: 1, width: 'fit-content',
         },
       }, label);
 
     return h('div', null,
-      // Header: every figure from the same derived header block.
-      h('div', { style: { padding: '4px 12px 10px', color: 'var(--nxai-card-sub)', fontSize: 13 } },
-        `${header.total} properties · ${header.placesTotal} places · ` +
-        `${header.byOrigin.local} only on your machine, ${header.byOrigin.wpe} WP Engine, ${header.byOrigin.external} external · ` +
-        `${header.onThisMachine} live on this machine`,
+      // The screen has a name, and the one action that adds to it.
+      h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 12, padding: '2px 12px 2px' } },
+        h('div', { style: { fontSize: 17, fontWeight: 700, color: 'var(--nxai-card-text)' } }, 'Your sites'),
+        this.props.onAddSite
+          ? h('span', {
+              onClick: this.props.onAddSite,
+              style: { marginLeft: 'auto', fontSize: 12, cursor: 'pointer', color: 'var(--nxai-accent)', fontWeight: 600 },
+            }, 'Add a site')
+          : null,
       ),
+      h('div', { style: { padding: '0 12px 2px', color: 'var(--nxai-card-sub)', fontSize: 13 } },
+        `${header.total} properties · ${header.placesTotal} places · ${header.onThisMachine} live on your machine`),
+      h('div', { style: { padding: '0 12px 10px', color: 'var(--nxai-card-sub)', fontSize: 11 } },
+        'Per-site “needs you” counts arrive when situations can be tied to a site; until then the list order carries it.'),
       ...header.ceilings.map((v) =>
         h('div', { key: `ceil-${v.accountId}`, style: notice },
           v.statement, ' ',
           h('a', {
             style: { cursor: 'pointer', color: 'var(--nxai-accent)' },
             onClick: () => this.setState({ ceilingAccount: v.accountId, origin: 'all', state: 'all', query: '' }),
-          }, `Show the ${v.propertyKeys.length} properties`),
+          }, 'Show them'),
         ),
       ),
       header.neverLookedInside > 0
@@ -518,9 +539,8 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
             }, 'Show them'),
           )
         : null,
-      // Where (an origin PARTITION — a segmented control on a recessed track)
-      // + state predicates (buttons) + the labelled sort + search.
-      h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: '0 12px 10px' } },
+      h('div', { style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: '0 12px 10px' } },
+        h('span', { style: { fontSize: 11, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub)' } }, 'Where'),
         h('span', { style: segTrack },
           ...ORIGIN_LABELS.map((o) =>
             h('span', {
@@ -529,6 +549,9 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
             }, o.key === 'all' ? `${o.label} ${header.total}` : `${o.label} ${header.byOrigin[o.key as 'local' | 'wpe' | 'external']}`),
           ),
         ),
+        // The partition note: the fact that makes it a partition.
+        h('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub)' } },
+          `${header.byOrigin.local} + ${header.byOrigin.wpe} + ${header.byOrigin.external} = ${header.total}`),
         ...STATE_LABELS.map((sl) =>
           h('span', {
             key: `s-${sl.key}`, style: stateBtn(state === sl.key),
@@ -555,7 +578,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
             h('line', { x1: 15.5, y1: 15.5, x2: 21, y2: 21, stroke: 'var(--nxai-card-sub)', strokeWidth: 2 }),
           ),
           h('input', {
-            placeholder: 'Search every property',
+            placeholder: 'Search sites by name or domain',
             value: query,
             onChange: (e: React.ChangeEvent<HTMLInputElement>) => this.setState({ query: e.target.value }),
             style: {
@@ -567,7 +590,6 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
         ),
       ),
       h('div', { style: { border: '1px solid var(--nxai-card-border)', borderRadius: 8, margin: '0 12px' } },
-        // The head row — the same grid as every row beneath it.
         h('div', { style: { ...gridRow, padding: '8px 12px', borderBottom: '1px solid var(--nxai-card-border)' } },
           h('span', null, ''),
           headCell('Site', 'name'),
@@ -581,9 +603,6 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
                 ? 'Nothing matches. The search covered every property, so if it is not here, Nexus has no row for it.'
                 : 'Nothing in this view.')
           : inView.map(({ p, outside }, i) => {
-              // Round-5: the hoist is labelled, so three rows above an A–Z
-              // block read as a decision, not a bug. Dividers only in the
-              // default order, and only when both groups exist.
               const divider =
                 sortBy === 'consequence' && i > 0 && rank(inView[i - 1].p) < 2 && rank(p) === 2
                   ? h('div', {

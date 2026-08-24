@@ -1284,6 +1284,9 @@ renderTabBar(): React.ReactNode {
               failed: this.state.collapseFailed,
               collapse: this.state.collapse,
               onRetry: () => { void this.fetchCollapse(); },
+              // "Add a site" doors to Settings, where the external-host wizard
+              // and the WPE connection both live.
+              onAddSite: () => this.setState({ activeTab: 'settings' }),
             })
           : React.createElement(SitesTab, {
         loaded: this.state.siteRowsLoaded,
