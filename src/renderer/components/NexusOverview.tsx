@@ -36,10 +36,9 @@ import { RunPill } from './agents/RunPill';
 import { RunDrawer } from './agents/RunDrawer';
 import { CredentialConsentModal } from './credentials/CredentialConsentModal';
 import { cardContainerStyle, cardStyle, cardTitleStyle, renderSectionLabel } from './tabs/shared/cards';
-import { SitesTab, BULK_CONFIRM_THRESHOLD, type BulkJobView } from './tabs/SitesTab';
+import { BULK_CONFIRM_THRESHOLD, type BulkJobView } from './tabs/SitesTab';
 import { PropertiesTab } from './tabs/PropertiesTab';
 import type { FleetCollapse } from '../../main/fleet/fleetCollapse';
-import { FleetTab } from './tabs/FleetTab';
 // Types only — a value import would pull main-process code into the renderer
 // bundle. Precedent: credentials/ConnectionsPanel.tsx:3.
 import type { SiteRow } from '../../main/fleet/siteRows';
@@ -140,7 +139,6 @@ const TABS = [
   // the owner rules on it. It stays a strip entry until then, because the
   // alternative is content nobody can reach — which the collapse's own third
   // rider forbids outright.
-  { key: 'fleet',      label: 'Fleet' },
   // XD-27 names the strip Sites / Record / Settings. Record is the surface that
   // already exists: the fleet's own event history, which is where a FINISHED run
   // belongs and where the finished-run door lands. The tab is renamed, not
@@ -1019,6 +1017,23 @@ renderTabBar(): React.ReactNode {
    * empty selection must never be re-interpreted as "the whole fleet", and this
    * is the last place that could happen before 369 sites are dispatched.
    */
+  renderPropertiesTab(): React.ReactNode {
+    return React.createElement(PropertiesTab, {
+      loaded: this.state.collapseLoaded,
+      failed: this.state.collapseFailed,
+      collapse: this.state.collapse,
+      onRetry: () => { void this.fetchCollapse(); },
+      onAddSite: () => this.setState({ activeTab: 'settings' }),
+      onBulkIndex: (ids: string[], names: Record<string, string>, autoStart: boolean) => {
+        void this.handleSiteBulk('index', ids, { siteNames: names, autoStartStop: autoStart, skipConfirm: true });
+      },
+      job: this.state.bulkJob,
+      onCancelJob: this.cancelBulkJob,
+      onDismissJob: this.dismissBulkJob,
+      onOpenNow: () => this.setState({ activeTab: 'now' }),
+    });
+  }
+
   handleSiteBulk = async (
     type: string,
     siteIds: string[],
@@ -1248,13 +1263,6 @@ renderTabBar(): React.ReactNode {
                 });
             },
           });
-      case 'fleet': return React.createElement(FleetTab, {
-        loaded: this.state.fleetLoaded,
-        failed: this.state.fleetFailed,
-        groups: this.state.fleetGroups,
-        unresolved: this.state.fleetUnresolved,
-        onRetry: () => { void this.fetchAll(); },
-      });
       // Progress readouts sit BELOW the table rather than inside SitesTab, so
       // the tab component stays a pure function of its props.
       //
@@ -1265,74 +1273,14 @@ renderTabBar(): React.ReactNode {
       // runs on mount and fills `wpeSyncProgress` for a sync the scheduler
       // started, so dropping it would hide background syncs entirely.
       case 'sites': return React.createElement('div', null,
-        // View toggle: install grain (SitesTab, unchanged) vs the property
-        // collapse (plan 2026-08-24 Phase 2). Enrich, don't replace — SitesTab
-        // is retired by a packet, never by this toggle.
-        React.createElement('div', { style: { display: 'flex', gap: 6, padding: '0 12px 8px' } },
-          ...([['installs', 'Installs'], ['properties', 'Properties']] as const).map(([key, label]) =>
-            React.createElement('span', {
-              key,
-              onClick: () => {
-                this.setState({ sitesView: key });
-                if (key === 'properties' && !this.state.collapseLoaded) void this.fetchCollapse();
-              },
-              style: {
-                cursor: 'pointer', fontSize: 12, padding: '3px 10px', borderRadius: 6,
-                border: '1px solid var(--nxai-card-border)',
-                background: this.state.sitesView === key ? 'var(--nxai-accent)' : 'var(--nxai-card-bg)',
-                color: this.state.sitesView === key ? 'var(--nxai-accent-text)' : 'var(--nxai-card-text)',
-              },
-            }, label),
-          ),
-        ),
-        this.state.sitesView === 'properties'
-          ? React.createElement(PropertiesTab, {
-              loaded: this.state.collapseLoaded,
-              failed: this.state.collapseFailed,
-              collapse: this.state.collapse,
-              onRetry: () => { void this.fetchCollapse(); },
-              // "Add a site" doors to Settings, where the external-host wizard
-              // and the WPE connection both live.
-              onAddSite: () => this.setState({ activeTab: 'settings' }),
-              // Sheet 18: filter-as-selector resolves to an id list and hands
-              // it to the SAME audited bulk path as everything else.
-              onBulkIndex: (ids: string[], names: Record<string, string>, autoStart: boolean) => {
-                void this.handleSiteBulk('index', ids, { siteNames: names, autoStartStop: autoStart, skipConfirm: true });
-              },
-              job: this.state.bulkJob,
-              onCancelJob: this.cancelBulkJob,
-              onDismissJob: this.dismissBulkJob,
-              onOpenNow: () => this.setState({ activeTab: 'now' }),
-            })
-          : React.createElement(SitesTab, {
-        loaded: this.state.siteRowsLoaded,
-        failed: this.state.siteRowsFailed,
-        rows: this.state.siteRows,
-        total: this.state.siteRowsTotal,
-        selected: this.state.selectedSiteIds,
-        onToggle: this.toggleSiteSelection,
-        onToggleAll: this.toggleAllSiteSelection,
-        onBulk: (type: string, ids: string[]) => { void this.handleSiteBulk(type, ids); },
-        // One site, through the same audited bulk path as everything else —
-        // not `nexus host index <alias>`, which fans out over the connection.
-        onIndexHost: (siteId: string) => { void this.handleSiteBulk('reindex', [siteId]); },
-        onRetry: () => { void this.fetchAll(); },
-        job: this.state.bulkJob,
-        onCancelJob: this.cancelBulkJob,
-        onDismissJob: this.dismissBulkJob,
-        onSelectFailed: (ids: string[]) => this.setState({ selectedSiteIds: ids, bulkJob: null }),
-        }),
-        // Finding 4: bulk machinery belongs to the installs view — on the
-        // property screens it was the largest object saying nothing.
-        ...(this.state.sitesView === 'installs'
-          ? [
-              this.renderWpeSyncProgress(),
-              React.createElement(BulkOperationsPanel, {
-                electron: this.props.electron,
-                siteNames: new Map(Object.values(this.state.sites || {}).map((s: any) => [s.id, s.name])),
-              }),
-            ]
-          : []),
+        // Round-7 item 7: the collapse happened. Properties IS the sites
+        // list — the unit is the product's decision, not a toggle. SitesTab
+        // and FleetTab are retired by this packet (files kept; the bulk
+        // contract lives on in PropertiesTab's own scope block).
+        this.renderPropertiesTab(),
+        // Background syncs the scheduler started stay visible; renders null
+        // when idle, so it is never an empty panel (round-3 finding 4).
+        this.renderWpeSyncProgress(),
       );
       case 'record': return this.renderRecordTab();
       case 'settings': return React.createElement(SettingsTab, {
@@ -1347,18 +1295,7 @@ renderTabBar(): React.ReactNode {
       });
       // 'agents' case handled in render() directly (no stats dependency)
       // Sites is the landing tab; fallback points there to handle any stale/in-flight 'overview' value
-      default: return React.createElement(SitesTab, {
-        loaded: this.state.siteRowsLoaded,
-        failed: this.state.siteRowsFailed,
-        rows: this.state.siteRows,
-        total: this.state.siteRowsTotal,
-        selected: this.state.selectedSiteIds,
-        onToggle: this.toggleSiteSelection,
-        onToggleAll: this.toggleAllSiteSelection,
-        onBulk: (type: string, ids: string[]) => { void this.handleSiteBulk(type, ids); },
-        onIndexHost: (siteId: string) => { void this.handleSiteBulk('reindex', [siteId]); },
-        onRetry: () => { void this.fetchAll(); },
-      });
+      default: return this.renderPropertiesTab();
     }
   }
 

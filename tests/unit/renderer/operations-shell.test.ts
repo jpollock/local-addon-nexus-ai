@@ -11,6 +11,7 @@ import { NexusOverview } from '../../../src/renderer/components/NexusOverview';
 import { BulkOperationsPanel } from '../../../src/renderer/components/BulkOperationsPanel';
 import { IPC_CHANNELS } from '../../../src/common/constants';
 import { handlerExistsFor } from './helpers/ipcContracts';
+import { serializeTree } from './helpers/serializeTree';
 
 const read = (p: string) =>
   fs.readFileSync(path.join(__dirname, '../../../src/renderer/components', p), 'utf8');
@@ -82,24 +83,34 @@ test('Operations is gone from the dashboard', () => {
 });
 
 test('bulk progress survived the move', () => {
-  // BulkOperationsPanel is the ONLY progress readout for BULK_EXECUTE, which
-  // the Sites table's bulk bar dispatches. Deleting it with the tab would
-  // leave every bulk action running blind.
-  //
-  // Assert on the RENDERED TREE, not on the source text: `toContain(
-  // 'BulkOperationsPanel')` was satisfied by the explanatory comment at
-  // NexusOverview.tsx:924, so deleting the call site kept it green. Its
-  // non-negotiable sibling below got a real render assertion; this one did not.
+  // THE PIN'S SUBJECT IS THE MACHINERY SURVIVING, REACHABLE — a bulk action
+  // must never run blind. Round-7 item 7 retired the Installs view; the
+  // progress readout now lives in PropertiesTab's own job board, fed by the
+  // same bulkJob state BULK_EXECUTE drives. Assert on the RENDERED TREE with
+  // a live job, exactly as the original pin demanded.
   const shell = new NexusOverview({ NavLink: () => null, electron: mockElectron });
   shell.state.activeTab = 'sites';
-  // Round-2 finding 4 (2026-08-24): bulk machinery belongs to the installs
-  // view — on the property screens it was an empty panel. The pin's subject
-  // (the machinery SURVIVES, reachable) now lives behind the view toggle.
-  shell.state.sitesView = 'installs';
   shell.state.stats = { localSites: { total: 0, running: 0, halted: 0 } } as any;
   shell.state.loading = false;
+  shell.state.collapseLoaded = true;
+  shell.state.collapse = {
+    properties: [],
+    header: { total: 0, byOrigin: { local: 0, wpe: 0, external: 0 }, placesTotal: 0, neverLookedInside: 0, onThisMachine: 0, ceilings: [], needsYou: null },
+  } as any;
+  shell.state.bulkJob = {
+    phase: 'running', type: 'index', siteIds: ['a'], startedAt: 1,
+    completed: 1, total: 3, failed: 0, failedIds: [],
+  } as any;
 
-  expect(containsComponent(shell.renderActiveTab(), BulkOperationsPanel)).toBe(true);
+  // serializeTree stops at component boundaries (its own docblock), so render
+  // the PropertiesTab element the shell produced — the same wiring, executed.
+  const el: any = shell.renderActiveTab();
+  const propsEl = (Array.isArray(el.props.children) ? el.props.children : [el.props.children])
+    .find((c: any) => c && typeof c.type === 'function' && (c.type.name === 'PropertiesTab'));
+  expect(propsEl).toBeTruthy();
+  const rendered = JSON.stringify(serializeTree(new propsEl.type(propsEl.props).render()));
+  expect(rendered).toContain('1 of 3 places');   // the job board, rendering the live job
+  expect(rendered).toContain('Stop');            // and its stop — never running blind
 });
 
 test('WPE sync progress survived — the scheduler drives it, not a button', () => {

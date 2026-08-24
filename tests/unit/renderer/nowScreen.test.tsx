@@ -304,7 +304,9 @@ describe('XD-27 AMENDED · the addon opens on Now, and Now is the FIRST TAB', ()
     expect(keys).toContain('sites');
     expect(keys).toContain('settings');
     // The interim strip, pending item 6's Fleet/Agents fold.
-    expect(keys).toEqual(['now', 'sites', 'fleet', 'record', 'agents', 'settings']);
+    // Round-7 item 7 (2026-08-24): the Fleet tab retired with the collapse —
+    // its unit was the install list's, and Properties IS the sites list now.
+    expect(keys).toEqual(['now', 'sites', 'record', 'agents', 'settings']);
   });
 
   test('SELECTED ON ARRIVAL · the Now entry carries the active underline before anything is clicked', () => {
@@ -341,7 +343,7 @@ describe('XD-27 AMENDED · the addon opens on Now, and Now is the FIRST TAB', ()
     // …and it is a rule, not a destination: a `tab-*` scan must not count it,
     // or "the strip is six entries" becomes seven and nobody notices.
     expect(stripKeys()).not.toContain('divider-now');
-    expect(stripKeys()).toHaveLength(6);
+    expect(stripKeys()).toHaveLength(5);  // round-7 item 7: Fleet retired with the collapse
   });
 
   test('THE MARK · the title still returns to Now the way a logo does (unamended)', () => {
