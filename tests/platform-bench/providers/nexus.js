@@ -22,6 +22,7 @@ module.exports = class NexusProvider {
       'claude',
       '--model', MODEL,
       '--mcp-config', MCP_CONFIG,
+      '--strict-mcp-config',
       '--dangerously-skip-permissions',
       '-p', `'${escaped}'`,
     ].join(' ');

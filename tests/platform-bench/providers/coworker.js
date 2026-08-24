@@ -69,6 +69,7 @@ module.exports = class CoworkerProvider {
       'claude',
       '--model', MODEL,
       '--mcp-config', configPath,
+      '--strict-mcp-config',
       '--dangerously-skip-permissions',
       '-p', `'${escaped}'`,
     ].join(' ');
