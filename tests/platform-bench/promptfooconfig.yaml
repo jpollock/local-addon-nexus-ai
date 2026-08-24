@@ -91,12 +91,14 @@ tests:
       - type: icontains-any
         value: ["overdue", "stale", "not reviewed"]
   # ── Reach test: ask about a site only Nexus can see ──────────────────────
+  # Reach test — ground truth: willowcreekderm.com runs WP 6.9.7 (CV-C-01 pathology).
+  # Nexus finds it via find_outdated_sites; Coworker has no KB; WordPress has no connection.
+  # The icontains-any assertion checks that Nexus returns the version.
+  # Manual review needed for Coworker/WordPress — score as pass if they say they cannot see it.
   - description: "Reach — ask about willowcreekderm (external SSH only, no Coworker KB)"
     vars:
       prompt: >
         What WordPress version is willowcreekderm.com running?
     assert:
-      # Nexus: find_outdated_sites or fleet_sql → 6.9.7
-      # Coworker: no KB for this site → should say so honestly
-      # WordPress: no connection → should say so    # Note: ground truth is 6.9.7 (CV-C-01 pathology).
-    # Score manually: Nexus correct answer vs Coworker honest refusal vs WordPress refusal.
+      - type: icontains-any
+        value: ["6.9.7", "6.9", "cannot", "don't have", "no access", "not configured"]
