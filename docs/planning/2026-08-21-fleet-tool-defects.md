@@ -943,7 +943,19 @@ one. No ledger migration (append-only invariant); old events stay reachable via
 `chatAssembly`'s documented workaround; the 418 phantom rows remain as inert
 history.
 
-## D21 — OPEN — WPE properties have no display name anywhere in our data
+## D21 — FIXED 2026-08-24 — WPE properties have no display name anywhere in our data
+
+**Fix verified live** (63923a0e, sweep run 2026-08-24 07:15): `wpe_sites` holds
+**270 rows, all 270 named**, and **268 of 268** install-side `wpe_site_id`
+values resolve to a name. The exhibit property `009f590e…` is
+**"WooTesting (Spencer's)"** — a portal display name no derivation from
+`b68c7f0b6038` could have produced, which is the whole point.
+
+**Follow-on finding from the live data:** one real Site is literally named
+`<script>alert()</script>`. Property names are user-controlled text — every
+surface that renders one must treat it as text, never interpolate it into
+HTML/markup. (React `createElement` escapes by default; the mock's `esc()`
+does; any future `innerHTML`/template path must not exist.)
 
 The fleet collapse's core unit — the property (`wpe_site_id`, the CAPI Site) —
 has **no name in graph.db**. Only the UUID is persisted
