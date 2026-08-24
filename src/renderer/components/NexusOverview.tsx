@@ -37,6 +37,8 @@ import { RunDrawer } from './agents/RunDrawer';
 import { CredentialConsentModal } from './credentials/CredentialConsentModal';
 import { cardContainerStyle, cardStyle, cardTitleStyle, renderSectionLabel } from './tabs/shared/cards';
 import { SitesTab, BULK_CONFIRM_THRESHOLD, type BulkJobView } from './tabs/SitesTab';
+import { PropertiesTab } from './tabs/PropertiesTab';
+import type { FleetCollapse } from '../../main/fleet/fleetCollapse';
 import { FleetTab } from './tabs/FleetTab';
 // Types only — a value import would pull main-process code into the renderer
 // bundle. Precedent: credentials/ConnectionsPanel.tsx:3.
@@ -194,6 +196,11 @@ interface NexusOverviewState {
   siteRowsTotal: PopulationCount;
   siteRowsLoaded: boolean;
   siteRowsFailed: boolean;
+  /** The Sites tab's view: the install-grain table or the property collapse. */
+  sitesView: 'installs' | 'properties';
+  collapse: FleetCollapse | null;
+  collapseLoaded: boolean;
+  collapseFailed: boolean;
   selectedSiteIds: string[];
   /** The bulk job started from the Sites bar, or null. Replaces the selection bar. */
   bulkJob: BulkJobView | null;
@@ -334,6 +341,10 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     siteRowsTotal: { count: 0, scope: '' },
     siteRowsLoaded: false,
     siteRowsFailed: false,
+    sitesView: 'installs',
+    collapse: null,
+    collapseLoaded: false,
+    collapseFailed: false,
     selectedSiteIds: [],
     bulkJob: null,
     aiProxy: null,
@@ -560,6 +571,26 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       .invoke(IPC_CHANNELS.GET_FLEET_STATUS)
       .catch(() => []);
     if (this.mounted) this.setState({ indexEntries: indexEntries ?? [] });
+  };
+
+  /**
+   * The property collapse, fetched lazily on first switch to the Properties
+   * view. `collapseFailed` is a read failure, never an empty fleet.
+   */
+  fetchCollapse = async (): Promise<void> => {
+    const ipc = this.props.electron?.ipcRenderer;
+    if (!ipc) return;
+    try {
+      const res = await ipc.invoke(IPC_CHANNELS.GET_FLEET_COLLAPSE);
+      if (!this.mounted) return;
+      if (res?.success && res.collapse) {
+        this.setState({ collapse: res.collapse as FleetCollapse, collapseLoaded: true, collapseFailed: false });
+      } else {
+        this.setState({ collapseLoaded: true, collapseFailed: true });
+      }
+    } catch {
+      if (this.mounted) this.setState({ collapseLoaded: true, collapseFailed: true });
+    }
   };
 
   fetchAll = async (): Promise<void> => {
@@ -1219,7 +1250,34 @@ renderTabBar(): React.ReactNode {
       // runs on mount and fills `wpeSyncProgress` for a sync the scheduler
       // started, so dropping it would hide background syncs entirely.
       case 'sites': return React.createElement('div', null,
-        React.createElement(SitesTab, {
+        // View toggle: install grain (SitesTab, unchanged) vs the property
+        // collapse (plan 2026-08-24 Phase 2). Enrich, don't replace — SitesTab
+        // is retired by a packet, never by this toggle.
+        React.createElement('div', { style: { display: 'flex', gap: 6, padding: '0 12px 8px' } },
+          ...([['installs', 'Installs'], ['properties', 'Properties']] as const).map(([key, label]) =>
+            React.createElement('span', {
+              key,
+              onClick: () => {
+                this.setState({ sitesView: key });
+                if (key === 'properties' && !this.state.collapseLoaded) void this.fetchCollapse();
+              },
+              style: {
+                cursor: 'pointer', fontSize: 12, padding: '3px 10px', borderRadius: 6,
+                border: '1px solid var(--nxai-card-border)',
+                background: this.state.sitesView === key ? 'var(--nxai-accent)' : 'var(--nxai-card-bg)',
+                color: this.state.sitesView === key ? 'var(--nxai-accent-text)' : 'var(--nxai-card-text)',
+              },
+            }, label),
+          ),
+        ),
+        this.state.sitesView === 'properties'
+          ? React.createElement(PropertiesTab, {
+              loaded: this.state.collapseLoaded,
+              failed: this.state.collapseFailed,
+              collapse: this.state.collapse,
+              onRetry: () => { void this.fetchCollapse(); },
+            })
+          : React.createElement(SitesTab, {
         loaded: this.state.siteRowsLoaded,
         failed: this.state.siteRowsFailed,
         rows: this.state.siteRows,

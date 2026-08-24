@@ -756,6 +756,24 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  // The property-grain collapse behind the Properties view (plan 2026-08-24).
+  // Same assembly as the nexusFleetCollapse resolver — one shared collector,
+  // so the two surfaces cannot drift.
+  safeHandle(IPC_CHANNELS.GET_FLEET_COLLAPSE, async () => {
+    try {
+      const { collectFleetCollapseFromServices } = await import('./fleet/collectFleetCollapse');
+      const collapse = await collectFleetCollapseFromServices({
+        graphService,
+        siteData,
+        indexRegistry,
+        statuses: localServicesBridge.getAllSiteStatuses(),
+      });
+      return { success: true, collapse };
+    } catch (err: any) {
+      return { success: false, error: err?.message ?? String(err), collapse: null };
+    }
+  });
+
   // One row per site across all three sources, for the Sites table. Unlike
   // GET_SITES above (local only), this is the whole fleet.
   safeHandle(IPC_CHANNELS.GET_SITE_ROWS, async () => {

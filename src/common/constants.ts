@@ -14,6 +14,7 @@ export const IPC_CHANNELS = {
   // One row per site across Local, WP Engine and external SSH hosts, for the
   // Sites table. Distinct from GET_SITES, which is local-only.
   GET_SITE_ROWS: `${ADDON_PREFIX}:sites:rows`,
+  GET_FLEET_COLLAPSE: `${ADDON_PREFIX}:fleet:collapse`,
   // WP-22b: what the record says about where a Local copy's content came from and
   // how far behind it is. Read-only, one Local site id in. Distinct from every other
   // site channel here, which carry INDEX ages (`created_at`, `content_indexed_at`) —

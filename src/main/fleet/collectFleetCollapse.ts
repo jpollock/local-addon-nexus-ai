@@ -36,6 +36,50 @@ export interface CollectFleetCollapseDeps {
 
 const NEVER: CheckedView = { state: 'never', finishedAt: null, reason: null };
 
+/**
+ * The one assembly both surfaces share (GraphQL resolver, IPC handler) — two
+ * copies of "which sources feed the collapse" would drift the same way the
+ * pre-WP-68 resolvers did.
+ */
+export async function collectFleetCollapseFromServices(s: {
+  graphService: { getDb?(): unknown; getWpeSites?(): Promise<unknown>; getAccounts?(): Promise<unknown> } | null | undefined;
+  siteData: { getSites?(): Record<string, unknown> } | null | undefined;
+  indexRegistry: { listAll?(): unknown[] } | null | undefined;
+  statuses?: Record<string, string>;
+}): Promise<FleetCollapse> {
+  const db = (s.graphService?.getDb?.() ?? null) as DbLike | null;
+
+  let siteLinks: Array<{ localSiteId: string; wpeInstallId: string }> = [];
+  try {
+    if (db) {
+      siteLinks = (db.prepare('SELECT local_site_id, wpe_install_id FROM site_links').all() as Array<Record<string, unknown>>)
+        .map((l) => ({ localSiteId: String(l.local_site_id), wpeInstallId: String(l.wpe_install_id) }));
+    }
+  } catch { /* no links → no copy nesting, honestly */ }
+
+  let wpeSites: CollectFleetCollapseDeps['wpeSites'] = [];
+  let wpeAccounts: CollectFleetCollapseDeps['wpeAccounts'] = [];
+  try { wpeSites = ((await s.graphService?.getWpeSites?.()) ?? []) as CollectFleetCollapseDeps['wpeSites']; } catch { /* names absent */ }
+  try { wpeAccounts = ((await s.graphService?.getAccounts?.()) ?? []) as CollectFleetCollapseDeps['wpeAccounts']; } catch { /* accounts absent */ }
+
+  let core: CoreLike | null = null;
+  try {
+    const { getIntelligenceCore } = await import('../intelligence-host/coreRegistry');
+    core = (getIntelligenceCore() ?? null) as CoreLike | null;
+  } catch { /* core down → every place reads never */ }
+
+  return collectFleetCollapse({
+    localSites: Object.values(s.siteData?.getSites?.() ?? {}) as Array<Record<string, any>>,
+    statuses: s.statuses,
+    db,
+    indexEntries: (s.indexRegistry?.listAll?.() ?? []) as Array<{ siteId: string; state: string }>,
+    wpeSites,
+    wpeAccounts,
+    siteLinks,
+    core,
+  });
+}
+
 function twinChecked(core: CoreLike, envId: string): CheckedView {
   let best: CheckedView = NEVER;
   for (const layer of ['pipeline:l2', 'pipeline:l3']) {
