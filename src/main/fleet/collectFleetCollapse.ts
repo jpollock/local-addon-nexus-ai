@@ -240,5 +240,8 @@ export function collectFleetCollapse(deps: CollectFleetCollapseDeps): FleetColla
     pluginCounts,
     docCounts,
     contentStatus: deps.contentStatus,
+    localPaths: new Map(
+      deps.localSites.filter((s) => s?.id && s?.path).map((s) => [s.id as string, String(s.path)]),
+    ),
   });
 }

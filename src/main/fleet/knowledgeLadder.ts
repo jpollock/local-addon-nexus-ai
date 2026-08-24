@@ -13,8 +13,20 @@
 
 export type KnowledgeRung = 'nothing' | 'basic' | 'detailed' | 'searchable';
 
+/**
+ * The two absence states, ONE sentence each, defined once (designer round-4):
+ * the fourth rung ("we have never looked inside this") and the distinct
+ * pipeline fact ("no check has run yet"). Every surface reads from here —
+ * a second spelling anywhere is the seam defect the vocabulary loop exists
+ * to prevent.
+ */
+export const STATE_SENTENCES = {
+  neverLookedInside: 'Never looked inside',
+  notYetChecked: 'not yet checked',
+} as const;
+
 export const KNOWLEDGE_LABELS: Record<KnowledgeRung, string> = {
-  nothing: 'Never looked inside',  // one sentence for the fourth rung, everywhere (round-3 finding 2)
+  nothing: STATE_SENTENCES.neverLookedInside,
   basic: 'Basic',
   detailed: 'Detailed',
   searchable: 'Searchable',

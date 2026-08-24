@@ -14,7 +14,7 @@ const iso = (hoursAgo: number) => new Date(NOW - hoursAgo * 3600_000).toISOStrin
 
 const place = (over: any = {}) => ({
   rowId: 'wpe-1', kind: 'production', source: 'wpe', name: 'dbrains',
-  domain: 'dbrains.wpengine.com', knowledge: 'searchable', ceiling: null,
+  domain: 'dbrains.wpengine.com', address: 'dbrains.wpengine.com', knowledge: 'searchable', ceiling: null,
   checked: { state: 'ok', finishedAt: iso(8), reason: null },
   checkedL2: { state: 'ok', finishedAt: iso(8), reason: null },
   checkedL3: { state: 'ok', finishedAt: iso(9), reason: null },
@@ -261,7 +261,7 @@ describe('designer round-2 findings', () => {
     const t = rendered(collapse([fine, dark, failing]));
     expect(t.indexOf('zzz-failing')).toBeLessThan(t.indexOf('yyy-dark'));   // fail before nothing
     expect(t.indexOf('yyy-dark')).toBeLessThan(t.indexOf('aaa-fine'));     // nothing before A–Z rest
-    expect(t).toContain('order: failures · never looked inside · A–Z');
+    expect(t).toContain('Sort: failures · never looked inside · A–Z'); // the labelled sort control
   });
 
   test('finding 1: no rationale leaks into product copy', () => {
@@ -343,5 +343,53 @@ describe('designer round-3 findings', () => {
     });
     expect(t).not.toContain('(D15)');
     expect(t).not.toContain('(D20)');
+  });
+});
+
+describe('designer round-4 — the visual layer', () => {
+  test('the list has column heads sharing the row grid, and Site/Checked switch the sort', () => {
+    const t = rendered(collapse([property({ name: 'bbb' }), property({ key: 'wpe:p2', name: 'aaa' })]));
+    for (const head of ['Site', 'Where it lives', 'What Nexus knows', 'Checked']) {
+      expect(t).toContain(head);
+    }
+    const sorted = rendered(collapse([
+      property({ name: 'bbb', oldest: { state: 'fail', finishedAt: iso(2), reason: 'x' } }),
+      property({ key: 'wpe:p2', name: 'aaa' }),
+    ]), (inst) => { inst.state.sortBy = 'name'; });
+    expect(sorted.indexOf('aaa')).toBeLessThan(sorted.indexOf('bbb')); // name sort beats consequence
+    expect(sorted).toContain('Sort: A–Z');
+  });
+
+  test('the address renders in mono, verbatim — hostname for an environment, path for a copy', () => {
+    const t = rendered(collapse([property()]));
+    expect(t).toContain('dbrains.wpengine.com');
+    expect(t).toContain('monospace');
+
+    const withCopy = property({
+      key: 'wpe:p2', hasCopy: true,
+      places: [place({ rowId: 'wpe-1' }),
+               place({ rowId: 'L1', kind: 'copy', source: 'local', name: 'ben-local', address: '/Users/j/Local Sites/ben' })],
+    });
+    const t2 = rendered(collapse([withCopy]), (inst) => { inst.state.open = { 'wpe:p2': true }; });
+    expect(t2).toContain('/Users/j/Local Sites/ben');
+  });
+
+  test('the state filter says Needs you, and the rungs render as chips', () => {
+    const t = rendered(collapse([property()]));
+    expect(t).toContain('Needs you');
+    expect(t).not.toContain('Needs attention');
+  });
+
+  test('the copy card holds the lineage legs; environments list below it', () => {
+    const withCopy = property({
+      key: 'wpe:p2', hasCopy: true,
+      places: [place({ rowId: 'wpe-1' }),
+               place({ rowId: 'L1', kind: 'copy', source: 'local', name: 'ben-local', address: '/Users/j/ben' })],
+      lineage: ["Your copy's content was pulled from benfischer1stg — its content is 11 day(s) behind."],
+    });
+    const t = rendered(collapse([withCopy]), (inst) => { inst.state.view = { screen: 'property', key: 'wpe:p2' }; });
+    expect(t).toContain('your copy');
+    expect(t).toContain('pulled from benfischer1stg');
+    expect(t.indexOf('pulled from')).toBeLessThan(t.indexOf('Environments')); // legs inside the card, envs below
   });
 });

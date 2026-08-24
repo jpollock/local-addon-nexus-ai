@@ -48,6 +48,11 @@ export interface PlaceView {
   source: 'local' | 'wpe' | 'external';
   name: string;
   domain: string | null;
+  /**
+   * The concrete address a person can locate this by — hostname for an
+   * environment, filesystem path for a copy. Rendered in mono, verbatim.
+   */
+  address: string | null;
   knowledge: KnowledgeRung;
   /**
    * Why this place cannot be known more deeply — a property of the account,
@@ -160,6 +165,8 @@ export interface FleetCollapseInput extends Omit<SiteRowsInput, 'graphRows'> {
    * `readSiteContentStatus`). Absent = no recorded lineage.
    */
   contentStatus?: Map<string, { state: string; sourceName?: string; behindSeconds?: number }>;
+  /** localSiteId → filesystem path (a copy's address). */
+  localPaths?: Map<string, string>;
 }
 
 const RUNG_ORDER: KnowledgeRung[] = ['nothing', 'basic', 'detailed', 'searchable'];
@@ -231,6 +238,9 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
       source: row.source,
       name: row.name,
       domain: row.domain,
+      address: row.source === 'local'
+        ? input.localPaths?.get(row.id) ?? row.domain
+        : row.domain,
       knowledge: row.knowledge,
       ceiling,
       checked: mergedOf(layers),

@@ -64,7 +64,7 @@ export function injectThemeVars(): void {
   style.textContent = `
     :root {
       --nxai-card-bg: #ffffff;
-      --nxai-card-border: #e5e7eb;
+      --nxai-card-border: #e2e6e8;  /* rgb(226,230,232) — the design system's border value */
       --nxai-card-label: #6b7280;
       --nxai-card-sub: #6b7280;
       --nxai-card-text: #111827;
