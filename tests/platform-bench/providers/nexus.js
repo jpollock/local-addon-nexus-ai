@@ -1,20 +1,17 @@
 /**
  * Nexus provider — drives Claude with the local-nexus-ai MCP server.
  *
- * Runs `claude -p "<prompt>" --mcp-server local-nexus-ai` via the same
- * CLI binary the rest of the project uses. This is the most faithful
- * representation of what a user gets from Nexus: the full tool surface,
- * the same model, no hand-holding in the system prompt.
- *
- * The nexus MCP server must be running (Local must be up with the addon loaded).
- * Run `nexus doctor` to verify before running the benchmark.
+ * Prerequisites:
+ *   - Local must be running with the addon loaded (run `nexus doctor`)
+ *   - MCP config: tests/platform-bench/nexus-mcp.json
  */
 
 const { execSync } = require('child_process');
 const path = require('path');
 
-const MODEL = process.env.BENCH_MODEL ?? 'claude-sonnet-5';
-const TIMEOUT_MS = 300_000; // 5 min — some Nexus tool chains take time
+const MODEL = process.env.BENCH_MODEL ?? 'claude-opus-5';
+const TIMEOUT_MS = 300_000;
+const MCP_CONFIG = path.join(__dirname, '..', 'nexus-mcp.json');
 
 module.exports = class NexusProvider {
   id() { return 'nexus-mcp'; }
@@ -24,7 +21,8 @@ module.exports = class NexusProvider {
     const cmd = [
       'claude',
       '--model', MODEL,
-      '--mcp-server', 'local-nexus-ai',
+      '--mcp-config', MCP_CONFIG,
+      '--dangerously-skip-permissions',
       '-p', `'${escaped}'`,
     ].join(' ');
 
@@ -33,19 +31,18 @@ module.exports = class NexusProvider {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout: TIMEOUT_MS,
-        // inherit PATH so the claude binary is found
         env: { ...process.env },
+        stdio: ['pipe', 'pipe', 'pipe'],
+        input: '',
       });
-      const durationMs = Date.now() - startMs;
       return {
         output: output.trim(),
-        // Promptfoo uses cost and tokenUsage when available; claude CLI doesn't
-        // expose them easily, so we omit rather than fabricate.
-        metadata: { durationMs },
+        metadata: { durationMs: Date.now() - startMs },
       };
     } catch (err) {
+      const msg = (err.stdout || err.stderr || err.message || '').toString().slice(0, 500);
       return {
-        error: `Nexus provider error: ${err.message?.slice(0, 300)}`,
+        error: `Nexus provider error: ${msg}`,
         output: '',
       };
     }

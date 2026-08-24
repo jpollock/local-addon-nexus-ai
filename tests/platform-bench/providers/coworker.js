@@ -1,61 +1,75 @@
 /**
  * Coworker provider — drives Claude with the wpe-coworker MCP server.
  *
- * Coworker's MCP surface is its knowledge base: search_knowledge_base,
- * fetch_knowledge_base_document, list_account_sites. Unlike Nexus it has no
- * cross-site join in a single call, and its ability to find facts depends on
- * ACF metadata being indexed into the KB.
+ * Prerequisites:
+ *   - COWORKER_API_KEY must be set. Add to nexus.env.local:
+ *       COWORKER_API_KEY=wpe_...
+ *     Then source it before running: set -a; source nexus.env.local; set +a
  *
- * Collection IDs are stable per-site and hard-coded here. Update if the Power
- * project changes or sites are reconnected.
- *
- * Auth: reads COWORKER_API_KEY from the environment. Load from nexus.env.local
- * before running the benchmark:
- *   set -a; source ~/development/wpengine/local-addon-nexus-ai/nexus.env.local; set +a
- *
- * Known KB collections in project proj_cE8Ib44IuegI3rH5l1MbBy (2026-08-24):
- *   col_elNAyZoSKGhJoFCFqHSK12   cedarvalehealt.wpenginepowered.com   (flagship)
- *   col_KO2gvD3Tbw5Rvuv0msq4dQ   summitdermatol.wpenginepowered.com   (site A)
- *   col_tErE8KxfsfxWrtd1HscbCe   palegreen-capybara-114180.hostingersite.com (site B/Ridgeline)
+ * Collection IDs (stable per site, proj_cE8Ib44IuegI3rH5l1MbBy, 2026-08-24):
+ *   cedarvalehealt.wpenginepowered.com              col_elNAyZoSKGhJoFCFqHSK12
+ *   summitdermatol.wpenginepowered.com              col_KO2gvD3Tbw5Rvuv0msq4dQ
+ *   palegreen-capybara-114180.hostingersite.com     col_tErE8KxfsfxWrtd1HscbCe
  */
 
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
-const MODEL = process.env.BENCH_MODEL ?? 'claude-sonnet-5';
+const MODEL = process.env.BENCH_MODEL ?? 'claude-opus-5';
 const TIMEOUT_MS = 300_000;
 
-// Tell the model which site maps to which collection so it can route queries.
 const COLLECTION_MAP = `
 Known Coworker knowledge base collections:
 - cedarvalehealt.wpenginepowered.com (flagship) → col_elNAyZoSKGhJoFCFqHSK12
-- summitdermatol.wpenginepowered.com (Summit Dermatology Partners, site A) → col_KO2gvD3Tbw5Rvuv0msq4dQ
-- palegreen-capybara-114180.hostingersite.com (Ridgeline Skin Institute, site B) → col_tErE8KxfsfxWrtd1HscbCe
+- summitdermatol.wpenginepowered.com (Summit Dermatology Partners) → col_KO2gvD3Tbw5Rvuv0msq4dQ
+- palegreen-capybara-114180.hostingersite.com (Ridgeline Skin Institute) → col_tErE8KxfsfxWrtd1HscbCe
 
-You have access to:
+Tools available:
   search_knowledge_base(collection_id, query?, filters?, aggregations?, top_n?)
   fetch_knowledge_base_document(collection_id, id)
   list_account_sites()
 
-ACF fields are in the 'metadata' object of each document, prefixed 'acf_'.
-You can filter on them: filters: { metadata: { acf_npi: ["1274960149"] } }
-You can aggregate: aggregations: [{ name: "x", field: "metadata.acf_hours", type: "terms" }]
-Cross-site queries require calling search_knowledge_base once per collection.
+ACF fields are in 'metadata' prefixed 'acf_'. Examples:
+  Filter by NPI:    filters: { metadata: { acf_npi: ["1274960149"] } }
+  Filter by status: filters: { metadata: { acf_review_status: ["overdue"] } }
+  Aggregate hours:  aggregations: [{ name: "h", field: "metadata.acf_hours", type: "terms" }]
+Cross-site queries require one call per collection.
 `.trim();
 
 module.exports = class CoworkerProvider {
   id() { return 'coworker-mcp'; }
 
   async callApi(prompt) {
+    const key = process.env.COWORKER_API_KEY;
+    if (!key) {
+      return {
+        error: 'COWORKER_API_KEY not set. Add to nexus.env.local and source it before running.',
+        output: '',
+      };
+    }
+
+    // Write an ephemeral MCP config with the bearer token
+    const mcpConfig = {
+      mcpServers: {
+        'wpe-coworker': {
+          type: 'http',
+          url: 'https://api.ai.wpengine.com/v1/mcp',
+          headers: { Authorization: `Bearer ${key}` },
+        },
+      },
+    };
+    const configPath = path.join(os.tmpdir(), `coworker-mcp-${process.pid}.json`);
+    fs.writeFileSync(configPath, JSON.stringify(mcpConfig));
+
     const fullPrompt = `${COLLECTION_MAP}\n\n${prompt}`;
     const escaped = fullPrompt.replace(/'/g, "'\\''");
-
-    // The wpe-coworker MCP server name must match what is configured in
-    // Claude Code's MCP settings. Run `/mcp` in the Claude Code terminal
-    // to verify it is connected before running the benchmark.
     const cmd = [
       'claude',
       '--model', MODEL,
-      '--mcp-server', 'wpe-coworker',
+      '--mcp-config', configPath,
+      '--dangerously-skip-permissions',
       '-p', `'${escaped}'`,
     ].join(' ');
 
@@ -64,22 +78,22 @@ module.exports = class CoworkerProvider {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout: TIMEOUT_MS,
-        env: {
-          ...process.env,
-          // The wpe-coworker MCP server reads this for auth.
-          // Source nexus.env.local before running.
-          COWORKER_API_KEY: process.env.COWORKER_API_KEY ?? '',
-        },
+        env: { ...process.env },
+        stdio: ['pipe', 'pipe', 'pipe'],
+        input: '',
       });
       return {
         output: output.trim(),
         metadata: { durationMs: Date.now() - startMs },
       };
     } catch (err) {
+      const msg = (err.stdout || err.stderr || err.message || '').toString().slice(0, 500);
       return {
-        error: `Coworker provider error: ${err.message?.slice(0, 300)}`,
+        error: `Coworker provider error: ${msg}`,
         output: '',
       };
+    } finally {
+      try { fs.unlinkSync(configPath); } catch { /* ignore */ }
     }
   }
 };

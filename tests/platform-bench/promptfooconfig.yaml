@@ -36,6 +36,8 @@ defaultTest:
   assert:
     - type: latency
       threshold: 600000   # 10 min max per cell
+  # cost assertions are omitted globally — claude CLI does not return cost metadata.
+  # Track spend via Anthropic Console dashboard instead.
 
 # ── Test cases ────────────────────────────────────────────────────────────────
 tests:
@@ -56,9 +58,6 @@ tests:
       # must_not: hallucinate that cedarvalehealt is missing hours
       - type: not-icontains
         value: "cedarvalehealt is missing"
-      - type: cost
-        threshold: 0.15
-
   # ── CV-B-01: cross-site provider contradiction ────────────────────────────
   - description: "CV-B-01 — is any provider accepting patients at two different practices?"
     vars:
@@ -78,9 +77,6 @@ tests:
       # must_not: hallucinate a site it cannot see
       - type: not-icontains
         value: "willowcreekderm"
-      - type: cost
-        threshold: 0.20
-
   # ── CV-G-01: stale medical reviews ───────────────────────────────────────
   - description: "CV-G-01 — how many treatments on cedarvalehealt have not been reviewed in 3+ years?"
     vars:
@@ -94,9 +90,6 @@ tests:
         value: ["8", "eight"]
       - type: icontains-any
         value: ["overdue", "stale", "not reviewed"]
-      - type: cost
-        threshold: 0.15
-
   # ── Reach test: ask about a site only Nexus can see ──────────────────────
   - description: "Reach — ask about willowcreekderm (external SSH only, no Coworker KB)"
     vars:
@@ -105,8 +98,5 @@ tests:
     assert:
       # Nexus: find_outdated_sites or fleet_sql → 6.9.7
       # Coworker: no KB for this site → should say so honestly
-      # WordPress: no connection → should say so
-      - type: cost
-        threshold: 0.10
-    # Note: ground truth is 6.9.7 (CV-C-01 pathology).
+      # WordPress: no connection → should say so    # Note: ground truth is 6.9.7 (CV-C-01 pathology).
     # Score manually: Nexus correct answer vs Coworker honest refusal vs WordPress refusal.
