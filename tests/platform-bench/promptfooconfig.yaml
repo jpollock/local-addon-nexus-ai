@@ -50,14 +50,24 @@ tests:
         Be specific about which site has the gap.
     assert:
       # Answer key: summitdermatol locations have acf_hours="" (empty).
-      # cedarvalehealt locations have hours.
+      # cedarvalehealt locations have hours on all 25 locations.
+      #
+      # Correct answer: summitdermatol is missing hours; cedarvalehealt has them.
+      # Wrong answers that must fail:
+      #   "neither has hours"    — Coworker said this (vacuously passed before)
+      #   "cedarvalehealt is missing" — hallucination
       - type: icontains
         value: "summitdermatol"
       - type: icontains-any
-        value: ["missing", "no hours", "without hours", "empty", "absent"]
-      # must_not: hallucinate that cedarvalehealt is missing hours
-      - type: not-icontains
-        value: "cedarvalehealt is missing"
+        value: ["missing", "no hours", "without hours", "empty", "absent", "lacks"]
+      # cedarvalehealt must be stated as having hours (distinguishes from "neither")
+      - type: icontains-any
+        value: ["cedarvalehealt has", "cedarvalehealt: has", "cedarvalehealt have",
+                "cedarvalehealt locations have", "flagship has", "cedarvale has hours"]
+      # must_not: a provider that says neither or both are missing is wrong
+      - type: not-icontains-any
+        value: ["neither site has", "neither has hours", "both sites are missing",
+                "both lack", "cedarvalehealt is missing", "cedarvalehealt lacks"]
   # ── CV-B-01: cross-site provider contradiction ────────────────────────────
   - description: "CV-B-01 — is any provider accepting patients at two different practices?"
     vars:
