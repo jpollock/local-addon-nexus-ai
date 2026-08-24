@@ -42,9 +42,18 @@ export interface PlaceView {
    * Null when nothing caps it.
    */
   ceiling: string | null;
+  /** The later of the two layers — what the fleet row shows. */
   checked: CheckedView;
+  /** Per-layer detail for the place screen: metadata vs content pipeline. */
+  checkedL2: CheckedView;
+  checkedL3: CheckedView;
   /** Local run state; null for remote places (Nexus does not run them). */
   status: string | null;
+  // Place-screen facts — NULL is the honest unknown, never a default.
+  wpVersion: string | null;
+  phpVersion: string | null;
+  pluginCount: number | null;
+  docCount: number | null;
 }
 
 export interface PropertyView {
@@ -73,6 +82,12 @@ export interface PropertyView {
   oldest: CheckedView;
   /** Shares a name with a property of another origin — kept separate, flagged. */
   collision: boolean;
+  /**
+   * The lineage block, COMPOSED HERE (the RowDoor rule: a sentence built in
+   * the surface is a second place the vocabulary lives). Stated absence is
+   * the common case and is a sentence with a reason, never an empty list.
+   */
+  lineage: string[];
 }
 
 export interface FleetCollapse {
@@ -102,11 +117,20 @@ export interface FleetCollapseInput extends Omit<SiteRowsInput, 'graphRows'> {
   wpeSites: Array<{ id: string; name: string | null; account_id: string | null }>;
   wpeAccounts: Array<{ id: string; name: string; nickname: string | null }>;
   /** Local↔WPE pairing, from Local's own site_links store (the mirror's source). */
-  siteLinks: Array<{ localSiteId: string; wpeInstallId: string }>;
+  siteLinks: Array<{ localSiteId: string; wpeInstallId: string; wpeInstallName?: string }>;
   /** D15: accountId → the stated reason SSH cannot reach this account. */
   gatewaylessAccounts: Map<string, string>;
-  /** Latest pipeline outcome per rowId/localSiteId (host reads the twins). */
-  checked: Map<string, CheckedView>;
+  /** Per-layer pipeline outcome per rowId/localSiteId (host reads the twins). */
+  checked: Map<string, { l2?: CheckedView; l3?: CheckedView }>;
+  /** rowId/localSiteId → active plugin-row count in the graph. Absent = unknown. */
+  pluginCounts?: Map<string, number>;
+  /** siteId → indexed document count from the registry. Absent = unknown. */
+  docCounts?: Map<string, number>;
+  /**
+   * localSiteId → the copy's content-lineage record (from
+   * `readSiteContentStatus`). Absent = no recorded lineage.
+   */
+  contentStatus?: Map<string, { state: string; sourceName?: string; behindSeconds?: number }>;
 }
 
 const RUNG_ORDER: KnowledgeRung[] = ['nothing', 'basic', 'detailed', 'searchable'];
@@ -143,7 +167,16 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
   const graphById = new Map(input.graphRows.map((g) => [g.id, g]));
   const wpeSiteById = new Map(input.wpeSites.map((s) => [s.id, s]));
   const accountById = new Map(input.wpeAccounts.map((a) => [a.id, a]));
-  const checkedOf = (id: string): CheckedView => input.checked.get(id) ?? NEVER;
+  const layersOf = (id: string): { l2: CheckedView; l3: CheckedView } => {
+    const c = input.checked.get(id);
+    return { l2: c?.l2 ?? NEVER, l3: c?.l3 ?? NEVER };
+  };
+  /** The later of the two layers — what the fleet row shows. */
+  const mergedOf = (l: { l2: CheckedView; l3: CheckedView }): CheckedView => {
+    if (l.l2.finishedAt === null) return l.l3;
+    if (l.l3.finishedAt === null) return l.l2;
+    return l.l3.finishedAt > l.l2.finishedAt ? l.l3 : l.l2;
+  };
 
   // Copy pairing: local site id → the wpe_site_id its linked install belongs to.
   const installToProperty = new Map<string, string>();
@@ -162,6 +195,7 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
     const g = graphById.get(row.id);
     const accountId = g?.account_id ?? null;
     const ceiling = accountId ? input.gatewaylessAccounts.get(accountId) ?? null : null;
+    const layers = layersOf(row.id);
     return {
       rowId: row.id,
       kind: placeKindOf(row, g?.environment, isCopy),
@@ -170,9 +204,68 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
       domain: row.domain,
       knowledge: row.knowledge,
       ceiling,
-      checked: checkedOf(row.id),
+      checked: mergedOf(layers),
+      checkedL2: layers.l2,
+      checkedL3: layers.l3,
       status: row.status,
+      wpVersion: row.wpVersion,
+      phpVersion: row.phpVersion,
+      pluginCount: input.pluginCounts?.get(row.id) ?? null,
+      docCount: input.docCounts?.get(row.id) ?? null,
     };
+  }
+
+  /**
+   * The lineage sentences — the ratified two-leg block. Content leg from the
+   * copy's recorded status; code leg is a stated absence until a deploy
+   * producer exists. Never composed in a renderer, never empty.
+   */
+  function lineageOf(
+    origin: 'local' | 'wpe' | 'external',
+    places: PlaceView[],
+    copyLocalIds: string[],
+  ): string[] {
+    const out: string[] = [];
+    if (origin === 'external') {
+      out.push(
+        'No recorded relationship links this place to any other. Nexus reads it over SSH and never writes to the server.',
+      );
+      return out;
+    }
+    if (origin === 'local') {
+      out.push('This site exists only on this machine — no linked place anywhere else is recorded.');
+      return out;
+    }
+    const copies = places.filter((p) => p.kind === 'copy');
+    if (copies.length === 0) {
+      out.push(
+        'No copy of this site exists on your machine. Each place stands alone until a pull or deploy is observed.',
+      );
+    } else {
+      for (const copy of copies) {
+        const link = input.siteLinks.find(
+          (l) => copyLocalIds.includes(l.localSiteId) && l.localSiteId === copy.rowId,
+        );
+        const linkedTo = link?.wpeInstallName ? ` — linked to ${link.wpeInstallName}` : '';
+        out.push(`A copy of this site lives on this machine (${copy.name})${linkedTo}.`);
+        const cs = input.contentStatus?.get(copy.rowId);
+        if (cs?.state === 'pulled' && cs.sourceName) {
+          const behind =
+            typeof cs.behindSeconds === 'number' && cs.behindSeconds > 0
+              ? ` — its content is ${Math.max(1, Math.round(cs.behindSeconds / 86_400))} day(s) behind`
+              : '';
+          out.push(`Your copy's content was pulled from ${cs.sourceName}${behind}.`);
+        } else {
+          out.push(
+            "No recorded pull links your copy's content to any place here — as far as Nexus can see, they are unrelated. Pulling again will record the link.",
+          );
+        }
+      }
+    }
+    out.push(
+      'Code moves through git; Nexus has no record of a deploy to any place here and says so rather than guessing.',
+    );
+    return out;
   }
 
   // ── group WPE rows by property ─────────────────────────────────────────────
@@ -196,10 +289,14 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
     const places = groupRows.map((r) => toPlace(r, false));
 
     // Copies whose linked install belongs to this property nest under it.
+    const copyLocalIds: string[] = [];
     for (const [localSiteId, prop] of copyPropertyOf) {
       if (prop !== wpeSiteId) continue;
       const localRow = rowById.get(localSiteId);
-      if (localRow) places.push(toPlace(localRow, true));
+      if (localRow) {
+        places.push(toPlace(localRow, true));
+        copyLocalIds.push(localSiteId);
+      }
     }
 
     const accountId = portal?.account_id ?? graphById.get(groupRows[0].id)?.account_id ?? null;
@@ -219,6 +316,7 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
       rungs: rungSet(places),
       oldest: rollupChecked(places),
       collision: false, // filled after all origins exist
+      lineage: lineageOf('wpe', places, copyLocalIds),
     });
   }
 
@@ -240,6 +338,7 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
       rungs: rungSet(places),
       oldest: rollupChecked(places),
       collision: false,
+      lineage: lineageOf('local', places, []),
     });
   }
 
@@ -259,6 +358,7 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
       rungs: rungSet(places),
       oldest: rollupChecked(places),
       collision: false,
+      lineage: lineageOf('external', places, []),
     });
   }
 

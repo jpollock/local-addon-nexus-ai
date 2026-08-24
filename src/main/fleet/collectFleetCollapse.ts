@@ -26,10 +26,12 @@ export interface CollectFleetCollapseDeps {
   /** localSiteId → run status, when the caller has them. */
   statuses?: Record<string, string>;
   db: DbLike | null;
-  indexEntries: Array<{ siteId: string; state: string }>;
+  indexEntries: Array<{ siteId: string; state: string; documentCount?: number }>;
   wpeSites: Array<{ id: string; name: string | null; account_id: string | null }>;
   wpeAccounts: Array<{ id: string; name: string; nickname: string | null }>;
-  siteLinks: Array<{ localSiteId: string; wpeInstallId: string }>;
+  siteLinks: Array<{ localSiteId: string; wpeInstallId: string; wpeInstallName?: string }>;
+  /** localSiteId → the copy's content-lineage record (host reads readSiteContentStatus). */
+  contentStatus?: Map<string, { state: string; sourceName?: string; behindSeconds?: number }>;
   /** The intelligence core, for pipeline twins. Null → every place reads `never`. */
   core: CoreLike | null;
 }
@@ -49,13 +51,30 @@ export async function collectFleetCollapseFromServices(s: {
 }): Promise<FleetCollapse> {
   const db = (s.graphService?.getDb?.() ?? null) as DbLike | null;
 
-  let siteLinks: Array<{ localSiteId: string; wpeInstallId: string }> = [];
+  let siteLinks: Array<{ localSiteId: string; wpeInstallId: string; wpeInstallName?: string }> = [];
   try {
     if (db) {
-      siteLinks = (db.prepare('SELECT local_site_id, wpe_install_id FROM site_links').all() as Array<Record<string, unknown>>)
-        .map((l) => ({ localSiteId: String(l.local_site_id), wpeInstallId: String(l.wpe_install_id) }));
+      siteLinks = (db.prepare('SELECT local_site_id, wpe_install_id, wpe_install_name FROM site_links').all() as Array<Record<string, unknown>>)
+        .map((l) => ({
+          localSiteId: String(l.local_site_id),
+          wpeInstallId: String(l.wpe_install_id),
+          ...(l.wpe_install_name ? { wpeInstallName: String(l.wpe_install_name) } : {}),
+        }));
     }
   } catch { /* no links → no copy nesting, honestly */ }
+
+  // The copy's content-lineage record, per linked local site. Async and few
+  // (one read per copy); a failed read is an absent record, never a guess.
+  const contentStatus = new Map<string, { state: string; sourceName?: string; behindSeconds?: number }>();
+  try {
+    const { readSiteContentStatus } = await import('../intelligence-host/siteContentStatus');
+    for (const link of siteLinks) {
+      try {
+        const cs = await readSiteContentStatus({ siteData: s.siteData as never }, link.localSiteId);
+        if (cs) contentStatus.set(link.localSiteId, cs);
+      } catch { /* absent record */ }
+    }
+  } catch { /* module unavailable → no lineage detail */ }
 
   let wpeSites: CollectFleetCollapseDeps['wpeSites'] = [];
   let wpeAccounts: CollectFleetCollapseDeps['wpeAccounts'] = [];
@@ -72,31 +91,31 @@ export async function collectFleetCollapseFromServices(s: {
     localSites: Object.values(s.siteData?.getSites?.() ?? {}) as Array<Record<string, any>>,
     statuses: s.statuses,
     db,
-    indexEntries: (s.indexRegistry?.listAll?.() ?? []) as Array<{ siteId: string; state: string }>,
+    indexEntries: (s.indexRegistry?.listAll?.() ?? []) as Array<{ siteId: string; state: string; documentCount?: number }>,
     wpeSites,
     wpeAccounts,
     siteLinks,
+    contentStatus,
     core,
   });
 }
 
-function twinChecked(core: CoreLike, envId: string): CheckedView {
-  let best: CheckedView = NEVER;
-  for (const layer of ['pipeline:l2', 'pipeline:l3']) {
-    const fact = core.twins.get(envId, layer);
-    const v = fact?.value as
-      | { outcome?: string; finished_at?: string; reason?: string }
-      | undefined;
-    if (!v?.outcome || !v.finished_at) continue;
-    if (best.finishedAt === null || v.finished_at > best.finishedAt) {
-      best = {
-        state: v.outcome === 'ok' ? 'ok' : v.outcome === 'skip' ? 'skip' : 'fail',
-        finishedAt: v.finished_at,
-        reason: v.reason ?? null,
-      };
-    }
-  }
-  return best;
+function twinLayer(core: CoreLike, envId: string, layer: 'pipeline:l2' | 'pipeline:l3'): CheckedView {
+  const fact = core.twins.get(envId, layer);
+  const v = fact?.value as { outcome?: string; finished_at?: string; reason?: string } | undefined;
+  if (!v?.outcome || !v.finished_at) return NEVER;
+  return {
+    state: v.outcome === 'ok' ? 'ok' : v.outcome === 'skip' ? 'skip' : 'fail',
+    finishedAt: v.finished_at,
+    reason: v.reason ?? null,
+  };
+}
+
+function twinChecked(core: CoreLike, envId: string): { l2: CheckedView; l3: CheckedView } {
+  return {
+    l2: twinLayer(core, envId, 'pipeline:l2'),
+    l3: twinLayer(core, envId, 'pipeline:l3'),
+  };
 }
 
 export function collectFleetCollapse(deps: CollectFleetCollapseDeps): FleetCollapse {
@@ -158,7 +177,7 @@ export function collectFleetCollapse(deps: CollectFleetCollapseDeps): FleetColla
   }
 
   // Pipeline twins: latest of l2/l3 per place. Core down → everything `never`.
-  const checked = new Map<string, CheckedView>();
+  const checked = new Map<string, { l2?: CheckedView; l3?: CheckedView }>();
   if (deps.core) {
     try {
       for (const g of graphRows) {
@@ -174,6 +193,24 @@ export function collectFleetCollapse(deps: CollectFleetCollapseDeps): FleetColla
     } catch {
       /* a twin-read fault must not blank the fleet */
     }
+  }
+
+  // Place-screen facts: plugin rows per site (graph), indexed docs (registry).
+  // Absent = unknown = NULL downstream, never a default.
+  const pluginCounts = new Map<string, number>();
+  try {
+    if (db) {
+      for (const r of db
+        .prepare('SELECT p.site_id AS site_id, COUNT(*) AS c FROM plugins p GROUP BY p.site_id')
+        .all() as Array<{ site_id: string; c: number }>) {
+        pluginCounts.set(r.site_id, r.c);
+      }
+    }
+  } catch { /* unknown, honestly */ }
+
+  const docCounts = new Map<string, number>();
+  for (const e of deps.indexEntries) {
+    if (typeof e.documentCount === 'number') docCounts.set(e.siteId, e.documentCount);
   }
 
   return buildFleetCollapse({
@@ -200,5 +237,8 @@ export function collectFleetCollapse(deps: CollectFleetCollapseDeps): FleetColla
     siteLinks: deps.siteLinks,
     gatewaylessAccounts,
     checked,
+    pluginCounts,
+    docCounts,
+    contentStatus: deps.contentStatus,
   });
 }

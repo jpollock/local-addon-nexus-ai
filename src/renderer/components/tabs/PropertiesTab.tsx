@@ -38,6 +38,8 @@ interface PropertiesTabState {
   query: string;
   /** Property keys the user has expanded. */
   open: Record<string, boolean>;
+  /** Drill-in: null = the fleet list. */
+  view: null | { screen: 'property'; key: string } | { screen: 'place'; key: string; rowId: string };
 }
 
 const ORIGIN_LABELS: Array<{ key: OriginFilter; label: string }> = [
@@ -81,17 +83,152 @@ function matchesState(p: PropertyView, state: StateFilter): boolean {
 export class PropertiesTab extends React.Component<PropertiesTabProps, PropertiesTabState> {
   constructor(props: PropertiesTabProps) {
     super(props);
-    this.state = { origin: 'all', state: 'all', query: '', open: {} };
+    this.state = { origin: 'all', state: 'all', query: '', open: {}, view: null };
+  }
+
+  /**
+   * The place screen's procedures — named with what would run, barred ones
+   * visible with the reason. READ-ONLY in this phase: doors are descriptions,
+   * not buttons; no new execution path exists here.
+   */
+  private proceduresFor(p: PropertyView, pl: PlaceView): Array<{ label: string; note: string; barred: boolean }> {
+    if (pl.kind === 'copy' || pl.kind === 'local') {
+      return [
+        { label: 'Open in Local', note: 'Your machine — Local’s own tools apply, ungated.', barred: false },
+        { label: 'Index content here', note: 'Starts the site if it is stopped, indexes, stops it again.', barred: false },
+      ];
+    }
+    if (pl.source === 'external') {
+      return [
+        { label: 'Refresh what Nexus knows', note: 'nexus host refresh — reads over SSH, never writes to your server.', barred: false },
+        { label: 'Index content here', note: 'nexus host index — read-only; raises this place to Searchable.', barred: false },
+      ];
+    }
+    const procs: Array<{ label: string; note: string; barred: boolean }> = [
+      { label: 'Re-check this place', note: 'Refreshes every fact on this screen with a new age.', barred: false },
+    ];
+    if (pl.ceiling) {
+      procs.push({ label: 'Index content here', note: `${pl.ceiling} — not retryable from Nexus.`, barred: true });
+    } else {
+      procs.push({ label: 'Index content here', note: 'Reads over SSH; raises this place to Searchable.', barred: false });
+      procs.push({
+        label: 'Pull a copy from here',
+        note: 'Reads only. Your machine changes; this place does not — and the pull records the lineage link.',
+        barred: false,
+      });
+    }
+    if (pl.kind === 'production') {
+      procs.push({
+        label: 'Update plugins here',
+        note: 'Writes to production are refused by default. Granting wpcli for production in Settings → WP Engine Access changes that.',
+        barred: true,
+      });
+    }
+    return procs;
+  }
+
+  private renderPropertyScreen(p: PropertyView): React.ReactNode {
+    return h('div', { style: { padding: '0 12px' } },
+      h('a', {
+        style: { cursor: 'pointer', fontSize: 12, color: 'var(--nxai-accent)' },
+        onClick: () => this.setState({ view: null }),
+      }, '← All sites'),
+      h('div', { style: { fontSize: 18, fontWeight: 700, color: 'var(--nxai-card-text)', margin: '8px 0 2px' } }, p.name),
+      h('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub)', marginBottom: 12 } },
+        `${p.places.length} ${p.places.length === 1 ? 'place' : 'places'}${p.accountName ? ` · ${p.accountName}` : ''}`),
+      h('div', { style: { display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 } },
+        ...p.places.map((pl) =>
+          h('div', {
+            key: pl.rowId,
+            onClick: () => this.setState({ view: { screen: 'place', key: p.key, rowId: pl.rowId } }),
+            style: {
+              cursor: 'pointer', minWidth: 200, padding: '10px 14px', borderRadius: 8,
+              border: '1px solid var(--nxai-card-border)', background: 'var(--nxai-card-bg)',
+            },
+          },
+            h('div', { style: { fontWeight: 600, fontSize: 13, color: 'var(--nxai-card-text)' } }, pl.kind),
+            h('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', margin: '2px 0 6px' } },
+              pl.domain ?? pl.name),
+            h('div', { style: { fontSize: 11, color: pl.checked.state === 'fail' ? 'var(--nxai-danger-text)' : 'var(--nxai-card-sub)' } },
+              `${KNOWLEDGE_LABELS[pl.knowledge]} · ${checkedText(pl.checked, false)}`),
+          ),
+        ),
+      ),
+      h('div', { style: { fontSize: 11, fontWeight: 700, letterSpacing: '.06em', color: 'var(--nxai-card-sub)', textTransform: 'uppercase' as const, marginBottom: 6 } }, 'Lineage'),
+      h('div', { style: { maxWidth: 560, fontSize: 13, color: 'var(--nxai-card-text)' } },
+        ...p.lineage.map((line, i) => h('p', { key: i, style: { margin: '0 0 6px' } }, line)),
+      ),
+      h('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', marginTop: 12 } },
+        'Activity is read per place — open one. (Assembled per place because the property-level record is not yet trustworthy — register D20.)'),
+    );
+  }
+
+  private renderPlaceScreen(p: PropertyView, pl: PlaceView): React.ReactNode {
+    const fact = (label: string, value: React.ReactNode) =>
+      h('div', { key: label, style: { display: 'flex', gap: 12, padding: '6px 0', borderBottom: '1px solid var(--nxai-card-border)', fontSize: 13 } },
+        h('span', { style: { minWidth: 110, color: 'var(--nxai-card-sub)' } }, label),
+        h('span', { style: { color: 'var(--nxai-card-text)' } }, value),
+      );
+    const absent = (why: string) => h('span', { style: { color: 'var(--nxai-card-sub)' } }, `— ${why}`);
+
+    return h('div', { style: { padding: '0 12px', maxWidth: 640 } },
+      h('a', {
+        style: { cursor: 'pointer', fontSize: 12, color: 'var(--nxai-accent)' },
+        onClick: () => this.setState({ view: { screen: 'property', key: p.key } }),
+      }, `← ${p.name}`),
+      h('div', { style: { fontSize: 18, fontWeight: 700, color: 'var(--nxai-card-text)', margin: '8px 0 2px' } },
+        `${p.name} — ${pl.kind}`),
+      h('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub)', marginBottom: 4 } }, pl.domain ?? pl.name),
+      h('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub)', marginBottom: 14 } },
+        'Read at a distance, through gates. Nothing on this screen edits anything.'),
+
+      h('div', { style: { fontSize: 11, fontWeight: 700, letterSpacing: '.06em', color: 'var(--nxai-card-sub)', textTransform: 'uppercase' as const, margin: '10px 0 4px' } }, 'What Nexus knows'),
+      fact('WordPress', pl.wpVersion ?? absent('not collected for this place')),
+      fact('PHP', pl.phpVersion ?? absent('unknown — never a guessed version')),
+      fact('Plugins', pl.pluginCount !== null ? `${pl.pluginCount} recorded` : absent(pl.ceiling ?? 'not collected for this place')),
+      fact('Content', pl.docCount !== null ? `${pl.docCount} documents indexed` : absent(pl.ceiling ?? 'not indexed')),
+      fact('Metadata checked', h('span', { style: pl.checkedL2.state === 'fail' ? { color: 'var(--nxai-danger-text)' } : undefined }, checkedText(pl.checkedL2, false))),
+      fact('Content checked', h('span', { style: pl.checkedL3.state === 'fail' ? { color: 'var(--nxai-danger-text)' } : undefined }, checkedText(pl.checkedL3, false))),
+
+      h('div', { style: { fontSize: 11, fontWeight: 700, letterSpacing: '.06em', color: 'var(--nxai-card-sub)', textTransform: 'uppercase' as const, margin: '16px 0 4px' } }, 'How deeply'),
+      h('div', { style: { fontSize: 13, color: 'var(--nxai-card-text)' } },
+        h('strong', null, KNOWLEDGE_LABELS[pl.knowledge]),
+        pl.ceiling
+          ? ` — and it cannot go deeper from here. ${pl.ceiling}. A property of the account, not a failure to retry.`
+          : pl.knowledge === 'searchable'
+            ? ' — Nexus has indexed the content here; it can answer about pages and posts, not just versions.'
+            : pl.knowledge === 'nothing'
+              ? ' — this place has never been scanned. One sync fills the table above.'
+              : ' — versions and configuration, not content. Indexing raises this place to Searchable.',
+      ),
+
+      h('div', { style: { fontSize: 11, fontWeight: 700, letterSpacing: '.06em', color: 'var(--nxai-card-sub)', textTransform: 'uppercase' as const, margin: '16px 0 4px' } }, 'What can be done from here'),
+      ...this.proceduresFor(p, pl).map((proc) =>
+        h('div', {
+          key: proc.label,
+          style: {
+            padding: '8px 12px', marginBottom: 6, borderRadius: 6, fontSize: 13,
+            border: `1px ${proc.barred ? 'dashed' : 'solid'} var(--nxai-card-border)`,
+            background: 'var(--nxai-card-bg)',
+          },
+        },
+          h('div', { style: { fontWeight: 600, color: proc.barred ? 'var(--nxai-card-sub)' : 'var(--nxai-card-text)' } },
+            proc.barred ? `${proc.label} — barred` : proc.label),
+          h('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } }, proc.note),
+        ),
+      ),
+    );
   }
 
   private toggleOpen = (key: string): void => {
     this.setState((s) => ({ open: { ...s.open, [key]: !s.open[key] } }));
   };
 
-  private renderPlace(pl: PlaceView): React.ReactNode {
+  private renderPlace(p: PropertyView, pl: PlaceView): React.ReactNode {
     return h('div', {
       key: pl.rowId,
-      style: { display: 'flex', gap: 12, alignItems: 'baseline', padding: '4px 0 4px 26px', fontSize: 12, color: 'var(--nxai-card-sub)' },
+      onClick: () => this.setState({ view: { screen: 'place', key: p.key, rowId: pl.rowId } }),
+      style: { display: 'flex', gap: 12, alignItems: 'baseline', padding: '4px 0 4px 26px', fontSize: 12, color: 'var(--nxai-card-sub)', cursor: 'pointer' },
     },
       h('span', { style: { minWidth: 90, color: 'var(--nxai-card-text)' } }, pl.kind),
       h('span', { style: { minWidth: 170 } }, pl.name),
@@ -114,11 +251,23 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
     if (outsideFilter) flags.push('outside the current filter — shown because it matches your search');
 
     const headline = h('div', {
-      style: { display: 'flex', gap: 12, alignItems: 'baseline', cursor: multi ? 'pointer' : 'default' },
-      onClick: multi ? () => this.toggleOpen(p.key) : undefined,
+      style: { display: 'flex', gap: 12, alignItems: 'baseline' },
     },
-      h('span', { style: { width: 14, color: 'var(--nxai-card-sub)', fontSize: 11 } }, multi ? (open ? '▾' : '▸') : ''),
-      h('span', { style: { fontWeight: 600, color: 'var(--nxai-card-text)' } }, p.name),
+      h('span', {
+        style: { width: 14, color: 'var(--nxai-card-sub)', fontSize: 11, cursor: multi ? 'pointer' : 'default' },
+        onClick: multi ? () => this.toggleOpen(p.key) : undefined,
+      }, multi ? (open ? '▾' : '▸') : ''),
+      // The name is the door: a multi-place property opens its screen; a
+      // single-place row goes straight to its one place (the mock's rule).
+      h('span', {
+        style: { fontWeight: 600, color: 'var(--nxai-card-text)', cursor: 'pointer' },
+        onClick: () =>
+          this.setState({
+            view: multi
+              ? { screen: 'property', key: p.key }
+              : { screen: 'place', key: p.key, rowId: p.places[0].rowId },
+          }),
+      }, p.name),
       h('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } },
         p.places.length === 1
           ? `${p.places[0].kind} · ${p.places[0].source === 'local' ? 'this Mac' : p.places[0].source === 'wpe' ? 'WP Engine' : 'your server'}`
@@ -143,7 +292,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       flags.length
         ? h('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', paddingLeft: 26 } }, flags.join(' · '))
         : null,
-      multi && open ? p.places.map((pl) => this.renderPlace(pl)) : null,
+      multi && open ? p.places.map((pl) => this.renderPlace(p, pl)) : null,
       !multi && p.places[0].ceiling
         ? h('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', paddingLeft: 26 } }, `⛔ ${p.places[0].ceiling}`)
         : null,
@@ -160,6 +309,17 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
     }
     if (!loaded || !collapse) {
       return h('div', { style: { padding: 24, color: 'var(--nxai-card-sub)' } }, 'Reading the fleet…');
+    }
+
+    // Drill-ins: a stale key (fleet refreshed underneath) falls back to the
+    // list rather than rendering a ghost.
+    if (this.state.view) {
+      const prop = collapse.properties.find((pp) => pp.key === (this.state.view as { key: string }).key);
+      if (prop && this.state.view.screen === 'property') return this.renderPropertyScreen(prop);
+      if (prop && this.state.view.screen === 'place') {
+        const pl = prop.places.find((x) => x.rowId === (this.state.view as { rowId: string }).rowId);
+        if (pl) return this.renderPlaceScreen(prop, pl);
+      }
     }
 
     const { header } = collapse;

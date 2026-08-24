@@ -15,7 +15,10 @@ const iso = (hoursAgo: number) => new Date(NOW - hoursAgo * 3600_000).toISOStrin
 const place = (over: any = {}) => ({
   rowId: 'wpe-1', kind: 'production', source: 'wpe', name: 'dbrains',
   domain: 'dbrains.wpengine.com', knowledge: 'searchable', ceiling: null,
-  checked: { state: 'ok', finishedAt: iso(8), reason: null }, status: null,
+  checked: { state: 'ok', finishedAt: iso(8), reason: null },
+  checkedL2: { state: 'ok', finishedAt: iso(8), reason: null },
+  checkedL3: { state: 'ok', finishedAt: iso(9), reason: null },
+  status: null, wpVersion: '6.8', phpVersion: '8.2', pluginCount: 24, docCount: 412,
   ...over,
 });
 
@@ -23,7 +26,9 @@ const property = (over: any = {}): PropertyView => ({
   key: 'wpe:p1', name: 'dbrains', nameSource: 'portal', accountId: 'a1',
   accountName: 'dbrains', origin: 'wpe', places: [place()], hasCopy: false,
   rungs: ['searchable'], oldest: { state: 'ok', finishedAt: iso(8), reason: null },
-  collision: false, ...over,
+  collision: false,
+  lineage: ['No copy of this site exists on your machine. Each place stands alone until a pull or deploy is observed.'],
+  ...over,
 });
 
 function collapse(properties: PropertyView[], headerOver: any = {}): FleetCollapse {
@@ -155,5 +160,56 @@ describe('PropertiesTab', () => {
     const t = JSON.stringify(serializeTree(inst.render()));
     expect(t).toContain('read failure');
     expect(t).toContain('Retry');
+  });
+});
+
+describe('drill-ins (Phase 2)', () => {
+  test('the property screen renders place cards and the composed lineage', () => {
+    const p = property({
+      key: 'wpe:p2', name: 'benfischer',
+      places: [place({ rowId: 'wpe-1' }), place({ rowId: 'wpe-2', kind: 'staging' })],
+      lineage: ['A copy of this site lives on this machine (ben-local) — linked to benfischer.',
+                "Your copy's content was pulled from benfischer1stg — its content is 11 day(s) behind."],
+    });
+    const t = rendered(collapse([p]), (inst) => { inst.state.view = { screen: 'property', key: 'wpe:p2' }; });
+    expect(t).toContain('← All sites');
+    expect(t).toContain('staging');
+    expect(t).toContain('pulled from benfischer1stg');
+    expect(t).toContain('11 day(s) behind');
+  });
+
+  test('the place screen states per-layer ages, honest absences, the ceiling, and barred procedures', () => {
+    const p = property({
+      key: 'wpe:au', name: 'jpmeautoscale',
+      places: [place({
+        rowId: 'wpe-au', knowledge: 'basic',
+        ceiling: 'AutoscaleAlpha has no SSH gateway',
+        pluginCount: null, docCount: null,
+        checkedL3: { state: 'never', finishedAt: null, reason: null },
+      })],
+      rungs: ['basic'],
+    });
+    const t = rendered(collapse([p]), (inst) => { inst.state.view = { screen: 'place', key: 'wpe:au', rowId: 'wpe-au' }; });
+    expect(t).toContain('cannot go deeper');
+    expect(t).toContain('AutoscaleAlpha has no SSH gateway');
+    expect(t).toContain('never checked');                       // L3 never ran
+    expect(t).toContain('Index content here — barred');         // barred with the reason visible
+    expect(t).toContain('Nothing on this screen edits anything');
+  });
+
+  test('a failing layer shows its transport reason on the place screen', () => {
+    const p = property({
+      places: [place({
+        checkedL2: { state: 'fail', finishedAt: iso(5), reason: 'NOT NULL constraint failed: users.username' },
+      })],
+    });
+    const t = rendered(collapse([p]), (inst) => { inst.state.view = { screen: 'place', key: 'wpe:p1', rowId: 'wpe-1' }; });
+    expect(t).toContain('NOT NULL constraint failed: users.username');
+  });
+
+  test('a stale drill-in key falls back to the list, never a ghost', () => {
+    const t = rendered(collapse([property()]), (inst) => { inst.state.view = { screen: 'property', key: 'wpe:gone' }; });
+    expect(t).toContain('properties');   // the fleet header rendered instead
+    expect(t).not.toContain('← All sites');
   });
 });

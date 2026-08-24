@@ -155,8 +155,8 @@ describe('ceiling, roll-ups and the header', () => {
       ],
       wpeSites: [{ id: 'p1', name: 'A', account_id: 'acct-1' }],
       checked: new Map([
-        ['wpe-1', ok('2026-08-24T10:00:00.000Z')],
-        ['wpe-2', ok('2026-08-24T02:00:00.000Z')], // the OLDEST — this one wins
+        ['wpe-1', { l3: ok('2026-08-24T10:00:00.000Z') }],
+        ['wpe-2', { l3: ok('2026-08-24T02:00:00.000Z') }], // the OLDEST — this one wins
       ]),
     });
     expect(buildFleetCollapse(input).properties[0].oldest.finishedAt).toBe('2026-08-24T02:00:00.000Z');
@@ -165,15 +165,15 @@ describe('ceiling, roll-ups and the header', () => {
       graphRows: input.graphRows,
       wpeSites: input.wpeSites,
       checked: new Map([
-        ['wpe-1', ok('2026-08-24T10:00:00.000Z')],
-        ['wpe-2', fail('2026-08-24T09:00:00.000Z', 'ssh: connection refused')],
+        ['wpe-1', { l3: ok('2026-08-24T10:00:00.000Z') }],
+        ['wpe-2', { l3: fail('2026-08-24T09:00:00.000Z', 'ssh: connection refused') }],
       ]),
     });
     const rolled = buildFleetCollapse(withFail).properties[0].oldest;
     expect(rolled.state).toBe('fail');
     expect(rolled.reason).toBe('ssh: connection refused');
 
-    const withNever = base({ graphRows: input.graphRows, wpeSites: input.wpeSites, checked: new Map([['wpe-1', ok('2026-08-24T10:00:00.000Z')]]) });
+    const withNever = base({ graphRows: input.graphRows, wpeSites: input.wpeSites, checked: new Map([['wpe-1', { l3: ok('2026-08-24T10:00:00.000Z') }]]) });
     expect(buildFleetCollapse(withNever).properties[0].oldest.state).toBe('never');
   });
 
@@ -213,5 +213,75 @@ describe('ceiling, roll-ups and the header', () => {
     expect(header.placesTotal).toBe(5); // 2 wpe installs + 1 copy + 1 local + 1 external
     expect(header.neverLookedInside).toBe(1);
     expect(header.onThisMachine).toBe(2); // solo + the property holding copyof1
+  });
+});
+
+describe('drill-in facts and lineage (Phase 2)', () => {
+  test('a place carries both layers; the merged checked is the LATER of the two', () => {
+    const input = base({
+      graphRows: [wpeRow('wpe-1', 'a', { wpe_site_id: 'p1' })],
+      wpeSites: [{ id: 'p1', name: 'A', account_id: 'acct-1' }],
+      checked: new Map([['wpe-1', {
+        l2: ok('2026-08-24T01:00:00.000Z'),
+        l3: fail('2026-08-24T09:00:00.000Z', 'ssh: refused'),
+      }]]),
+      pluginCounts: new Map([['wpe-1', 24]]),
+      docCounts: new Map([['wpe-1', 412]]),
+    });
+    const place = buildFleetCollapse(input).properties[0].places[0];
+    expect(place.checkedL2.state).toBe('ok');
+    expect(place.checkedL3.reason).toBe('ssh: refused');
+    expect(place.checked.state).toBe('fail'); // the later layer
+    expect(place.pluginCount).toBe(24);
+    expect(place.docCount).toBe(412);
+    expect(place.wpVersion).toBe('6.8');
+  });
+
+  test('unknown facts are NULL, never a default', () => {
+    const input = base({
+      graphRows: [wpeRow('wpe-1', 'a', { wpe_site_id: 'p1', php_version: null })],
+      wpeSites: [{ id: 'p1', name: 'A', account_id: 'acct-1' }],
+    });
+    const place = buildFleetCollapse(input).properties[0].places[0];
+    expect(place.pluginCount).toBeNull();
+    expect(place.docCount).toBeNull();
+    expect(place.phpVersion).toBeNull();
+  });
+
+  test('lineage: a pulled copy gets the recorded source and drift; the code leg is always a stated absence', () => {
+    const input = base({
+      graphRows: [wpeRow('wpe-1', 'benfischer', { wpe_site_id: 'prop-1' })],
+      wpeSites: [{ id: 'prop-1', name: 'benfischer', account_id: 'acct-1' }],
+      localSites: [{ id: 'LocA', name: 'ben-local', wpVersion: '6.8' }],
+      siteLinks: [{ localSiteId: 'LocA', wpeInstallId: 'inst-benfischer', wpeInstallName: 'benfischer' }],
+      contentStatus: new Map([['LocA', { state: 'pulled', sourceName: 'benfischer1stg', behindSeconds: 11 * 86_400 }]]),
+    });
+    const lineage = buildFleetCollapse(input).properties[0].lineage;
+    expect(lineage.join(' ')).toContain('lives on this machine (ben-local) — linked to benfischer');
+    expect(lineage.join(' ')).toContain('pulled from benfischer1stg — its content is 11 day(s) behind');
+    expect(lineage.join(' ')).toContain('Code moves through git');
+  });
+
+  test('lineage: absence is stated with a reason — never an empty block', () => {
+    const noCopy = base({
+      graphRows: [wpeRow('wpe-1', 'solo', { wpe_site_id: 'p1' })],
+      wpeSites: [{ id: 'p1', name: 'Solo', account_id: 'acct-1' }],
+    });
+    expect(buildFleetCollapse(noCopy).properties[0].lineage.join(' '))
+      .toContain('No copy of this site exists on your machine');
+
+    const unlinkedCopy = base({
+      graphRows: [wpeRow('wpe-1', 'a', { wpe_site_id: 'p1' })],
+      wpeSites: [{ id: 'p1', name: 'A', account_id: 'acct-1' }],
+      localSites: [{ id: 'LocB', name: 'copy-b', wpVersion: '6.8' }],
+      siteLinks: [{ localSiteId: 'LocB', wpeInstallId: 'inst-a' }],
+      // no contentStatus — no recorded pull
+    });
+    expect(buildFleetCollapse(unlinkedCopy).properties[0].lineage.join(' '))
+      .toContain("No recorded pull links your copy's content");
+
+    const localOnly = base({ localSites: [{ id: 'LocC', name: 'mine', wpVersion: '6.8' }] });
+    expect(buildFleetCollapse(localOnly).properties[0].lineage.join(' '))
+      .toContain('exists only on this machine');
   });
 });
