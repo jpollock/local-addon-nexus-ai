@@ -150,7 +150,12 @@ whatever it should be) wrapping `indexOneWpeContent` / `indexAllWpeContent`.
 
 ---
 
-## D6 — `get_site_structure` against a WPE install returned nothing in 20 minutes
+## D6 — LIKELY RESOLVED BY D14, RETEST NEEDED — `get_site_structure` against a WPE install returned nothing in 20 minutes
+
+> **Status 2026-08-24:** the "contention" candidate below is now the confirmed
+> mechanism of D14 (the sweep held all 5 of WPE's per-user connections, so any
+> other SSH call waited forever). D14 is fixed (`closeMaster`, concurrency 3).
+> No dedicated retest of this tool has been run yet — retest before marking FIXED.
 
 **Reproduce:** `get_site_structure(site: 'cedarvalehealt')` — no result after
 20 minutes; killed.
@@ -293,7 +298,10 @@ they are complete by luck rather than by demonstration.
 
 ---
 
-## D8 — `keyword` and `hybrid` search are broken for any site whose id contains a hyphen
+## D8 — OPEN — `keyword` and `hybrid` search are broken for any site whose id contains a hyphen
+
+> **Status 2026-08-24:** still unquoted at `SqliteVecStore.ts` `searchBM25`
+> (the sibling read at :502 IS quoted). The fix is one line; not yet taken.
 
 **Found 2026-08-22, after WP-62.** Blocks the structured-filter capability that
 `describe_site_fields` advertises.
@@ -364,7 +372,12 @@ assertion, and `locations` surfaces post IDs rather than slugs.
 
 ---
 
-## D9 — every Local site fails to content-index when the site is not running
+## D9 — FIXED 2026-08-22 (d417a277, d07ea42f) — every Local site fails to content-index when the site is not running
+
+> **FIXED by the owner's ruling:** a bulk operation that reaches a halted Local
+> site starts it, collects, and stops it again — implemented across every
+> dispatcher (bulk, scheduled, single-site) and verified live in the 2026-08-23
+> full-fleet sweep, where halted local sites were started, indexed and stopped.
 
 **Found 2026-08-22, while fixing WP-67.** Filed separately because WP-67's
 scope is the *reporting* contract; this is the underlying failure it was
@@ -411,7 +424,12 @@ text, which is a behaviour change this packet had no mandate for.
 
 ---
 
-## D10 — the WP Engine content index sent the graph id as the install name, so all 365 SSH calls failed instantly
+## D10 — FIXED 2026-08-22 (d07ea42f; display residue 8530bf82) — the WP Engine content index sent the graph id as the install name, so all 365 SSH calls failed instantly
+
+> **FIXED:** `requireWpeInstallName` refuses id-shaped names at the transport
+> seam, and the fleet path resolves real install names. Verified live: the
+> 2026-08-23 sweep ran 283/286 reachable installs clean. The unexplained
+> `sites.name` graph writer is guarded against, not yet root-caused.
 
 > **CORRECTED 2026-08-22, during WP-68.** This entry originally blamed the
 > *bulk* path (`op.siteNames?.[siteId] ?? siteId`). That attribution is wrong.
@@ -524,7 +542,7 @@ space, needs a live reproduction rather than more log reading.
 
 ---
 
-## D11 — a WP Engine metadata sync writes the site row, then fails on `users.username`
+## D11 — OPEN — a WP Engine metadata sync writes the site row, then fails on `users.username`
 
 **Found 2026-08-22, in the WP-68 exhibit.** Pre-existing; unrelated to WP-68's
 change, and now visible because the outcome is reported honestly.
@@ -617,7 +635,7 @@ say "6 posts read, none with indexable content" instead.
 
 ---
 
-## D13 — `siteNames` was stripped by its own validation schema on every bulk dispatch
+## D13 — FIXED 2026-08-22 (0423dd6d; chokepoint resolution 8530bf82) — `siteNames` was stripped by its own validation schema on every bulk dispatch
 
 **Found 2026-08-22, from a screenshot of pending rows reading `wpe-3055da28-…`
 instead of install names.** This is the answer to D10's open residual.
@@ -788,7 +806,7 @@ for WP Engine, not something determinable from here.
 
 ---
 
-## D16 — a bulk sweep double-indexes every halted local site it starts
+## D16 — OPEN — a bulk sweep double-indexes every halted local site it starts (fix planned: pipeline-observability plan phase 3)
 
 **Found 2026-08-23 by the pipeline ledger, on its first day.** During the
 413-site sweep, the ledger recorded **35 local sites with BOTH an `adhoc` L3
