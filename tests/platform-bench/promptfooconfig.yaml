@@ -15,13 +15,13 @@ evaluateOptions:
   repeat: 3           # 3 per cell; raise to 5 before publishing
 
 providers:
-  - id: file://providers/nexus.js
+  - id: file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/nexus.js
     label: Nexus
 
-  - id: file://providers/coworker.js
+  - id: file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/coworker.js
     label: Coworker
 
-  - id: file://providers/wordpress.js
+  - id: file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/wordpress.js
     label: WordPress
 
 # ── Substrate constants ────────────────────────────────────────────────────────
