@@ -60,6 +60,103 @@ const fleetCommand = new Command('fleet').description('Fleet intelligence and an
 // Health Commands
 // ============================================================================
 
+interface CollapseChecked { state: string; finishedAt: string | null; reason: string | null }
+interface CollapsePlace {
+  kind: string; name: string; knowledge: string; ceiling: string | null;
+  checked: CollapseChecked; status: string | null;
+}
+interface CollapseProperty {
+  name: string; nameSource: string; origin: string; accountName: string | null;
+  places: CollapsePlace[]; hasCopy: boolean; rungs: string[];
+  oldest: CollapseChecked; collision: boolean;
+}
+interface Collapse {
+  properties: CollapseProperty[];
+  header: {
+    total: number; byOrigin: { local: number; wpe: number; external: number };
+    placesTotal: number; neverLookedInside: number; onThisMachine: number;
+  };
+}
+
+fleetCommand
+  .command('properties')
+  .description('The fleet at the property grain: places, knowledge rungs, ceilings, checked ages')
+  .option('--json', 'Output raw JSON')
+  .option('--origin <origin>', 'Filter by origin: local | wpe | external')
+  .option('--all', 'Print every property (default: multi-place and attention-worthy rows, plus a count)')
+  .action(async (options) => {
+    try {
+      const client = getClient();
+      const result = await client.mutate<{ nexusFleetCollapse: { success: boolean; error?: string; collapse?: string } }>(`
+        mutation {
+          nexusFleetCollapse { success error collapse }
+        }
+      `);
+      const res = result.nexusFleetCollapse;
+      if (!res?.success || !res.collapse) {
+        console.error(`❌ ${res?.error ?? 'No collapse returned'}`);
+        process.exit(1);
+      }
+      const collapse: Collapse = JSON.parse(res.collapse);
+      if (options.json) {
+        console.log(JSON.stringify(collapse, null, 2));
+        return;
+      }
+
+      const h = collapse.header;
+      console.log('\nYOUR SITES — property grain');
+      console.log('─'.repeat(78));
+      console.log(
+        `${h.total} properties · ${h.placesTotal} places · ` +
+        `${h.byOrigin.local} on this machine only, ${h.byOrigin.wpe} WP Engine, ${h.byOrigin.external} external`,
+      );
+      console.log(
+        `${h.neverLookedInside} places never looked inside · ${h.onThisMachine} properties live on this machine`,
+      );
+      console.log('─'.repeat(78));
+
+      const age = (c: CollapseChecked): string => {
+        if (c.state === 'never') return 'never checked';
+        const hrs = (Date.now() - Date.parse(c.finishedAt ?? '')) / 3600_000;
+        const a = !Number.isFinite(hrs) ? '?' : hrs < 1 ? `${Math.round(hrs * 60)}m` : hrs < 48 ? `${Math.round(hrs)}h` : `${Math.round(hrs / 24)}d`;
+        return c.state === 'fail' ? `FAILED ${a} — ${(c.reason ?? '').slice(0, 60)}` : `${a} ago`;
+      };
+
+      let props = collapse.properties;
+      if (options.origin) props = props.filter((p) => p.origin === options.origin);
+      const interesting = (p: CollapseProperty) =>
+        p.places.length > 1 || p.collision || p.oldest.state !== 'ok' ||
+        p.rungs.includes('nothing') || p.places.some((pl) => pl.ceiling);
+      const shown = options.all ? props : props.filter(interesting);
+
+      for (const p of shown) {
+        const flags = [
+          p.collision ? 'name collision' : null,
+          p.hasCopy ? 'copy here' : null,
+          p.nameSource === 'install' ? 'unnamed in portal' : null,
+        ].filter(Boolean).join(' · ');
+        console.log(
+          `\n${p.name}  [${p.origin}]${p.accountName ? `  ${p.accountName}` : ''}${flags ? `  (${flags})` : ''}`,
+        );
+        for (const pl of p.places) {
+          const ceiling = pl.ceiling ? `  ⛔ ${pl.ceiling}` : '';
+          console.log(
+            `  ${pl.kind.padEnd(12)} ${pl.name.padEnd(22)} ${pl.knowledge.padEnd(11)} ${age(pl.checked)}${ceiling}`,
+          );
+        }
+      }
+      if (!options.all && shown.length < props.length) {
+        console.log(
+          `\n… and ${props.length - shown.length} single-place properties with nothing needing attention (--all to print them)`,
+        );
+      }
+      console.log('');
+    } catch (error: any) {
+      console.error(`❌ ${error?.message ?? String(error)}`);
+      process.exit(1);
+    }
+  });
+
 fleetCommand
   .command('health')
   .description('Overall fleet health summary')

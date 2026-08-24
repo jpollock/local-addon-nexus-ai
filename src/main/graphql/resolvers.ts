@@ -2691,6 +2691,49 @@ export function createResolvers(context: ResolverContext) {
         }
       },
 
+      nexusFleetCollapse: async () => {
+        try {
+          const { collectFleetCollapse } = await import('../fleet/collectFleetCollapse');
+          const { getIntelligenceCore } = await import('../intelligence-host/coreRegistry');
+          const db = (services.graphService as any)?.getDb?.() ?? null;
+
+          // site_links read directly — the store is a wrapper over this table.
+          let siteLinks: Array<{ localSiteId: string; wpeInstallId: string }> = [];
+          try {
+            if (db) {
+              siteLinks = (db.prepare('SELECT local_site_id, wpe_install_id FROM site_links').all() as any[])
+                .map((l) => ({ localSiteId: String(l.local_site_id), wpeInstallId: String(l.wpe_install_id) }));
+            }
+          } catch { /* no links → no copy nesting, honestly */ }
+
+          let wpeSites: Array<{ id: string; name: string | null; account_id: string | null }> = [];
+          let wpeAccounts: Array<{ id: string; name: string; nickname: string | null }> = [];
+          try { wpeSites = await (services.graphService as any)?.getWpeSites?.() ?? []; } catch { /* names absent */ }
+          try { wpeAccounts = await (services.graphService as any)?.getAccounts?.() ?? []; } catch { /* accounts absent */ }
+
+          const localSites = Object.values(services.siteData?.getSites?.() ?? {}) as any[];
+          const statuses: Record<string, string> = {};
+          for (const s of localSites) {
+            if (!s?.id) continue;
+            try { statuses[s.id] = services.localServices?.getSiteStatus?.(s.id) ?? 'unknown'; } catch { /* leave unset */ }
+          }
+
+          const collapse = collectFleetCollapse({
+            localSites,
+            statuses,
+            db,
+            indexEntries: (services.indexRegistry?.listAll?.() ?? []) as any[],
+            wpeSites,
+            wpeAccounts,
+            siteLinks,
+            core: getIntelligenceCore() ?? null,
+          });
+          return { success: true, error: null, collapse: JSON.stringify(collapse) };
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error), collapse: null };
+        }
+      },
+
       nexusFleetHealth: async () => {
         return withQueue(async () => {
         try {

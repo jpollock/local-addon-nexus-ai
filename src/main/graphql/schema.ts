@@ -967,6 +967,9 @@ export const typeDefs = gql`
     "Data-pipeline status: L2/L3 coverage, failures with reasons, 24h run history (plan 2026-08-23)"
     nexusPipelineStatus: NexusPipelineStatusResult!
 
+    "The fleet collapse: properties grouped over places, with rungs, ceilings and checked ages (plan 2026-08-24)"
+    nexusFleetCollapse: NexusFleetCollapseResult!
+
     "Individual site health"
     nexusFleetSiteHealth(target: String!): NexusFleetSiteHealthResult!
 
@@ -1113,6 +1116,13 @@ export const typeDefs = gql`
     error: String
     "JSON-encoded PipelineStatusReport (sources, failures, history24h)"
     report: String
+  }
+
+  type NexusFleetCollapseResult {
+    success: Boolean!
+    error: String
+    "JSON-encoded FleetCollapse (properties[], header). Property names are untrusted text."
+    collapse: String
   }
 
   type NexusFleetHealthResult {
