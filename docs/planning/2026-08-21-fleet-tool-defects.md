@@ -1119,3 +1119,37 @@ check, and this register's own rule (D21, the `'8.0'` lesson) is that an
 unknown value must be NULL/absent, never a plausible-looking figure. Likely
 arithmetic over missing CAPI fields; fix at the formatting site with the
 honest-NULL rule.
+
+---
+
+## O4 — Observation — flattened repeaters swamp BM25 and dominate tool output
+
+Observed 2026-08-24 on `cedarvalehealt` while re-running CV-G-01 after D8.
+
+Each `treatment` carries roughly fifty flattened repeater fields —
+`price_range_by_location_0_low`, `_0_high`, … `_24_high` — plus twenty-five
+`_N_location` slugs, and they form part of the searchable text. Two costs
+follow.
+
+**BM25 relevance.** `searchMode:'keyword'` for "dermatology" returned three
+treatments whose displayed content was nothing but
+`Price Range By Location 20 High: 2381. Price Range By Location 21 Low: 1818…`,
+all at an identical score of 0.016. The match is on the word inside location
+slugs such as `cedar-vale-dermatology-denver-80202`, not on any prose. On an
+ACF-heavy site the keyword half of hybrid contributes mostly noise.
+
+**Output size.** One filtered query returning 8 records produced roughly 28,000
+characters, nearly all price numbers. For an agent consuming these results that
+is a large share of a context window spent on a single search.
+
+**Related:** `price_range_by_location` is reported as the repeater's *row
+count*, not a price — `number 25–25` on the flagship, `2–2` on `summitdermatol`,
+`boolean (0/1)` on `tablemesaderm`, tracking the number of clinics each site
+has. A "what does Mohs cost in Denver" question would read 25 as the answer; the
+real values are in the per-row `_N_low` / `_N_high` fields.
+
+Not filed as a defect. Flattening a repeater is a defensible choice and the row
+count may be deliberate. But the relevance and context costs are real, and both
+look like decisions worth making explicitly rather than inheriting. A candidate
+shape: keep repeater rows retrievable but exclude them from the BM25 text, and
+report the row count under a distinct name.
