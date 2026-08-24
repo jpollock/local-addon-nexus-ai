@@ -9,6 +9,7 @@ import { chunkPosts } from '../content/chunker';
 import { vectorSiteId } from '../vector-store/vectorSiteId';
 import { recordPipelineRun } from '../intelligence-host/pipelineRunProducer';
 import type { PipelineTrigger } from '../../intelligence';
+import { writeRowsHonestly } from './writeRowsHonestly';
 
 export interface ExternalContentIndexServiceOptions {
   graphService: GraphService;
@@ -80,8 +81,8 @@ export class ExternalContentIndexService {
         return { documentCount: 0 };
       }
 
-      for (const post of extracted.posts) {
-        await this.graphService.upsertContent({
+      await writeRowsHonestly(extracted.posts, (post) =>
+        this.graphService.upsertContent({
           site_id: siteId,
           post_id: post.id,
           post_type: post.postType,
@@ -90,8 +91,8 @@ export class ExternalContentIndexService {
           author_id: parseInt(post.author, 10) || null,
           created_at: new Date(post.date).getTime(),
           updated_at: Date.now(),
-        });
-      }
+        }),
+      { subject: siteId, label: 'content', logger: this.logger });
 
       // One chunker, shared with the local path and with WP Engine (WP-62).
       // `source: 'external'` is NEVER 'wpe' here — this is the honesty-rule

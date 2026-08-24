@@ -1,5 +1,6 @@
 // src/main/startup/writeExternalHostData.ts
 import type { ExternalHostData } from './collectExternalHostData';
+import { writeRowsHonestly } from '../events/writeRowsHonestly';
 
 export type GraphWriter = {
   upsertSite(site: Record<string, unknown>): Promise<unknown>;
@@ -170,12 +171,12 @@ export async function writeExternalHostData(
   if (data.plugins !== undefined) {
     try {
       try { db?.prepare('DELETE FROM plugins WHERE site_id=?').run(siteId); } catch { /* keep going */ }
-      for (const p of data.plugins) {
-        await graphService.upsertPlugin({
+      await writeRowsHonestly(data.plugins, (p) =>
+        graphService.upsertPlugin({
           site_id: siteId, slug: p.slug, name: p.name, version: p.version,
           is_active: p.isActive, author: null, created_at: now, updated_at: now,
-        });
-      }
+        }),
+      { subject: siteId, label: 'plugin', logger });
     } catch (err) {
       logger.warn(
         `[writeExternalHostData] plugin write failed for ${siteId}, inventory may be incomplete: `
@@ -186,12 +187,12 @@ export async function writeExternalHostData(
   if (data.themes !== undefined) {
     try {
       try { db?.prepare('DELETE FROM themes WHERE site_id=?').run(siteId); } catch { /* keep going */ }
-      for (const t of data.themes) {
-        await graphService.upsertTheme({
+      await writeRowsHonestly(data.themes, (t) =>
+        graphService.upsertTheme({
           site_id: siteId, slug: t.slug, name: t.name, version: t.version,
           is_active: t.isActive, author: null, created_at: now, updated_at: now,
-        });
-      }
+        }),
+      { subject: siteId, label: 'theme', logger });
     } catch (err) {
       logger.warn(
         `[writeExternalHostData] theme write failed for ${siteId}, inventory may be incomplete: `

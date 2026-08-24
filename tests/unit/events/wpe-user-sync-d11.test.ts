@@ -66,3 +66,68 @@ describe('D11 — the users write is honest per row', () => {
     expect(upsertUser).not.toHaveBeenCalled();
   });
 });
+
+describe('the generalised shield (round: any-other-tables audit)', () => {
+  test('a PHP notice ahead of the plugin JSON no longer silently empties the section', async () => {
+    const upsertPlugin = jest.fn();
+    const warn = jest.fn();
+    const service = new WPESyncService({
+      graphService: {
+        getDb: () => null, upsertSite: jest.fn(), upsertUser: jest.fn(),
+        deletePlugins: jest.fn(), upsertPlugin,
+      } as any,
+      localServices: {
+        remoteWpCliRun: jest.fn(async (_i: string, args: string[]) => {
+          if (args.includes('plugin')) {
+            return { stdout: 'PHP Notice: something deprecated\n[{"name":"akismet","title":"Akismet","status":"active","version":"5.3"}]', success: true };
+          }
+          return { stdout: '[]', success: true };
+        }),
+      } as any,
+      logger: { info: jest.fn(), warn, error: jest.fn(), debug: jest.fn() },
+    });
+
+    await (service as any).syncInstallInner(
+      { install_id: 'i1', install_name: 'qwerky', environment: 'production', primary_domain: 'q.wpengine.com' },
+      'wpe-q1',
+    );
+
+    expect(upsertPlugin).toHaveBeenCalledTimes(1);
+    expect(upsertPlugin.mock.calls[0][0].slug).toBe('akismet');
+  });
+
+  test('one constraint-violating plugin row no longer kills the section', async () => {
+    const upsertPlugin = jest.fn(async (p: any) => {
+      if (p.slug == null) throw new Error('NOT NULL constraint failed: plugins.slug');
+    });
+    const warn = jest.fn();
+    const service = new WPESyncService({
+      graphService: {
+        getDb: () => null, upsertSite: jest.fn(), upsertUser: jest.fn(),
+        deletePlugins: jest.fn(), upsertPlugin,
+      } as any,
+      localServices: {
+        remoteWpCliRun: jest.fn(async (_i: string, args: string[]) => {
+          if (args.includes('plugin')) {
+            return { stdout: JSON.stringify([
+              { name: null, title: null, status: 'active', version: '1' },
+              { name: 'akismet', title: 'Akismet', status: 'active', version: '5.3' },
+            ]), success: true };
+          }
+          return { stdout: '[]', success: true };
+        }),
+      } as any,
+      logger: { info: jest.fn(), warn, error: jest.fn(), debug: jest.fn() },
+    });
+
+    await (service as any).syncInstallInner(
+      { install_id: 'i1', install_name: 'qwerky', environment: 'production', primary_domain: 'q.wpengine.com' },
+      'wpe-q1',
+    );
+
+    expect(upsertPlugin).toHaveBeenCalledTimes(2);                      // both attempted
+    const good = upsertPlugin.mock.calls.find((c) => c[0].slug === 'akismet');
+    expect(good).toBeTruthy();                                          // the good row landed
+    expect(warn.mock.calls.map((c) => c.join(' ')).join('\n')).toContain('1 of 2');
+  });
+});

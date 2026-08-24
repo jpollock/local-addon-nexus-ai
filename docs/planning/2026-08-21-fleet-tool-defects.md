@@ -560,6 +560,18 @@ space, needs a live reproduction rather than more log reading.
 > ("5,003 of 5,004 users unreadable — skipped, stated, never fabricated"),
 > and the site keeps its wp_version, plugins and themes. Guard-removal
 > mutation killed. acfprod almost certainly shares the seeded-user shape.
+>
+> **Generalised 2026-08-24 (the any-other-tables audit).** The class is: a
+> per-row write loop fed by remote rows into NOT NULL columns, where one bad
+> row killed the section. `writeRowsHonestly` (events/writeRowsHonestly.ts)
+> now shields the seven sweep-path loops — WPE plugins/users/content,
+> external plugins/themes/content, local bulk and lifecycle plugin writes —
+> skipping and COUNTING an unwritable row with its reason, never fabricating,
+> never dying. Constraints stay as tripwires. The D19-sibling strict parses
+> in syncInstall (plugins, users) now use parseJsonArrayLenient, so a PHP
+> notice ahead of the JSON no longer silently empties a section. Ad-hoc
+> paths (deep-refresh, resolver refresh) remain unshielded by choice — a
+> manual call failing loudly is acceptable; the sweeps were not.
 
 **Found 2026-08-22, in the WP-68 exhibit.** Pre-existing; unrelated to WP-68's
 change, and now visible because the outcome is reported honestly.

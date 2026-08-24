@@ -77,7 +77,7 @@ export interface RemoteContentExtractorOptions {
  * with no parseable JSON array anywhere is still a failed page; leniency must
  * not turn garbage into an empty site.
  */
-function parseJsonArrayLenient(stdout: string): unknown[] | undefined {
+export function parseJsonArrayLenient(stdout: string): unknown[] | undefined {
   const attempt = (text: string): unknown[] | undefined => {
     try {
       const parsed = JSON.parse(text);

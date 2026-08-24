@@ -12,6 +12,7 @@ import type { GraphService } from '../events/GraphService';
 import { autoGenerateContextFile } from '../ai-context/auto-generate';
 import { generateMuPluginContent } from '../ai-gateway/mu-plugin-template';
 import { isSiteReady } from './site-readiness';
+import { writeRowsHonestly } from '../events/writeRowsHonestly';
 
 /**
  * Auto-apply gateway toggle changes on site start.
@@ -433,8 +434,8 @@ echo json_encode($out);`,
               });
               // Write plugins to graph.db plugins table
               if (plugins.status === 'fulfilled') {
-                for (const p of plugins.value) {
-                  await graphService.upsertPlugin({
+                await writeRowsHonestly(plugins.value, (p: any) =>
+                  graphService.upsertPlugin({
                     site_id: site.id,
                     slug: p.name,
                     name: p.title ?? p.name,
@@ -443,8 +444,8 @@ echo json_encode($out);`,
                     author: null,
                     created_at: now,
                     updated_at: now,
-                  });
-                }
+                  }),
+                { subject: site.name, label: 'plugin', logger });
               }
             } catch (graphErr) {
               logger.warn(`[NexusAI] graph.db write failed for ${site.name} (non-fatal):`, graphErr);

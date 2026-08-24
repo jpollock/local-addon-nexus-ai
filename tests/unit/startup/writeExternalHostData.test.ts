@@ -152,7 +152,10 @@ describe('writeExternalHostData — the honesty rule', () => {
 
     // Theme write still ran despite the plugin block throwing.
     expect(g.upsertTheme).toHaveBeenCalledWith(expect.objectContaining({ site_id: 'ssh:myhost', slug: 'tt4' }));
-    // The failure was surfaced, not silently swallowed.
-    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('plugin write failed'));
+    // The failure was surfaced, not silently swallowed — and per-row now
+    // (the generalised D11 shield): counted, with its reason, while the
+    // OTHER plugin rows still land instead of dying as collateral.
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unwritable'));
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('1 of 3'));
   });
 });

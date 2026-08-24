@@ -15,6 +15,7 @@ import { auditDirectOperation, type AuditCapableServices } from '../audit/auditD
 import { siteSourceOf, wpeInstallIdOf, type SiteSource } from './siteSource';
 import { recordPipelineRun } from '../intelligence-host/pipelineRunProducer';
 import type { PipelineTrigger } from '../../intelligence';
+import { writeRowsHonestly } from '../events/writeRowsHonestly';
 
 export interface BulkOpDeps {
   contentPipeline: { indexSite(info: any, trigger?: PipelineTrigger): Promise<any> };
@@ -800,8 +801,8 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     // 2. Sync plugins (delete all, then re-insert)
     await this.deps.graphService.deletePlugins(siteId);
     const plugins = await this.deps.siteDataBridge.getPlugins(siteId);
-    for (const plugin of plugins) {
-      await this.deps.graphService.upsertPlugin({
+    await writeRowsHonestly(plugins, (plugin: any) =>
+      this.deps.graphService!.upsertPlugin({
         site_id: siteId,
         slug: plugin.name, // WP-CLI returns 'name' as the slug
         name: plugin.title, // WP-CLI returns 'title' as the display name
@@ -810,8 +811,8 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
         author: null,
         created_at: now,
         updated_at: now,
-      });
-    }
+      }),
+    { subject: siteId, label: 'plugin', logger: { warn: (m: string) => console.warn(m) } });
 
     // Note: Themes and users not currently tracked in graph
     // Could add in future if needed

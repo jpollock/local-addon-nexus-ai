@@ -23,6 +23,8 @@ import { IndexRegistry } from '../content/IndexRegistry';
 import { STORAGE_KEYS } from '../../common/constants';
 import pLimit from 'p-limit';
 import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation-permissions';
+import { parseJsonArrayLenient } from '../content/RemoteContentExtractor';
+import { writeRowsHonestly } from './writeRowsHonestly';
 import type { SiteOpOutcome } from '../bulk/types';
 import { recordPipelineRun } from '../intelligence-host/pipelineRunProducer';
 import type { PipelineTrigger } from '../../intelligence';
@@ -468,7 +470,10 @@ export class WPESyncService {
     this.logger.debug(`[WPESyncService] ${install.install_name} plugin list: success=${pluginResult.success} ms=${t2 - t1}`);
     let pluginRows: any[] = [];
     if (pluginResult.success && pluginResult.stdout) {
-      try { const p = JSON.parse(pluginResult.stdout); pluginRows = Array.isArray(p) ? p : []; } catch { /* skip */ }
+      pluginRows = parseJsonArrayLenient(pluginResult.stdout) ?? [];
+      if (pluginRows.length === 0 && pluginResult.stdout.trim().length > 0) {
+        this.logger.warn(`[WPESyncService] ${install.install_name}: plugin list output did not parse — section kept from previous sync`);
+      }
     }
 
     // P1-6: restrict fields so user_email never leaves the production server. The sync needs only
@@ -479,7 +484,10 @@ export class WPESyncService {
     this.logger.debug(`[WPESyncService] ${install.install_name} user list: success=${userResult.success} ms=${t3 - t2}`);
     let userRows: any[] = [];
     if (userResult.success && userResult.stdout) {
-      try { const u = JSON.parse(userResult.stdout); userRows = Array.isArray(u) ? u : []; } catch { /* skip */ }
+      userRows = (parseJsonArrayLenient(userResult.stdout) ?? []) as typeof userRows;
+      if (userRows.length === 0 && userResult.stdout.trim().length > 0) {
+        this.logger.warn(`[WPESyncService] ${install.install_name}: user list output did not parse — section kept from previous sync`);
+      }
     }
 
     this.logger.info(
@@ -510,8 +518,8 @@ export class WPESyncService {
     // Write plugins (wp plugin list returns: name=slug, title=display name, status, version, author)
     if ((pluginRows as any[]).length > 0) {
       await this.graphService.deletePlugins(siteId);
-      for (const plugin of pluginRows as any[]) {
-        await this.graphService.upsertPlugin({
+      await writeRowsHonestly(pluginRows as any[], (plugin: any) =>
+        this.graphService.upsertPlugin({
           site_id: siteId,
           slug: plugin.name,           // wp plugin list uses 'name' for the slug
           name: plugin.title || plugin.name,
@@ -520,8 +528,8 @@ export class WPESyncService {
           author: plugin.author || null,
           created_at: now,
           updated_at: now,
-        });
-      }
+        }),
+      { subject: install.install_name, label: 'plugin', logger: this.logger });
     }
 
     // Write users — honest per ROW (D11). qwerky's 5,003 seeded users come
@@ -532,12 +540,13 @@ export class WPESyncService {
     // signature the register records. A row with no username is skipped and
     // COUNTED; it is never fabricated and never allowed to kill the sync.
     let unreadableUsers = 0;
-    for (const user of userRows) {
-      if (!user?.user_login) {
-        unreadableUsers++;
-        continue;
-      }
-      await this.graphService.upsertUser({
+    const readableUsers = (userRows as any[]).filter((user) => {
+      if (user?.user_login) return true;
+      unreadableUsers++;
+      return false;
+    });
+    await writeRowsHonestly(readableUsers, (user: any) =>
+      this.graphService.upsertUser({
         site_id: siteId,
         user_id: user.ID,
         username: user.user_login,
@@ -547,8 +556,8 @@ export class WPESyncService {
         roles: JSON.stringify(user.roles ? user.roles.split(',') : []),
         created_at: now,
         updated_at: now,
-      });
-    }
+      }),
+    { subject: install.install_name, label: 'user', logger: this.logger });
     if (unreadableUsers > 0) {
       this.logger.warn(
         `[WPESyncService] ${install.install_name}: ${unreadableUsers} of ${(userRows as any[]).length} ` +
@@ -702,9 +711,10 @@ export class WPESyncService {
         };
       }
 
-      for (const post of extracted.posts) {
-        // Store post metadata in graph
-        await this.graphService.upsertContent({
+      // One post with a constraint-violating field (a seeded corpus with a
+      // NULL title, say) is one skipped row — never a dead content index.
+      await writeRowsHonestly(extracted.posts, (post) =>
+        this.graphService.upsertContent({
           site_id: siteId,
           post_id: post.id,
           post_type: post.postType,
@@ -713,8 +723,8 @@ export class WPESyncService {
           author_id: parseInt(post.author, 10) || null,
           created_at: new Date(post.date).getTime(),
           updated_at: Date.now(),
-        });
-      }
+        }),
+      { subject: installName, label: 'content', logger: this.logger });
 
       // Chunk exactly the way the local path chunks (WP-62). This used to be
       // `// Simple approach: one document per post (no chunking for now)`,
