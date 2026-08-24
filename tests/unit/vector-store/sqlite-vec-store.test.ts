@@ -497,3 +497,79 @@ describe('CRUD — lookupById / delete / dropSite / dropAllTables / listSites / 
     expect(result.tablesScanned).toBe(0);
   });
 });
+
+/**
+ * D8 — keyword and hybrid search were broken for any site whose id contains a
+ * hyphen: the FTS table name was CREATED quoted but QUERIED unquoted in
+ * searchBM25, so SQLite read `--` in a nanoid as a line comment ("no such
+ * table: site_oXhu") and a single hyphen as a syntax error. The semantic path
+ * was always quoted, which is why only keyword/hybrid failed.
+ *
+ * Both real symptom shapes from the register are pinned: the local nanoid with
+ * a double hyphen (oXhu--v0j / cedarvale) and the WPE UUID (cedarvalehealt).
+ */
+describe('D8 — keyword/hybrid search on hyphenated site ids', () => {
+  let store: SqliteVecStore;
+  let dbPath: string;
+
+  beforeEach(async () => {
+    dbPath = tmpDb();
+    store = new SqliteVecStore(dbPath);
+    await store.initialize();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  });
+
+  const HYPHENATED = [
+    ['local nanoid with double hyphen', 'oXhu--v0j'],
+    ['WPE uuid', '99ef6161-13f1-4bd0-9c1e-2f65a1b0c3d4'],
+  ] as const;
+
+  for (const [label, siteId] of HYPHENATED) {
+    it(`keyword search works on a ${label}`, async () => {
+      await store.upsert(siteId, [makeDoc({
+        siteId, id: `wp_${siteId}_7`, postId: 7,
+        title: 'Dermatology provider',
+        content: 'Our dermatology provider sees patients weekly.',
+      })]);
+
+      const results = await store.search(
+        siteId, new Float32Array(VECTOR_DIMENSIONS).fill(0.1),
+        { searchMode: 'keyword', queryText: 'dermatology provider', limit: 10 },
+      );
+
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0].postId).toBe(7);
+    });
+
+    it(`hybrid search works on a ${label}`, async () => {
+      await store.upsert(siteId, [makeDoc({
+        siteId, id: `wp_${siteId}_7`, postId: 7,
+        title: 'Dermatology provider',
+        content: 'Our dermatology provider sees patients weekly.',
+      })]);
+
+      const results = await store.search(
+        siteId, new Float32Array(VECTOR_DIMENSIONS).fill(0.1),
+        { searchMode: 'hybrid', queryText: 'dermatology provider', limit: 10 },
+      );
+
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0].postId).toBe(7);
+    });
+  }
+
+  it('a keyword miss on a hyphenated id is an empty result, not a thrown SQL error', async () => {
+    await store.upsert('oXhu--v0j', [makeDoc({ siteId: 'oXhu--v0j', id: 'wp_oXhu--v0j_1' })]);
+
+    const results = await store.search(
+      'oXhu--v0j', new Float32Array(VECTOR_DIMENSIONS).fill(0.1),
+      { searchMode: 'keyword', queryText: 'nomatchanywhere', limit: 10 },
+    );
+
+    expect(results).toEqual([]);
+  });
+});

@@ -298,10 +298,15 @@ they are complete by luck rather than by demonstration.
 
 ---
 
-## D8 — OPEN — `keyword` and `hybrid` search are broken for any site whose id contains a hyphen
+## D8 — FIXED 2026-08-24 — `keyword` and `hybrid` search are broken for any site whose id contains a hyphen
 
-> **Status 2026-08-24:** still unquoted at `SqliteVecStore.ts` `searchBM25`
-> (the sibling read at :502 IS quoted). The fix is one line; not yet taken.
+> **FIXED:** `searchBM25` now quotes the FTS table name, exactly as the
+> creation path and the sibling read always did. The "NOTE: FTS5 virtual
+> tables use unquoted table names in MATCH clause" comment WAS the defect —
+> FTS5 accepts a quoted table name on the left of MATCH. Both symptom shapes
+> are pinned by tests a mutation kills (double-hyphen nanoid `oXhu--v0j`,
+> WPE UUID), keyword and hybrid modes both. The `metadataFilters` workaround
+> the nexus agent used can be retired.
 
 **Found 2026-08-22, after WP-62.** Blocks the structured-filter capability that
 `describe_site_fields` advertises.

@@ -275,13 +275,16 @@ export class SqliteVecStore implements IVectorStore {
 
     // FTS5 rank is negative (better = more negative)
     // Query FTS5 table directly, then join docs
-    // NOTE: FTS5 virtual tables use unquoted table names in MATCH clause.
+    // The table name MUST be quoted, exactly as at creation and in the sibling
+    // read at hasKeywordMatch (D8): site ids carry hyphens (local nanoids, WPE
+    // UUIDs), and a bare identifier reads `--` as a line comment and `-` as a
+    // syntax error. FTS5's MATCH accepts a quoted table name on the left — the
+    // previous NOTE here claiming otherwise was the defect.
     // fetchLimit is the number of candidate rows to pull (callers widen it when
     // post-fetch metadata filtering will discard many).
-    const ftsTableName = `${p}_fts`;
     const ftsLimit = Math.max(1, Math.floor(fetchLimit));
     const ftsRows = this.conn.prepare(
-      `SELECT rowid, rank FROM ${ftsTableName} WHERE ${ftsTableName} MATCH ? ORDER BY rank LIMIT ${ftsLimit}`
+      `SELECT rowid, rank FROM "${p}_fts" WHERE "${p}_fts" MATCH ? ORDER BY rank LIMIT ${ftsLimit}`
     ).all(sanitized) as Array<{ rowid: number; rank: number }>;
 
     if (ftsRows.length === 0) return [];
