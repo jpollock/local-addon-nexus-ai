@@ -455,7 +455,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
             const ids = scope.map(({ pl }) => pl.rowId);
             const names: Record<string, string> = {};
             for (const { pl } of scope) names[pl.rowId] = pl.name;
-            this.props.onBulkIndex!(ids, names, !this.state.declineStart);
+            this.props.onBulkIndex!(ids, names, !this.state.declineStart); // dispatched as the combined 'index' op
             this.setState({ armed: false, removed: {} });
           },
         }, 'Start indexing'),

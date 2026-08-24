@@ -407,7 +407,7 @@ export const WpeInstallIdSchema = z.string().min(1, 'Install ID required');
 // ============================================================================
 
 export const BulkOperationRequestSchema = z.object({
-  type: z.enum(['reindex', 'plugin-update', 'start', 'stop', 'health-refresh', 'setup-ai', 'sync-graph']),
+  type: z.enum(['reindex', 'plugin-update', 'start', 'stop', 'health-refresh', 'setup-ai', 'sync-graph', 'index']),
   siteIds: z.array(SiteIdSchema).min(1, 'At least one site ID required'),
   /**
    * id → display name. UNDECLARED UNTIL 2026-08-22, and Zod strips unknown

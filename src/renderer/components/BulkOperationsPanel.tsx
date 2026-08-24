@@ -28,6 +28,7 @@ import { summarizeBulkOperation, type BulkOperationSummary } from '../../main/bu
  * value, so a new BulkOpType reads as words even before it is added here.
  */
 const BULK_TYPE_LABELS: Record<BulkOpType, string> = {
+  index: 'Indexing (metadata + content)',
   'sync-graph': 'Refresh metadata',
   reindex: 'Index content',
   'setup-ai': 'Set up AI',

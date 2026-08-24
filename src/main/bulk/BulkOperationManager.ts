@@ -90,7 +90,7 @@ export interface BulkOpDeps {
  * Local's WP-CLI bridge. Only the two data-currency operations, which are what
  * the Sites table's bulk bar offers, are defined for all three.
  */
-const REMOTE_SUPPORTED: BulkOpType[] = ['sync-graph', 'reindex'];
+const REMOTE_SUPPORTED: BulkOpType[] = ['sync-graph', 'reindex', 'index'];
 
 /**
  * Five was exactly WP Engine's cap and therefore had no headroom.
@@ -383,6 +383,14 @@ export class BulkOperationManager {
     switch (op.type) {
       case 'reindex':
         return this.executeReindex(siteId, op.options);
+      case 'index':
+        // Sheet 18: ONE run covers both depths — metadata first (a metadata
+        // failure is the run failing to read the place at all), then content.
+        // The outcome is the CONTENT step's, verbatim: a gatewayless place
+        // lands as did-not-run with the gateway reason, which is exactly the
+        // "stops at the API facts" group — where it stopped, stated.
+        await this.executeGraphSync(siteId, op.options);
+        return this.executeReindex(siteId, op.options);
       case 'plugin-update':
         await this.executePluginUpdate(siteId, op.options.pluginSlug, op.options);
         return { ran: true };
@@ -433,19 +441,19 @@ export class BulkOperationManager {
     if (source === 'wpe') {
       const ops = this.deps.wpeOps;
       if (!ops) throw new Error(`WP Engine sync is not available in this process — cannot ${op.type} ${label}.`);
-      if (op.type === 'sync-graph') {
+      if (op.type === 'sync-graph' || op.type === 'index') {
         // syncSingleSite calls capiGetInstall, which does not know the `wpe-` form.
         await ops.syncSingleSite(wpeInstallIdOf(siteId));
-        return { ran: true };
+        if (op.type === 'sync-graph') return { ran: true };
       }
       return ops.indexOne(siteId);
     }
 
     const ops = this.deps.externalOps;
     if (!ops) throw new Error(`External host access is not available in this process — cannot ${op.type} ${label}.`);
-    if (op.type === 'sync-graph') {
+    if (op.type === 'sync-graph' || op.type === 'index') {
       await ops.refreshSite(siteId);
-      return { ran: true };
+      if (op.type === 'sync-graph') return { ran: true };
     }
     return ops.indexSite(siteId);
   }

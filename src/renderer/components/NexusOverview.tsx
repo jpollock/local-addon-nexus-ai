@@ -1297,7 +1297,7 @@ renderTabBar(): React.ReactNode {
               // Sheet 18: filter-as-selector resolves to an id list and hands
               // it to the SAME audited bulk path as everything else.
               onBulkIndex: (ids: string[], names: Record<string, string>, autoStart: boolean) => {
-                void this.handleSiteBulk('reindex', ids, { siteNames: names, autoStartStop: autoStart, skipConfirm: true });
+                void this.handleSiteBulk('index', ids, { siteNames: names, autoStartStop: autoStart, skipConfirm: true });
               },
               job: this.state.bulkJob,
               onCancelJob: this.cancelBulkJob,
