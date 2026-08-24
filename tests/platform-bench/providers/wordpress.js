@@ -38,15 +38,18 @@ Core abilities available (WordPress 7.0.4, no extra plugins):
   core/get-environment-info — PHP version, server info
 `.trim();
 
-const NOT_CONFIGURED = `WordPress MCP Adapter not yet configured.
+// Status 2026-08-24:
+// ✅ mcp-adapter v0.6.1 installed and active on all 3 sites
+// ✅ Application Passwords created (stored in nexus.env.local)
+// ✅ mcp-wordpress-remote 0.4.0 installed globally
+// ⏳ Tools not appearing in tools/list — mcp-adapter exposes abilities via
+//    mcp-adapter/discover-abilities, not in the standard tools/list response.
+//    The proxy connects but Claude sees no tools to use.
+//    Next step: investigate whether --skip-plugins causes ability non-registration,
+//    or whether a custom server needs to be created via create_server() to expose
+//    abilities as direct tools.
 
-Prerequisites:
-  1. Install mcp-adapter plugin (pinned version) on each site
-  2. Create an Application Password per site
-  3. Configure @automattic/mcp-wordpress-remote proxy
-  4. Add 'wordpress-mcp' server to Claude Code MCP settings
-
-See: docs/planning/2026-08-21-platform-benchmark-design.md §8`;
+const NOT_CONFIGURED = `WordPress MCP Adapter infrastructure is in place (mcp-adapter v0.6.1 active, Application Passwords created, proxy installed) but tool exposure requires further investigation. The adapter serves abilities via mcp-adapter/discover-abilities rather than the standard tools/list, and the proxy integration needs additional work. See tests/platform-bench/providers/wordpress.js for status.`;
 
 module.exports = class WordPressProvider {
   id() { return 'wordpress-mcp'; }
