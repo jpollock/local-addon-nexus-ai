@@ -92,6 +92,10 @@ test('bulk progress survived the move', () => {
   // non-negotiable sibling below got a real render assertion; this one did not.
   const shell = new NexusOverview({ NavLink: () => null, electron: mockElectron });
   shell.state.activeTab = 'sites';
+  // Round-2 finding 4 (2026-08-24): bulk machinery belongs to the installs
+  // view — on the property screens it was an empty panel. The pin's subject
+  // (the machinery SURVIVES, reachable) now lives behind the view toggle.
+  shell.state.sitesView = 'installs';
   shell.state.stats = { localSites: { total: 0, running: 0, halted: 0 } } as any;
   shell.state.loading = false;
 
@@ -103,6 +107,10 @@ test('WPE sync progress survived — the scheduler drives it, not a button', () 
   // but never be called, leaving background syncs invisible.
   const shell = new NexusOverview({ NavLink: () => null, electron: mockElectron });
   shell.state.activeTab = 'sites';
+  // Round-2 finding 4 (2026-08-24): bulk machinery belongs to the installs
+  // view — on the property screens it was an empty panel. The pin's subject
+  // (the machinery SURVIVES, reachable) now lives behind the view toggle.
+  shell.state.sitesView = 'installs';
   shell.state.stats = { localSites: { total: 0, running: 0, halted: 0 } } as any;
   shell.state.loading = false;
   shell.state.wpeSyncing = true;

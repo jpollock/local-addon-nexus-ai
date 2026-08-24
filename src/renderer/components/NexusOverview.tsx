@@ -341,7 +341,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     siteRowsTotal: { count: 0, scope: '' },
     siteRowsLoaded: false,
     siteRowsFailed: false,
-    sitesView: 'installs',
+    sitesView: 'properties',  // finding 2: the product decided the unit — installs are the secondary view
     collapse: null,
     collapseLoaded: false,
     collapseFailed: false,
@@ -535,6 +535,14 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
   }
 
   componentDidUpdate(_prevProps: NexusOverviewProps, prevState: NexusOverviewState): void {
+    if (
+      this.state.activeTab === 'sites' &&
+      this.state.sitesView === 'properties' &&
+      !this.state.collapseLoaded &&
+      this.state.activeTab !== prevState.activeTab
+    ) {
+      void this.fetchCollapse();
+    }
     if (this.state.activeTab !== prevState.activeTab && this.contentScrollEl) {
       this.contentScrollEl.scrollTop = 0;
     }
@@ -1295,11 +1303,17 @@ renderTabBar(): React.ReactNode {
         onDismissJob: this.dismissBulkJob,
         onSelectFailed: (ids: string[]) => this.setState({ selectedSiteIds: ids, bulkJob: null }),
         }),
-        this.renderWpeSyncProgress(),
-        React.createElement(BulkOperationsPanel, {
-          electron: this.props.electron,
-          siteNames: new Map(Object.values(this.state.sites || {}).map((s: any) => [s.id, s.name])),
-        }),
+        // Finding 4: bulk machinery belongs to the installs view — on the
+        // property screens it was the largest object saying nothing.
+        ...(this.state.sitesView === 'installs'
+          ? [
+              this.renderWpeSyncProgress(),
+              React.createElement(BulkOperationsPanel, {
+                electron: this.props.electron,
+                siteNames: new Map(Object.values(this.state.sites || {}).map((s: any) => [s.id, s.name])),
+              }),
+            ]
+          : []),
       );
       case 'record': return this.renderRecordTab();
       case 'settings': return React.createElement(SettingsTab, {

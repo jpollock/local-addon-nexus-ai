@@ -26,6 +26,19 @@ export interface CheckedView {
 
 const NEVER: CheckedView = { state: 'never', finishedAt: null, reason: null };
 
+/**
+ * Whose failure is this? A transport refusal ("ssh: connection refused") is a
+ * fact about the PLACE; a constraint violation in our own store is a fact
+ * about NEXUS, and must never be phrased as if the site failed (designer
+ * round-2 finding 3 — QWERKY's D11 error was dressed as theirs).
+ */
+export function reasonBlame(reason: string | null): 'place' | 'nexus' {
+  if (!reason) return 'place';
+  return /constraint failed|SqliteError|no such (table|column)|database is locked|UNIQUE constraint/i.test(reason)
+    ? 'nexus'
+    : 'place';
+}
+
 export type PlaceKind = 'production' | 'staging' | 'development' | 'copy' | 'local' | 'unknown';
 
 export interface PlaceView {
@@ -233,7 +246,7 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
       return out;
     }
     if (origin === 'local') {
-      out.push('This site exists only on this machine — no linked place anywhere else is recorded.');
+      out.push('This site exists only on your machine — no linked place anywhere else is recorded.');
       return out;
     }
     const copies = places.filter((p) => p.kind === 'copy');
@@ -247,7 +260,7 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
           (l) => copyLocalIds.includes(l.localSiteId) && l.localSiteId === copy.rowId,
         );
         const linkedTo = link?.wpeInstallName ? ` — linked to ${link.wpeInstallName}` : '';
-        out.push(`A copy of this site lives on this machine (${copy.name})${linkedTo}.`);
+        out.push(`A copy of this site lives on your machine (${copy.name})${linkedTo}.`);
         const cs = input.contentStatus?.get(copy.rowId);
         if (cs?.state === 'pulled' && cs.sourceName) {
           const behind =

@@ -257,7 +257,7 @@ describe('drill-in facts and lineage (Phase 2)', () => {
       contentStatus: new Map([['LocA', { state: 'pulled', sourceName: 'benfischer1stg', behindSeconds: 11 * 86_400 }]]),
     });
     const lineage = buildFleetCollapse(input).properties[0].lineage;
-    expect(lineage.join(' ')).toContain('lives on this machine (ben-local) — linked to benfischer');
+    expect(lineage.join(' ')).toContain('lives on your machine (ben-local) — linked to benfischer');
     expect(lineage.join(' ')).toContain('pulled from benfischer1stg — its content is 11 day(s) behind');
     expect(lineage.join(' ')).toContain('Code moves through git');
   });
@@ -282,6 +282,6 @@ describe('drill-in facts and lineage (Phase 2)', () => {
 
     const localOnly = base({ localSites: [{ id: 'LocC', name: 'mine', wpVersion: '6.8' }] });
     expect(buildFleetCollapse(localOnly).properties[0].lineage.join(' '))
-      .toContain('exists only on this machine');
+      .toContain('exists only on your machine');
   });
 });

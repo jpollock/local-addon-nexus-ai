@@ -136,7 +136,7 @@ describe('PropertiesTab', () => {
     expect(t).toContain('never looked inside');
     expect(t).toContain('Show them');
 
-    expect(rendered(collapse([property()]))).not.toContain('never looked inside');
+    expect(rendered(collapse([property()]))).not.toContain('places Nexus has never looked inside');
   });
 
   test('header counts render from the derived header block, and origins carry their counts', () => {
@@ -147,7 +147,7 @@ describe('PropertiesTab', () => {
     ]));
     expect(t).toContain('2 properties');
     expect(t).toContain('WP Engine 1');
-    expect(t).toContain('This Mac 1');
+    expect(t).toContain('Your machine 1');
   });
 
   test('an XSS-shaped property name renders as text through createElement', () => {
@@ -211,5 +211,62 @@ describe('drill-ins (Phase 2)', () => {
     const t = rendered(collapse([property()]), (inst) => { inst.state.view = { screen: 'property', key: 'wpe:gone' }; });
     expect(t).toContain('properties');   // the fleet header rendered instead
     expect(t).not.toContain('← All sites');
+  });
+});
+
+describe('designer round-2 findings', () => {
+  test('finding 3: a Nexus storage fault is never phrased as the site failing', () => {
+    const ours = property({
+      oldest: { state: 'fail', finishedAt: iso(6), reason: 'NOT NULL constraint failed: users.username' },
+    });
+    const t1 = rendered(collapse([ours]));
+    expect(t1).toContain('a Nexus storage error, not the site');
+
+    const theirs = property({
+      oldest: { state: 'fail', finishedAt: iso(3), reason: 'ssh: connection refused' },
+    });
+    const t2 = rendered(collapse([theirs]));
+    expect(t2).toContain('failed 3h ago — ssh: connection refused');
+    expect(t2).not.toContain('a Nexus storage error');
+  });
+
+  test('finding 5: every procedure names its runbook; the barred one carries no raw capability token', () => {
+    const t = rendered(collapse([property()]), (inst) => {
+      inst.state.view = { screen: 'place', key: 'wpe:p1', rowId: 'wpe-1' };
+    });
+    expect(t).toContain('rb.wpe-sync 1.0.0');
+    expect(t).toContain('rb.wpe-pull 1.0.0');
+    expect(t).toContain('rb.bulk-plugin-update 1.2.0');
+    expect(t).not.toContain('wpcli');
+  });
+
+  test('finding 6: the copy anchors the property screen — first and accented', () => {
+    const p = property({
+      key: 'wpe:p2', hasCopy: true,
+      places: [place({ rowId: 'wpe-1' }), place({ rowId: 'L1', kind: 'copy', source: 'local', name: 'ben-local' })],
+    });
+    const t = rendered(collapse([p]), (inst) => { inst.state.view = { screen: 'property', key: 'wpe:p2' }; });
+    expect(t).toContain('your copy');
+    expect(t.indexOf('your copy')).toBeLessThan(t.indexOf('production')); // copy card renders first
+  });
+
+  test('finding 7: the sort is consequence-ranked and the footer states it', () => {
+    const failing = property({ key: 'wpe:f', name: 'zzz-failing',
+      oldest: { state: 'fail', finishedAt: iso(2), reason: 'ssh: refused' } });
+    const dark = property({ key: 'wpe:d', name: 'yyy-dark', rungs: ['nothing'],
+      places: [place({ rowId: 'wpe-d', knowledge: 'nothing' })] });
+    const fine = property({ key: 'wpe:a', name: 'aaa-fine' });
+    const t = rendered(collapse([fine, dark, failing]));
+    expect(t.indexOf('zzz-failing')).toBeLessThan(t.indexOf('yyy-dark'));   // fail before nothing
+    expect(t.indexOf('yyy-dark')).toBeLessThan(t.indexOf('aaa-fine'));     // nothing before A–Z rest
+    expect(t).toContain('failures first, then never looked inside, then A–Z');
+  });
+
+  test('finding 1: no rationale leaks into product copy', () => {
+    const t = rendered(collapse([property()]));
+    expect(t).not.toContain('most actionable');
+    expect(t).not.toContain('register D20');
+    expect(t).toContain('Search every property');
+    expect(t).not.toContain('filters never hide');
   });
 });

@@ -19,6 +19,7 @@
 import * as React from 'react';
 import { KNOWLEDGE_LABELS } from '../../../main/fleet/knowledgeLadder';
 import type { FleetCollapse, PropertyView, PlaceView, CheckedView } from '../../../main/fleet/fleetCollapse';
+import { reasonBlame } from '../../../main/fleet/fleetCollapse';
 
 type OriginFilter = 'all' | 'local' | 'wpe' | 'external';
 type StateFilter = 'all' | 'nothing' | 'copy' | 'attention';
@@ -44,7 +45,7 @@ interface PropertiesTabState {
 
 const ORIGIN_LABELS: Array<{ key: OriginFilter; label: string }> = [
   { key: 'all', label: 'Everywhere' },
-  { key: 'local', label: 'This Mac' },
+  { key: 'local', label: 'Your machine' },
   { key: 'wpe', label: 'WP Engine' },
   { key: 'external', label: 'External' },
 ];
@@ -66,7 +67,13 @@ function ageOf(c: CheckedView): string {
 }
 
 function checkedText(c: CheckedView, labelOldest: boolean): string {
-  if (c.state === 'fail') return `failed ${ageOf(c)} — ${c.reason ?? 'no reason recorded'}`;
+  if (c.state === 'fail') {
+    const detail = c.reason ?? 'no reason recorded';
+    // A storage fault of OURS must not read as the site failing (finding 3).
+    return reasonBlame(c.reason) === 'nexus'
+      ? `record failed ${ageOf(c)} — a Nexus storage error, not the site: ${detail}`
+      : `failed ${ageOf(c)} — ${detail}`;
+  }
   if (c.state === 'never' || !c.finishedAt) return 'never checked';
   const prefix = labelOldest ? 'oldest ' : '';
   return `${prefix}${ageOf(c)}`;
@@ -91,38 +98,33 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
    * visible with the reason. READ-ONLY in this phase: doors are descriptions,
    * not buttons; no new execution path exists here.
    */
-  private proceduresFor(p: PropertyView, pl: PlaceView): Array<{ label: string; note: string; barred: boolean }> {
+  private proceduresFor(p: PropertyView, pl: PlaceView): Array<{ label: string; rb: string | null; note: string; barred: boolean }> {
     if (pl.kind === 'copy' || pl.kind === 'local') {
       return [
-        { label: 'Open in Local', note: 'Your machine — Local’s own tools apply, ungated.', barred: false },
-        { label: 'Index content here', note: 'Starts the site if it is stopped, indexes, stops it again.', barred: false },
+        { label: 'Open in Local', rb: null, note: 'Your machine — Local’s own tools apply, ungated.', barred: false },
+        { label: 'Index content here', rb: 'rb.local-index 1.0.0', note: 'Starts the site if it is stopped, indexes, stops it again.', barred: false },
       ];
     }
     if (pl.source === 'external') {
       return [
-        { label: 'Refresh what Nexus knows', note: 'nexus host refresh — reads over SSH, never writes to your server.', barred: false },
-        { label: 'Index content here', note: 'nexus host index — read-only; raises this place to Searchable.', barred: false },
+        { label: 'Refresh what Nexus knows', rb: 'rb.host-refresh 1.0.0', note: 'Reads over SSH. Never writes to your server.', barred: false },
+        { label: 'Index content here', rb: 'rb.host-index 1.0.0', note: 'Read-only; raises this place to Searchable.', barred: false },
       ];
     }
-    const procs: Array<{ label: string; note: string; barred: boolean }> = [
-      { label: 'Re-check this place', note: 'Refreshes every fact on this screen with a new age.', barred: false },
+    const procs: Array<{ label: string; rb: string | null; note: string; barred: boolean }> = [
+      { label: 'Re-check this place', rb: 'rb.wpe-sync 1.0.0', note: 'Refreshes every fact on this screen with a new age.', barred: false },
     ];
     if (pl.ceiling) {
-      procs.push({ label: 'Index content here', note: `${pl.ceiling} — not retryable from Nexus.`, barred: true });
+      procs.push({ label: 'Index content here', rb: 'rb.wpe-index 1.0.0', barred: true,
+        note: `${pl.ceiling}. Not retryable from Nexus.` });
     } else {
-      procs.push({ label: 'Index content here', note: 'Reads over SSH; raises this place to Searchable.', barred: false });
-      procs.push({
-        label: 'Pull a copy from here',
-        note: 'Reads only. Your machine changes; this place does not — and the pull records the lineage link.',
-        barred: false,
-      });
+      procs.push({ label: 'Index content here', rb: 'rb.wpe-index 1.0.0', note: 'Reads over SSH; raises this place to Searchable.', barred: false });
+      procs.push({ label: 'Pull a copy from here', rb: 'rb.wpe-pull 1.0.0',
+        note: 'Reads only. Your machine changes; this place does not — and the pull records the lineage link.', barred: false });
     }
     if (pl.kind === 'production') {
-      procs.push({
-        label: 'Update plugins here',
-        note: 'Writes to production are refused by default. Granting wpcli for production in Settings → WP Engine Access changes that.',
-        barred: true,
-      });
+      procs.push({ label: 'Update plugins here', rb: 'rb.bulk-plugin-update 1.2.0', barred: true,
+        note: 'Declared for staging and development. Production needs its own grant — Settings → WP Engine Access.' });
     }
     return procs;
   }
@@ -137,16 +139,20 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       h('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub)', marginBottom: 12 } },
         `${p.places.length} ${p.places.length === 1 ? 'place' : 'places'}${p.accountName ? ` · ${p.accountName}` : ''}`),
       h('div', { style: { display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 } },
-        ...p.places.map((pl) =>
+        // The agency rule: where a copy exists it anchors the screen — first,
+        // accented — and the environments read as context around it.
+        ...[...p.places].sort((a, b) => (a.kind === 'copy' ? -1 : 0) - (b.kind === 'copy' ? -1 : 0)).map((pl) =>
           h('div', {
             key: pl.rowId,
             onClick: () => this.setState({ view: { screen: 'place', key: p.key, rowId: pl.rowId } }),
             style: {
               cursor: 'pointer', minWidth: 200, padding: '10px 14px', borderRadius: 8,
-              border: '1px solid var(--nxai-card-border)', background: 'var(--nxai-card-bg)',
+              border: pl.kind === 'copy' ? '2px solid var(--nxai-accent)' : '1px solid var(--nxai-card-border)',
+              background: 'var(--nxai-card-bg)',
             },
           },
-            h('div', { style: { fontWeight: 600, fontSize: 13, color: 'var(--nxai-card-text)' } }, pl.kind),
+            h('div', { style: { fontWeight: 600, fontSize: 13, color: 'var(--nxai-card-text)' } },
+              pl.kind === 'copy' ? 'your copy' : pl.kind),
             h('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', margin: '2px 0 6px' } },
               pl.domain ?? pl.name),
             h('div', { style: { fontSize: 11, color: pl.checked.state === 'fail' ? 'var(--nxai-danger-text)' : 'var(--nxai-card-sub)' } },
@@ -159,7 +165,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
         ...p.lineage.map((line, i) => h('p', { key: i, style: { margin: '0 0 6px' } }, line)),
       ),
       h('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', marginTop: 12 } },
-        'Activity is read per place — open one. (Assembled per place because the property-level record is not yet trustworthy — register D20.)'),
+        'Activity is read per place — open one.'),
     );
   }
 
@@ -171,7 +177,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       );
     const absent = (why: string) => h('span', { style: { color: 'var(--nxai-card-sub)' } }, `— ${why}`);
 
-    return h('div', { style: { padding: '0 12px', maxWidth: 640 } },
+    return h('div', { style: { padding: '0 12px', maxWidth: 1160 } },
       h('a', {
         style: { cursor: 'pointer', fontSize: 12, color: 'var(--nxai-accent)' },
         onClick: () => this.setState({ view: { screen: 'property', key: p.key } }),
@@ -182,6 +188,8 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       h('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub)', marginBottom: 14 } },
         'Read at a distance, through gates. Nothing on this screen edits anything.'),
 
+      h('div', { style: { display: 'flex', gap: 40, flexWrap: 'wrap', alignItems: 'flex-start' } },
+        h('div', { style: { flex: '1 1 380px', maxWidth: 620 } },
       h('div', { style: { fontSize: 11, fontWeight: 700, letterSpacing: '.06em', color: 'var(--nxai-card-sub)', textTransform: 'uppercase' as const, margin: '10px 0 4px' } }, 'What Nexus knows'),
       fact('WordPress', pl.wpVersion ?? absent('not collected for this place')),
       fact('PHP', pl.phpVersion ?? absent('unknown — never a guessed version')),
@@ -201,7 +209,8 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
               ? ' — this place has never been scanned. One sync fills the table above.'
               : ' — versions and configuration, not content. Indexing raises this place to Searchable.',
       ),
-
+        ),
+        h('div', { style: { flex: '1 1 320px', maxWidth: 480 } },
       h('div', { style: { fontSize: 11, fontWeight: 700, letterSpacing: '.06em', color: 'var(--nxai-card-sub)', textTransform: 'uppercase' as const, margin: '16px 0 4px' } }, 'What can be done from here'),
       ...this.proceduresFor(p, pl).map((proc) =>
         h('div', {
@@ -213,8 +222,13 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
           },
         },
           h('div', { style: { fontWeight: 600, color: proc.barred ? 'var(--nxai-card-sub)' : 'var(--nxai-card-text)' } },
-            proc.barred ? `${proc.label} — barred` : proc.label),
+            proc.barred ? `${proc.label} — barred` : proc.label,
+            proc.rb
+              ? h('span', { style: { fontFamily: 'monospace', fontWeight: 400, fontSize: 11, color: 'var(--nxai-card-sub)', marginLeft: 8 } }, proc.rb)
+              : null),
           h('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } }, proc.note),
+        ),
+      ),
         ),
       ),
     );
@@ -270,7 +284,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       }, p.name),
       h('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } },
         p.places.length === 1
-          ? `${p.places[0].kind} · ${p.places[0].source === 'local' ? 'this Mac' : p.places[0].source === 'wpe' ? 'WP Engine' : 'your server'}`
+          ? `${p.places[0].kind} · ${p.places[0].source === 'local' ? 'your machine' : p.places[0].source === 'wpe' ? 'WP Engine' : 'your server'}`
           : `${p.places.length} places${p.hasCopy ? ' incl. your copy' : ''}`,
       ),
       h('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } },
@@ -336,6 +350,12 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       if (!inFilter && !q) continue;
       inView.push({ p, outside: !inFilter });
     }
+    // The order MEANS something and the footer states it (finding 7): rows
+    // whose latest check failed first, then places never looked inside, then
+    // A–Z — so the top of a 296-row list is the part that needs a person.
+    const rank = (p: PropertyView): number =>
+      p.oldest.state === 'fail' ? 0 : p.rungs.includes('nothing') ? 1 : 2;
+    inView.sort((a, b) => rank(a.p) - rank(b.p) || a.p.name.localeCompare(b.p.name));
 
     const chip = (active: boolean): React.CSSProperties => ({
       padding: '4px 10px', borderRadius: 999, cursor: 'pointer', fontSize: 12,
@@ -348,7 +368,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       // Header: every figure from the same derived header block.
       h('div', { style: { padding: '4px 12px 10px', color: 'var(--nxai-card-sub)', fontSize: 13 } },
         `${header.total} properties · ${header.placesTotal} places · ` +
-        `${header.byOrigin.local} on this Mac only, ${header.byOrigin.wpe} WP Engine, ${header.byOrigin.external} external · ` +
+        `${header.byOrigin.local} only on your machine, ${header.byOrigin.wpe} WP Engine, ${header.byOrigin.external} external · ` +
         `${header.onThisMachine} live on this machine`,
       ),
       header.neverLookedInside > 0
@@ -356,7 +376,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
             style: { margin: '0 12px 10px', padding: '8px 12px', fontSize: 13, border: '1px solid var(--nxai-danger-text)', borderRadius: 6, color: 'var(--nxai-card-text)' },
           },
             h('strong', null, String(header.neverLookedInside)),
-            ' places Nexus has never looked inside — the most actionable number on this screen. ',
+            ' places Nexus has never looked inside. ',
             h('a', {
               style: { cursor: 'pointer', color: 'var(--nxai-accent)' },
               onClick: () => this.setState({ state: 'nothing', origin: 'all' }),
@@ -379,7 +399,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
           }, s.label),
         ),
         h('input', {
-          placeholder: 'Search every property — filters never hide a search hit',
+          placeholder: 'Search every property',
           value: query,
           onChange: (e: React.ChangeEvent<HTMLInputElement>) => this.setState({ query: e.target.value }),
           style: {
@@ -398,7 +418,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
           : inView.map(({ p, outside }) => this.renderProperty(p, outside)),
       ),
       h('div', { style: { padding: '8px 12px', color: 'var(--nxai-card-sub)', fontSize: 12 } },
-        `${inView.length} of ${header.total} properties shown · no pagination — the list is one scroll`),
+        `${inView.length} of ${header.total} properties shown · failures first, then never looked inside, then A–Z · one scroll, no pagination`),
     );
   }
 }
