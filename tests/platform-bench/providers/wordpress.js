@@ -1,81 +1,122 @@
 /**
- * WordPress provider — drives Claude with the WordPress MCP Adapter.
+ * WordPress provider — drives Claude with the WordPress benchmark MCP server.
  *
- * The WordPress MCP Adapter (github.com/WordPress/mcp-adapter) exposes the
- * WordPress Abilities API as an MCP server, bridging wp_register_ability() calls
- * to MCP tools. With only core, WordPress 7.0.4 registers three abilities:
+ * Uses the WP-CLI STDIO transport, which bypasses HTTP auth complexity and is
+ * the path the mcp-adapter docs show for testing. Each site runs the command:
+ *   wp mcp-adapter serve --user=<user> --server=benchmark-server
+ *
+ * The benchmark server (mu-plugin: benchmark-mcp-server.php) is a custom
+ * mcp-adapter server exposing exactly three core abilities as direct tools:
  *   core/get-site-info, core/get-user-info, core/get-environment-info
  *
- * This is the honest baseline: what a WordPress site offers with no WP Engine
- * product attached, through its own official AI surface.
+ * This represents what WordPress ships with the mcp-adapter plugin — no Coworker
+ * abilities, no custom tools. The Power Coworker abilities that wpe-hub registers
+ * are deliberately excluded: those belong to the Coworker column.
  *
- * Prerequisites (not yet set up — see docs/planning/2026-08-21-platform-benchmark-design.md §8):
- *   - mcp-adapter plugin installed on the Cedar sites, version pinned
- *   - Application Password created per site
- *   - @automattic/mcp-wordpress-remote proxy running locally
- *   - wordpress-mcp server configured in Claude Code MCP settings
+ * Prerequisites (all done as of 2026-08-24):
+ *   ✅ mcp-adapter v0.6.1 installed on all 3 sites
+ *   ✅ benchmark-mcp-server.php mu-plugin deployed to all 3 sites
+ *   ✅ SSH access configured for cedarvalehealt, summitdermatol, hostinger-test
+ *   ✅ Application Passwords created (in nexus.env.local — not needed for STDIO)
  *
- * Until those are in place this provider returns a structured placeholder
- * so the promptfoo config is complete and can be run once prereqs are met.
+ * Site → SSH target mapping:
+ *   cedarvalehealt  →  cedarvalehealt@cedarvalehealt.ssh.wpengine.net  path=sites/cedarvalehealt
+ *   summitdermatol  →  summitdermatol@summitdermatol.ssh.wpengine.net  path=sites/summitdermatol
+ *   palegreen       →  hostinger-test  path=~/domains/palegreen-capybara-114180.hostingersite.com/public_html
  */
 
 const { execSync } = require('child_process');
+const path = require('path');
 
-const MODEL = process.env.BENCH_MODEL ?? 'claude-sonnet-5';
+const MODEL = process.env.BENCH_MODEL ?? 'claude-opus-5';
 const TIMEOUT_MS = 300_000;
 
-// Sites the WP MCP Adapter is configured for.
-// Update once the adapter is installed and Application Passwords are created.
-const WP_SITES = `
-WordPress MCP Adapter connected sites (update once configured):
-  cedarvalehealt.wpenginepowered.com
-  summitdermatol.wpenginepowered.com
-  palegreen-capybara-114180.hostingersite.com
+// WP-CLI STDIO transport: claude drives a claude process that uses the mcp-adapter
+// WP-CLI command as the MCP server transport. The MCP config points to a script
+// that invokes wp mcp-adapter serve over SSH.
+const SITE_CONFIGS = {
+  // Map site names mentioned in prompts to their SSH targets
+  cedarvalehealt:  { sshHost: 'cedarvalehealt@cedarvalehealt.ssh.wpengine.net', wpPath: 'sites/cedarvalehealt',  wpUser: 'admin' },
+  summitdermatol:  { sshHost: 'summitdermatol@summitdermatol.ssh.wpengine.net',  wpPath: 'sites/summitdermatol', wpUser: 'summitdermatol' },
+  'palegreen-capybara-114180.hostingersite.com': {
+    sshHost: 'hostinger-test',
+    wpPath: '~/domains/palegreen-capybara-114180.hostingersite.com/public_html',
+    wpUser: 'jeremy@elasticapi.io',
+  },
+};
 
-Core abilities available (WordPress 7.0.4, no extra plugins):
-  core/get-site-info     — WP version, site title, site URL, admin email
-  core/get-user-info     — current user details
-  core/get-environment-info — PHP version, server info
+const SITE_CONTEXT = `
+You have access to a WordPress MCP server via the wp mcp-adapter serve command.
+The server exposes exactly three core WordPress tools:
+  core-get-site-info     — site name, URL, version, admin email, charset, language
+  core-get-user-info     — current user display name, login, roles, locale
+  core-get-environment-info — environment type, PHP version, DB version, WP version
+
+These are the only tools available. You cannot access content, plugins, themes, or
+any other WordPress data through this server. If a question requires data beyond
+site/user/environment info, say so clearly rather than fabricating an answer.
+
+Sites you can query (one at a time — use separate tool calls if needed):
+  cedarvalehealt.wpenginepowered.com  (flagship Cedar & Vale)
+  summitdermatol.wpenginepowered.com  (Summit Dermatology Partners)
+  palegreen-capybara-114180.hostingersite.com  (Ridgeline Skin Institute)
 `.trim();
-
-// Status 2026-08-24:
-// ✅ mcp-adapter v0.6.1 installed and active on all 3 sites
-// ✅ Application Passwords created (stored in nexus.env.local)
-// ✅ mcp-wordpress-remote 0.4.0 installed globally
-// ⏳ Tools not appearing in tools/list — mcp-adapter exposes abilities via
-//    mcp-adapter/discover-abilities, not in the standard tools/list response.
-//    The proxy connects but Claude sees no tools to use.
-//    Next step: investigate whether --skip-plugins causes ability non-registration,
-//    or whether a custom server needs to be created via create_server() to expose
-//    abilities as direct tools.
-
-const NOT_CONFIGURED = `WordPress MCP Adapter infrastructure is in place (mcp-adapter v0.6.1 active, Application Passwords created, proxy installed) but tool exposure requires further investigation. The adapter serves abilities via mcp-adapter/discover-abilities rather than the standard tools/list, and the proxy integration needs additional work. See tests/platform-bench/providers/wordpress.js for status.`;
 
 module.exports = class WordPressProvider {
   id() { return 'wordpress-mcp'; }
 
-  async callApi(prompt) {
-    // Check if the wordpress-mcp server is likely configured.
-    // When it is, swap the placeholder for the real MCP call.
-    const mcpServer = process.env.WORDPRESS_MCP_SERVER ?? 'wordpress-mcp';
-    const configured = process.env.WORDPRESS_MCP_CONFIGURED === 'true';
+  /**
+   * Pick the primary site a prompt is asking about, defaulting to the flagship.
+   * The WP-CLI STDIO transport connects to one site; cross-site questions need
+   * separate calls (which this simple implementation doesn't support — it will
+   * answer for whichever site it detects or the flagship).
+   */
+  detectSite(prompt) {
+    const lower = prompt.toLowerCase();
+    if (lower.includes('summitdermatol') || lower.includes('summit dermatology')) {
+      return 'summitdermatol';
+    }
+    if (lower.includes('palegreen') || lower.includes('ridgeline')) {
+      return 'palegreen-capybara-114180.hostingersite.com';
+    }
+    // Default to flagship for general questions
+    return 'cedarvalehealt';
+  }
 
-    if (!configured) {
-      // Return a structured NOT_CONFIGURED response so promptfoo can score it.
-      // This will correctly fail the content assertions and pass as an honest refusal
-      // in the reach test.
-      return {
-        output: NOT_CONFIGURED,
-        metadata: { configured: false },
-      };
+  async callApi(prompt) {
+    const siteKey = this.detectSite(prompt);
+    const cfg = SITE_CONFIGS[siteKey];
+    if (!cfg) {
+      return { error: `No SSH config for site: ${siteKey}`, output: '' };
     }
 
-    const fullPrompt = `${WP_SITES}\n\n${prompt}`;
+    // Write a temp MCP config that uses SSH to run wp mcp-adapter serve
+    const os = require('os');
+    const fs = require('fs');
+    const configPath = path.join(os.tmpdir(), `wp-mcp-${process.pid}.json`);
+    const mcpConfig = {
+      mcpServers: {
+        'wordpress-benchmark': {
+          command: 'ssh',
+          args: [
+            '-o', 'BatchMode=yes',
+            '-o', 'ConnectTimeout=30',
+            cfg.sshHost,
+            `cd ${cfg.wpPath} && wp mcp-adapter serve --user=${cfg.wpUser} --server=benchmark-server`,
+          ],
+        },
+      },
+    };
+    fs.writeFileSync(configPath, JSON.stringify(mcpConfig));
+
+    const fullPrompt = `${SITE_CONTEXT}\n\nSite you are connected to: ${siteKey}\n\n${prompt}`;
     const escaped = fullPrompt.replace(/'/g, "'\\''");
+
     const cmd = [
       'claude',
       '--model', MODEL,
-      '--mcp-server', mcpServer,
+      '--mcp-config', configPath,
+      '--dangerously-skip-permissions',
       '-p', `'${escaped}'`,
     ].join(' ');
 
@@ -85,16 +126,21 @@ module.exports = class WordPressProvider {
         encoding: 'utf8',
         timeout: TIMEOUT_MS,
         env: { ...process.env },
+        stdio: ['pipe', 'pipe', 'pipe'],
+        input: '',
       });
       return {
         output: output.trim(),
-        metadata: { durationMs: Date.now() - startMs, configured: true },
+        metadata: { durationMs: Date.now() - startMs, site: siteKey },
       };
     } catch (err) {
+      const msg = (err.stdout || err.stderr || err.message || '').toString().slice(0, 500);
       return {
-        error: `WordPress provider error: ${err.message?.slice(0, 300)}`,
+        error: `WordPress provider error (${siteKey}): ${msg}`,
         output: '',
       };
+    } finally {
+      try { fs.unlinkSync(configPath); } catch { /* ignore */ }
     }
   }
 };
