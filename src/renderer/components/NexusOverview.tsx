@@ -1019,10 +1019,17 @@ renderTabBar(): React.ReactNode {
    * empty selection must never be re-interpreted as "the whole fleet", and this
    * is the last place that could happen before 369 sites are dispatched.
    */
-  handleSiteBulk = async (type: string, siteIds: string[]): Promise<void> => {
+  handleSiteBulk = async (
+    type: string,
+    siteIds: string[],
+    opts?: { autoStartStop?: boolean; siteNames?: Record<string, string>; skipConfirm?: boolean },
+  ): Promise<void> => {
     if (siteIds.length === 0) return;
 
-    if (siteIds.length > BULK_CONFIRM_THRESHOLD && !this.confirmLargeBulk(type, siteIds)) return;
+    // The Properties scope block IS the declaration (sheet 18: declaration
+    // and a stop, no consent gate) — a second native confirm would be a
+    // consent gate on a read.
+    if (!opts?.skipConfirm && siteIds.length > BULK_CONFIRM_THRESHOLD && !this.confirmLargeBulk(type, siteIds)) return;
 
     // Set the job bar BEFORE awaiting, so the selection bar becomes the job bar in the
     // same paint as the click. Awaiting first leaves a frame in which the button has been
@@ -1048,7 +1055,7 @@ renderTabBar(): React.ReactNode {
         // passes it to a transport — the remote adapters take the graph id and
         // resolve the install name themselves. Do not reintroduce a name
         // parameter on the strength of this map being here.
-        siteNames: this.state.siteRows.reduce((acc: Record<string, string>, r) => {
+        siteNames: opts?.siteNames ?? this.state.siteRows.reduce((acc: Record<string, string>, r) => {
           if (siteIds.indexOf(r.id) !== -1) acc[r.id] = r.name;
           return acc;
         }, {}),
@@ -1063,7 +1070,7 @@ renderTabBar(): React.ReactNode {
         // surface a user actually presses was the only one that refused to do
         // the work. `executeSingle` starts the site, waits for MySQL, and stops
         // it again in its `finally` — and only for sites it started itself.
-        options: { autoStartStop: true },
+        options: { autoStartStop: opts?.autoStartStop ?? true },
       });
       if (result?.success && result.opId) {
         // `success` here means the manager accepted the job, NOT that it finished — it
@@ -1287,6 +1294,14 @@ renderTabBar(): React.ReactNode {
               // "Add a site" doors to Settings, where the external-host wizard
               // and the WPE connection both live.
               onAddSite: () => this.setState({ activeTab: 'settings' }),
+              // Sheet 18: filter-as-selector resolves to an id list and hands
+              // it to the SAME audited bulk path as everything else.
+              onBulkIndex: (ids: string[], names: Record<string, string>, autoStart: boolean) => {
+                void this.handleSiteBulk('reindex', ids, { siteNames: names, autoStartStop: autoStart, skipConfirm: true });
+              },
+              job: this.state.bulkJob,
+              onCancelJob: this.cancelBulkJob,
+              onDismissJob: this.dismissBulkJob,
             })
           : React.createElement(SitesTab, {
         loaded: this.state.siteRowsLoaded,

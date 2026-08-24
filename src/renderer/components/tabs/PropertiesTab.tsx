@@ -20,6 +20,7 @@ import * as React from 'react';
 import { KNOWLEDGE_LABELS, STATE_SENTENCES } from '../../../main/fleet/knowledgeLadder';
 import type { FleetCollapse, PropertyView, PlaceView, CheckedView } from '../../../main/fleet/fleetCollapse';
 import { reasonBlame } from '../../../main/fleet/fleetCollapse';
+import type { BulkJobView } from './SitesTab';
 
 const h = React.createElement;
 
@@ -35,6 +36,12 @@ interface PropertiesTabProps {
   onRetry: () => void;
   /** Door to adding a site (external host wizard in Settings). Optional. */
   onAddSite?: () => void;
+  /** Sheet 18: dispatch the armed scope to the audited bulk path. */
+  onBulkIndex?: (ids: string[], names: Record<string, string>, autoStart: boolean) => void;
+  /** The running/finished bulk job, shared with the rest of the dashboard. */
+  job?: BulkJobView | null;
+  onCancelJob?: () => void;
+  onDismissJob?: () => void;
 }
 
 interface PropertiesTabState {
@@ -46,6 +53,13 @@ interface PropertiesTabState {
   /** Drill-in: null = the fleet list. */
   view: null | { screen: 'property'; key: string } | { screen: 'place'; key: string; rowId: string };
   sortBy: SortBy;
+  /** Sheet 18: the filter-as-selector is ARMED — checkboxes appear, scope recomputes live. */
+  armed: boolean;
+  armedAt: number | null;
+  /** Refinement: place rowIds the user removed from the armed scope. */
+  removed: Record<string, boolean>;
+  /** The decline door: read stopped sites are skipped instead of started. */
+  declineStart: boolean;
 }
 
 const ORIGIN_LABELS: Array<{ key: OriginFilter; label: string }> = [
@@ -129,7 +143,7 @@ function matchesState(p: PropertyView, state: StateFilter): boolean {
 export class PropertiesTab extends React.Component<PropertiesTabProps, PropertiesTabState> {
   constructor(props: PropertiesTabProps) {
     super(props);
-    this.state = { origin: 'all', state: 'all', query: '', open: {}, view: null, sortBy: 'consequence' };
+    this.state = { origin: 'all', state: 'all', query: '', open: {}, view: null, sortBy: 'consequence', armed: false, armedAt: null, removed: {}, declineStart: false };
   }
 
   /**
@@ -320,6 +334,136 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
     this.setState((s) => ({ open: { ...s.open, [key]: !s.open[key] } }));
   };
 
+  private scopeCheckbox(placeIds: string[], stop = true): React.ReactNode {
+    const inScope = placeIds.filter((id) => !this.state.removed[id]);
+    const mixed = inScope.length > 0 && inScope.length < placeIds.length;
+    return h('input', {
+      type: 'checkbox',
+      checked: inScope.length === placeIds.length,
+      ref: (el: HTMLInputElement | null) => { if (el) el.indeterminate = mixed; },
+      onClick: (e: React.MouseEvent) => { if (stop) e.stopPropagation(); },
+      onChange: () => {
+        const removed = { ...this.state.removed };
+        const allIn = inScope.length === placeIds.length;
+        for (const id of placeIds) removed[id] = allIn; // all in → remove all; else restore all
+        this.setState({ removed });
+      },
+      style: { marginRight: 6 },
+    });
+  }
+
+  /**
+   * Sheet 18, boards A–D in one region under the toolbar: the offer, the
+   * armed declaration with its transport-shaped groups, the running job, and
+   * the finished verdict — every count from ONE derivation over the scope.
+   */
+  private renderBulkBar(
+    inView: Array<{ p: PropertyView }>,
+    fromLabel: string,
+  ): React.ReactNode {
+    const { job } = this.props;
+    const notice: React.CSSProperties = {
+      margin: '0 12px 10px', padding: '10px 14px', fontSize: 13, borderRadius: 6,
+      border: '1px solid var(--nxai-card-border)', background: 'var(--nxai-section-bg)',
+      color: 'var(--nxai-card-text)',
+    };
+    const btn = (primary: boolean): React.CSSProperties => ({
+      padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+      border: `1px solid ${primary ? 'var(--nxai-action)' : 'var(--nxai-card-border)'}`,
+      background: primary ? 'var(--nxai-action)' : 'var(--nxai-card-bg)',
+      color: primary ? 'var(--nxai-action-text)' : 'var(--nxai-card-text)',
+      marginRight: 8,
+    });
+
+    // Board C / D: the job owns the region while it exists.
+    if (job) {
+      if (job.phase === 'starting' || job.phase === 'running') {
+        return h('div', { style: notice },
+          h('strong', null, 'Indexing'),
+          ` — ${job.completed} of ${job.total} places · ${job.failed} failed so far. `,
+          this.props.onCancelJob
+            ? h('span', { style: btn(false), onClick: this.props.onCancelJob }, 'Stop')
+            : null,
+        );
+      }
+      // Finished (done or error): the verdict is derived from the outcomes it sits above.
+      return h('div', { style: notice },
+        h('strong', null, job.phase === 'error' ? 'Indexing could not start' : 'Indexing finished'),
+        job.phase === 'error'
+          ? ` — ${job.error ?? 'no reason recorded'}. `
+          : ` — read ${job.total - job.failed} of ${job.total} places · ${job.failed} failed. `,
+        this.props.onDismissJob
+          ? h('span', { style: btn(false), onClick: this.props.onDismissJob }, 'Dismiss')
+          : null,
+      );
+    }
+
+    if (!this.props.onBulkIndex || inView.length === 0) return null;
+
+    // ONE derivation for every figure below (the no-count-stated-twice rule).
+    const allPlaces = inView.flatMap(({ p }) => p.places.map((pl) => ({ p, pl })));
+    const scope = allPlaces.filter(({ pl }) => !this.state.removed[pl.rowId]);
+    const removedCount = allPlaces.length - scope.length;
+    const apiOnly = scope.filter(({ pl }) => pl.ceiling !== null);
+    const stopped = scope.filter(({ pl }) => pl.source === 'local' && pl.status !== null && pl.status !== 'running');
+    const full = scope.length - apiOnly.length - stopped.length;
+    const mins = Math.max(1, Math.ceil((scope.length * 25) / 3 / 60));
+
+    // Board A: the offer — both units, from the view that produced the set.
+    if (!this.state.armed) {
+      return h('div', { style: { ...notice, display: 'flex', alignItems: 'center', gap: 10 } },
+        h('span', null,
+          `Index what Nexus knows — ${allPlaces.length} place${allPlaces.length === 1 ? '' : 's'} ` +
+          `(${inView.length} propert${inView.length === 1 ? 'y' : 'ies'}) from ${fromLabel}.`),
+        h('span', {
+          style: { ...btn(true), marginLeft: 'auto', marginRight: 0 },
+          onClick: () => this.setState({ armed: true, armedAt: Date.now(), removed: {}, declineStart: false }),
+        }, 'Arm'),
+      );
+    }
+
+    // Board B: armed — the declaration, its groups, and the stop.
+    const when = this.state.armedAt
+      ? new Date(this.state.armedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : '';
+    const line = (text: string): React.ReactNode =>
+      h('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub)', margin: '2px 0' } }, text);
+    return h('div', { style: notice },
+      h('div', { style: { fontWeight: 700, marginBottom: 4 } }, 'Index — a read, not a write'),
+      line(`from ${fromLabel}, ${when}` + (removedCount > 0 ? ` — minus ${removedCount} you removed` : '')),
+      line(`${full} place${full === 1 ? '' : 's'} read fully over SSH`),
+      apiOnly.length > 0
+        ? line(`${apiOnly.length} stop at the API facts — their account has no SSH gateway`)
+        : null,
+      stopped.length > 0
+        ? h('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub)', margin: '2px 0' } },
+            this.state.declineStart
+              ? `${stopped.length} stopped site${stopped.length === 1 ? '' : 's'} will be skipped — you declined the start. `
+              : `${stopped.length} stopped site${stopped.length === 1 ? '' : 's'} will be STARTED to read them, then stopped again. `,
+            h('a', {
+              style: { cursor: 'pointer', color: 'var(--nxai-accent)' },
+              onClick: () => this.setState({ declineStart: !this.state.declineStart }),
+            }, this.state.declineStart ? 'Start them after all' : 'Don’t start them'))
+        : null,
+      h('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', margin: '6px 0' } },
+        'Steps: read API facts → read SSH facts → index content. No approval, no backup — nothing here writes to a site.'),
+      line(`${scope.length} places · about ${mins} min at three at a time · you can stop it while it runs`),
+      h('div', { style: { marginTop: 8 } },
+        h('span', {
+          style: btn(true),
+          onClick: () => {
+            const ids = scope.map(({ pl }) => pl.rowId);
+            const names: Record<string, string> = {};
+            for (const { pl } of scope) names[pl.rowId] = pl.name;
+            this.props.onBulkIndex!(ids, names, !this.state.declineStart);
+            this.setState({ armed: false, removed: {} });
+          },
+        }, 'Start indexing'),
+        h('span', { style: btn(false), onClick: () => this.setState({ armed: false, removed: {} }) }, 'Cancel'),
+      ),
+    );
+  }
+
   private renderPlace(p: PropertyView, pl: PlaceView): React.ReactNode {
     const row = h('div', {
       key: pl.rowId,
@@ -329,6 +473,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       h('span', null, ''),
       // The indent lives INSIDE the Site cell — the tracks never move.
       h('span', { style: { ...ellipsis, paddingLeft: 14, color: 'var(--nxai-card-text)' } },
+        this.state.armed ? this.scopeCheckbox([pl.rowId]) : null,
         pl.kind === 'copy' ? 'your copy' : pl.kind,
         h('span', { style: { color: 'var(--nxai-card-sub)', marginLeft: 8 } }, pl.name)),
       h('span', null,
@@ -369,16 +514,18 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
         style: { color: 'var(--nxai-card-sub)', fontSize: 11, cursor: multi ? 'pointer' : 'default' },
         onClick: multi ? () => this.toggleOpen(p.key) : undefined,
       }, multi ? (open ? '▾' : '▸') : ''),
-      h('span', {
-        style: { ...ellipsis, fontWeight: 600, color: 'var(--nxai-card-text)', cursor: 'pointer' },
-        onClick: () =>
-          this.setState({
-            view: multi
-              ? { screen: 'property', key: p.key }
-              : { screen: 'place', key: p.key, rowId: p.places[0].rowId },
-          }),
-        title: p.name,
-      }, p.name),
+      h('span', { style: { ...ellipsis, fontWeight: 600, color: 'var(--nxai-card-text)' } },
+        this.state.armed ? this.scopeCheckbox(p.places.map((pl) => pl.rowId)) : null,
+        h('span', {
+          style: { cursor: 'pointer' },
+          onClick: () =>
+            this.setState({
+              view: multi
+                ? { screen: 'property', key: p.key }
+                : { screen: 'place', key: p.key, rowId: p.places[0].rowId },
+            }),
+          title: p.name,
+        }, p.name)),
       // Where it lives: address stacked over host (the sheet's shape). A
       // group shows the HOST SET — a set may be rendered, a count hides it.
       h('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub)' } },
@@ -458,6 +605,12 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
     const rank = (p: PropertyView): number =>
       p.oldest.state === 'fail' ? 0 : p.rungs.includes('nothing') ? 1 : 2;
     const checkedKey = (p: PropertyView): string => p.oldest.finishedAt ?? '';
+    // The from-line resolves to the filter that produced the set (sheet 18).
+    const fromParts: string[] = [];
+    if (origin !== 'all') fromParts.push(ORIGIN_LABELS.find((o) => o.key === origin)!.label);
+    if (state !== 'all') fromParts.push(`“${STATE_LABELS.find((sl) => sl.key === state)!.label}”`);
+    if (q) fromParts.push(`search “${query.trim()}”`);
+    const fromLabel = fromParts.length ? `your ${fromParts.join(' · ')} view` : 'the full list';
     inView.sort((a, b) => {
       if (sortBy === 'name') return a.p.name.localeCompare(b.p.name);
       if (sortBy === 'checked') return checkedKey(a.p).localeCompare(checkedKey(b.p)) || a.p.name.localeCompare(b.p.name);
@@ -581,6 +734,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
           }),
         ),
       ),
+      this.renderBulkBar(inView, fromLabel),
       h('div', { style: { border: '1px solid var(--nxai-card-border)', borderRadius: 8, margin: '0 12px' } },
         h('div', { style: { ...gridRow, padding: '8px 12px', borderBottom: '1px solid var(--nxai-card-border)' } },
           h('span', null, ''),

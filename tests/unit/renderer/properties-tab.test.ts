@@ -482,3 +482,115 @@ describe('designer round-6', () => {
     expect(t).not.toContain('failed 7h ago — ssh');
   });
 });
+
+describe('sheet 18 — bulk indexing', () => {
+  const twoProps = () => [
+    property({
+      key: 'wpe:p2', name: 'benfischer',
+      places: [place({ rowId: 'wpe-1' }),
+               place({ rowId: 'L1', kind: 'copy', source: 'local', name: 'ben-local', address: '~/ben', status: 'stopped' })],
+    }),
+    property({
+      key: 'wpe:au', name: 'jpmeautoscale',
+      places: [place({ rowId: 'wpe-au', knowledge: 'basic', ceiling: 'no SSH gateway' })],
+      rungs: ['basic'],
+    }),
+  ];
+  const bulkProps = (over: any = {}) => ({ onBulkIndex: jest.fn(), ...over });
+
+  function inst(c: FleetCollapse, extra: any = {}, mutate?: (i: any) => void) {
+    const i: any = new (PropertiesTab as any)(props(c, bulkProps(extra)));
+    if (mutate) mutate(i);
+    return i;
+  }
+  const tree = (i: any) => JSON.stringify(serializeTree(i.render()));
+
+  test('the offer states the set in both units, and only exists with a dispatch path', () => {
+    const t = tree(inst(collapse(twoProps())));
+    expect(t).toContain('3 places');
+    expect(t).toContain('2 properties');
+    expect(t).toContain('from the full list');
+    expect(t).toContain('Arm');
+    // no dispatch path → no offer
+    const bare = rendered(collapse(twoProps()));
+    expect(bare).not.toContain('Arm');
+  });
+
+  test('no checkboxes before arming; checkboxes after (refinement comes after arming)', () => {
+    expect(tree(inst(collapse(twoProps())))).not.toContain('checkbox');
+    const armed = inst(collapse(twoProps()), {}, (i) => { i.state.armed = true; i.state.armedAt = Date.now(); });
+    expect(tree(armed)).toContain('checkbox');
+  });
+
+  test('armed: the transport-shaped groups, the state-changing group, and the decline door', () => {
+    const armed = inst(collapse(twoProps()), {}, (i) => { i.state.armed = true; i.state.armedAt = Date.now(); });
+    const t = tree(armed);
+    expect(t).toContain('1 place read fully over SSH');                 // wpe-1
+    expect(t).toContain('1 stop at the API facts');                     // the capped one runs and stops earlier
+    expect(t).toContain('1 stopped site will be STARTED');              // the state-changing group
+    expect(t).toContain('Don’t start them');
+    expect(t).toContain('a read, not a write');
+    expect(t).not.toContain('checkpoint');                              // guided: steps, never checkpoints
+
+    const declined = inst(collapse(twoProps()), {}, (i) => { i.state.armed = true; i.state.armedAt = Date.now(); i.state.declineStart = true; });
+    const t2 = tree(declined);
+    expect(t2).toContain('will be skipped — you declined the start');
+  });
+
+  test('refinement recomputes the scope live and the from-line states the divergence', () => {
+    const armed = inst(collapse(twoProps()), {}, (i) => {
+      i.state.armed = true; i.state.armedAt = Date.now();
+      i.state.removed = { 'wpe-au': true };
+    });
+    const t = tree(armed);
+    expect(t).toContain('minus 1 you removed');
+    expect(t).toContain('2 places · about 1 min');
+    expect(t).not.toContain('stop at the API facts'); // the removed place took its group with it
+  });
+
+  test('Start dispatches the scope ids with names, and the decline flag rides along', () => {
+    const onBulkIndex = jest.fn();
+    const armed = inst(collapse(twoProps()), { onBulkIndex }, (i) => {
+      i.state.armed = true; i.state.armedAt = Date.now(); i.state.declineStart = true;
+    });
+    // find the Start handler in the rendered tree by invoking the component's own click path
+    const scope = ['wpe-1', 'L1', 'wpe-au'];
+    // simulate: call the same code path the button uses
+    const el: any = armed.render();
+    const findStart = (node: any): any => {
+      if (!node || typeof node !== 'object') return null;
+      const kids = Array.isArray(node.props?.children) ? node.props.children : [node.props?.children];
+      if (kids.some((k: any) => k === 'Start indexing')) return node;
+      for (const k of kids) { const f = findStart(k); if (f) return f; }
+      return null;
+    };
+    const startEl = findStart(el);
+    expect(startEl).toBeTruthy();
+    startEl.props.onClick();
+    expect(onBulkIndex).toHaveBeenCalledTimes(1);
+    const [ids, names, autoStart] = onBulkIndex.mock.calls[0];
+    expect(ids.sort()).toEqual(scope.sort());
+    expect(names['L1']).toBe('ben-local');
+    expect(autoStart).toBe(false);   // declined
+  });
+
+  test('the job owns the region: running shows progress and a stop; finished shows the derived verdict', () => {
+    const running = inst(collapse(twoProps()), {
+      job: { phase: 'running', type: 'reindex', siteIds: [], startedAt: 1, completed: 181, total: 413, failed: 2, failedIds: [] },
+      onCancelJob: jest.fn(),
+    });
+    const t = tree(running);
+    expect(t).toContain('181 of 413 places');
+    expect(t).toContain('Stop');
+    expect(t).not.toContain('Arm'); // the offer yields while a job exists
+
+    const done = inst(collapse(twoProps()), {
+      job: { phase: 'done', type: 'reindex', siteIds: [], startedAt: 1, completed: 413, total: 413, failed: 2, failedIds: [] },
+      onDismissJob: jest.fn(),
+    });
+    const t2 = tree(done);
+    expect(t2).toContain('read 411 of 413 places');
+    expect(t2).toContain('2 failed');
+    expect(t2).toContain('Dismiss');
+  });
+});
