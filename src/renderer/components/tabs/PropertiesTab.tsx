@@ -75,17 +75,14 @@ const gridRow: React.CSSProperties = { display: 'grid', gridTemplateColumns: GRI
 
 const mono: React.CSSProperties = { fontFamily: 'monospace', fontSize: 11, color: 'var(--nxai-card-sub)' };
 
-/** Chip size=xs look — the depth rungs and the quiet ceiling marker. */
-function rungChip(label: string, strong = false): React.ReactNode {
-  return h('span', {
-    key: label,
-    style: {
-      display: 'inline-block', padding: '1px 6px', marginRight: 4, borderRadius: 4, fontSize: 11,
-      border: `1px solid ${strong ? 'var(--nxai-card-sub)' : 'var(--nxai-card-border)'}`,
-      color: strong ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
-      background: 'var(--nxai-card-bg)', whiteSpace: 'nowrap' as const,
-    },
-  }, label);
+/**
+ * The knows cell — plain text like Checked (round-5: depth and freshness are
+ * facts of equal standing), with the ceiling folded into the rung as one
+ * fact: `Never looked inside · capped`. The ACCOUNT's condition lives in the
+ * banner; the row carries only this fold.
+ */
+function knowsText(rungLabel: string, capped: boolean): string {
+  return capped ? `${rungLabel} · capped` : rungLabel;
 }
 
 
@@ -173,7 +170,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       },
         h('span', { style: { minWidth: 110, color: 'var(--nxai-card-text)', fontWeight: 600 } }, pl.kind),
         h('span', { style: { ...mono, minWidth: 200 } }, pl.address ?? ''),
-        h('span', null, rungChip(KNOWLEDGE_LABELS[pl.knowledge]), pl.ceiling ? rungChip('cannot go deeper', true) : null),
+        h('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } }, knowsText(KNOWLEDGE_LABELS[pl.knowledge], pl.ceiling !== null)),
         h('span', { style: { fontSize: 12, color: pl.checked.state === 'fail' ? 'var(--nxai-danger-text)' : 'var(--nxai-card-sub)' } },
           checkedText(pl.checked, false)),
       );
@@ -201,9 +198,8 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
               'your copy',
               h('span', { style: { fontWeight: 400, color: 'var(--nxai-card-sub)', marginLeft: 8 } }, copy.name)),
             copy.address ? h('div', { style: { ...mono, margin: '2px 0 8px' } }, copy.address) : null,
-            h('div', { style: { marginBottom: 8 } },
-              rungChip(KNOWLEDGE_LABELS[copy.knowledge]),
-              h('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } }, checkedText(copy.checked, false))),
+            h('div', { style: { marginBottom: 8, fontSize: 12, color: 'var(--nxai-card-sub)' } },
+              `${knowsText(KNOWLEDGE_LABELS[copy.knowledge], copy.ceiling !== null)} · ${checkedText(copy.checked, false)}`),
             ...p.lineage.map((line, i) =>
               h('p', { key: i, style: { margin: '0 0 4px', fontSize: 13, color: 'var(--nxai-card-text)' } }, line)),
           )
@@ -324,14 +320,17 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
         pl.kind === 'copy' ? 'your copy' : pl.kind,
         h('span', { style: { color: 'var(--nxai-card-sub)', marginLeft: 8 } }, pl.name)),
       h('span', { style: mono }, pl.address ?? '—'),
-      h('span', null,
-        rungChip(KNOWLEDGE_LABELS[pl.knowledge]),
-        pl.ceiling ? rungChip('cannot go deeper', true) : null),
+      h('span', null, knowsText(KNOWLEDGE_LABELS[pl.knowledge], pl.ceiling !== null)),
       pl.knowledge === 'nothing'
         ? h('span', null, '') // the rung already says it — one sentence per state
         : h('span', {
             style: pl.checked.state === 'fail' ? { color: 'var(--nxai-danger-text)' } : undefined,
-          }, checkedText(pl.checked, false)),
+            // The cell stays short; the full sentence gets its own line below.
+          }, checkedText(pl.checked, false, true)),
+      pl.checked.state === 'fail' && pl.checked.reason
+        ? h('span', { style: { gridColumn: '2 / -1', fontSize: 12, color: 'var(--nxai-danger-text)' } },
+            checkedText(pl.checked, false))
+        : null,
     );
   }
 
@@ -366,13 +365,16 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       // shape of the set for a group.
       p.places.length === 1
         ? h('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } },
-            `${p.places[0].kind === 'copy' ? 'your copy' : p.places[0].kind} · ${sourceWord(p.places[0])} `,
+            // "local · your machine · <path>" was three spellings of one fact —
+            // for a local-only site the machine IS the kind (round-5 pushback).
+            p.places[0].kind === 'local'
+              ? 'your machine '
+              : `${p.places[0].kind === 'copy' ? 'your copy' : p.places[0].kind} · ${sourceWord(p.places[0])} `,
             h('span', { style: mono }, p.places[0].address ?? ''))
         : h('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } },
             `${p.places.length} places${p.hasCopy ? ' incl. your copy' : ''}`),
-      h('span', null,
-        ...p.rungs.map((r) => rungChip(KNOWLEDGE_LABELS[r])),
-        p.places.some((pl) => pl.ceiling) ? rungChip('cannot go deeper', true) : null),
+      h('span', { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } },
+        knowsText(p.rungs.map((r) => KNOWLEDGE_LABELS[r]).join(' / '), p.places.some((pl) => pl.ceiling))),
       p.rungs.includes('nothing') && p.oldest.state === 'never'
         ? h('span', null, '') // the rung already says it
         : h('span', {
@@ -380,9 +382,11 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
               fontSize: 12,
               color: p.oldest.state === 'fail' ? 'var(--nxai-danger-text)' : 'var(--nxai-card-sub)',
             },
-            // When the row is OPEN the failing place row carries the reason —
-            // the group row states it once, short.
-          }, checkedText(p.oldest, multi && p.oldest.state !== 'fail' && p.oldest.state !== 'never', multi && open)),
+            // The cell is always the short form — a 95-character sentence is
+            // longer than the column. The full reason renders once, on its
+            // own line: under the group when closed, under the failing place
+            // row when open.
+          }, checkedText(p.oldest, multi && p.oldest.state !== 'fail' && p.oldest.state !== 'never', true)),
     );
 
     return h('div', {
@@ -390,6 +394,10 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       style: { padding: '8px 12px', borderBottom: '1px solid var(--nxai-card-border)' },
     },
       headline,
+      !(multi && open) && p.oldest.state === 'fail' && p.oldest.reason
+        ? h('div', { style: { fontSize: 12, color: 'var(--nxai-danger-text)', paddingLeft: 34 } },
+            checkedText(p.oldest, false))
+        : null,
       flags.length
         ? h('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', paddingLeft: 34 } }, flags.join(' · '))
         : null,
@@ -450,17 +458,19 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
     // SegmentedControl body: a recessed grey track, items lift when active.
     const segTrack: React.CSSProperties = {
       display: 'inline-flex', gap: 1, padding: 2, borderRadius: 8,
-      background: 'var(--nxai-section-bg)', border: '1px solid var(--nxai-card-border)',
+      background: 'var(--nxai-score-bg)',
     };
     const segItem = (active: boolean): React.CSSProperties => ({
-      padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+      padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
       background: active ? 'var(--nxai-card-bg)' : 'transparent',
-      border: active ? '1px solid var(--nxai-card-border)' : '1px solid transparent',
+      border: 'none',
+      boxShadow: active ? '0 1px 2px rgba(0,0,0,0.12)' : 'none',
       color: active ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
+      fontWeight: active ? 600 : 400,
     });
     // Button size=sm: primary when on, outline when off — a predicate, not a segment.
     const stateBtn = (active: boolean): React.CSSProperties => ({
-      padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+      padding: '4px 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12,
       border: `1px solid ${active ? 'var(--nxai-accent)' : 'var(--nxai-card-border)'}`,
       background: active ? 'var(--nxai-accent)' : 'var(--nxai-card-bg)',
       color: active ? 'var(--nxai-accent-text)' : 'var(--nxai-card-text)',
@@ -570,7 +580,24 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
               q
                 ? 'Nothing matches. The search covered every property, so if it is not here, Nexus has no row for it.'
                 : 'Nothing in this view.')
-          : inView.map(({ p, outside }) => this.renderProperty(p, outside)),
+          : inView.map(({ p, outside }, i) => {
+              // Round-5: the hoist is labelled, so three rows above an A–Z
+              // block read as a decision, not a bug. Dividers only in the
+              // default order, and only when both groups exist.
+              const divider =
+                sortBy === 'consequence' && i > 0 && rank(inView[i - 1].p) < 2 && rank(p) === 2
+                  ? h('div', {
+                      key: `div-${p.key}`,
+                      style: { padding: '4px 12px', fontSize: 11, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub)', background: 'var(--nxai-section-bg)', borderBottom: '1px solid var(--nxai-card-border)' },
+                    }, 'Everything else · A–Z')
+                  : sortBy === 'consequence' && i === 0 && rank(p) < 2
+                    ? h('div', {
+                        key: `div-needs-${p.key}`,
+                        style: { padding: '4px 12px', fontSize: 11, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase' as const, color: 'var(--nxai-card-sub)', background: 'var(--nxai-section-bg)', borderBottom: '1px solid var(--nxai-card-border)' },
+                      }, 'Needs you first')
+                    : null;
+              return h(React.Fragment, { key: `frag-${p.key}` }, divider, this.renderProperty(p, outside));
+            }),
       ),
       h('div', { style: { padding: '8px 12px', color: 'var(--nxai-card-sub)', fontSize: 12 } },
         `${inView.length} of ${header.total} properties shown · one scroll, no pagination`),

@@ -11,6 +11,7 @@
 import { buildFleetCollapse, FleetCollapse, FleetCollapseInput, CheckedView } from './fleetCollapse';
 import { sshGatewayUnavailableReason } from '../transport/wpeGatewayStatus';
 import { pipelineEntityId } from '../intelligence-host/pipelineRunProducer';
+import * as os from 'os';
 
 interface DbLike {
   prepare(sql: string): { all(...args: unknown[]): unknown[]; get(...args: unknown[]): unknown };
@@ -241,7 +242,9 @@ export function collectFleetCollapse(deps: CollectFleetCollapseDeps): FleetColla
     docCounts,
     contentStatus: deps.contentStatus,
     localPaths: new Map(
-      deps.localSites.filter((s) => s?.id && s?.path).map((s) => [s.id as string, String(s.path)]),
+      deps.localSites
+        .filter((s) => s?.id && s?.path)
+        .map((s) => [s.id as string, String(s.path).replace(os.homedir(), '~')]),
     ),
   });
 }

@@ -119,7 +119,8 @@ describe('PropertiesTab', () => {
       rungs: ['basic'],
     });
     const t1 = rendered(collapse([auto]));
-    expect(t1).toContain('cannot go deeper');          // the quiet marker
+    expect(t1).toContain('· capped');                  // folded into the rung — one fact, one cell
+    expect(t1).not.toContain('cannot go deeper');      // no second chip on the row
     expect(t1).not.toContain('no SSH gateway');        // the verdict lives in the banner, once
 
     const t2 = rendered(collapse([property({ collision: true })]));
@@ -391,5 +392,38 @@ describe('designer round-4 — the visual layer', () => {
     expect(t).toContain('your copy');
     expect(t).toContain('pulled from benfischer1stg');
     expect(t.indexOf('pulled from')).toBeLessThan(t.indexOf('Environments')); // legs inside the card, envs below
+  });
+});
+
+describe('designer round-5', () => {
+  test('a failing row: short form in the cell, the full sentence once on its own line', () => {
+    const failing = property({
+      oldest: { state: 'fail', finishedAt: iso(7), reason: 'NOT NULL constraint failed: users.username' },
+      places: [place({ checked: { state: 'fail', finishedAt: iso(7), reason: 'NOT NULL constraint failed: users.username' } })],
+    });
+    const t = rendered(collapse([failing]));
+    expect(t).toContain('record failed 7h ago');                                        // the short cell
+    expect(t.split('NOT NULL constraint failed: users.username').length - 1).toBe(1);   // full sentence once
+  });
+
+  test('the consequence hoist is labelled: Needs you first, then Everything else', () => {
+    const failing = property({ key: 'wpe:f', name: 'zzz',
+      oldest: { state: 'fail', finishedAt: iso(2), reason: 'x' } });
+    const fine = property({ key: 'wpe:a', name: 'aaa' });
+    const t = rendered(collapse([fine, failing]));
+    expect(t).toContain('Needs you first');
+    expect(t).toContain('Everything else · A–Z');
+    expect(t.indexOf('Needs you first')).toBeLessThan(t.indexOf('zzz'));
+
+    // No dividers when the hoist is empty, or when another sort is active.
+    expect(rendered(collapse([fine]))).not.toContain('Needs you first');
+    expect(rendered(collapse([fine, failing]), (i) => { i.state.sortBy = 'name'; }))
+      .not.toContain('Needs you first');
+  });
+
+  test('depth is plain text like Checked — no chip borders in the knows cell', () => {
+    const t = rendered(collapse([property()]));
+    expect(t).toContain('Searchable');
+    expect(t).not.toContain('cannot go deeper');
   });
 });
