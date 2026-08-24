@@ -1,0 +1,112 @@
+# Platform Benchmark — Nexus vs Coworker vs WordPress
+# Spec: docs/planning/2026-08-21-platform-benchmark-design.md
+#
+# Three MCP surfaces, one model, identical prompts.
+# Repeat: 3 (raise to 5 before publishing any numbers).
+#
+# Run:
+#   npx promptfoo eval -c tests/platform-bench/promptfooconfig.yaml --no-cache
+#   npx promptfoo view
+
+description: "Platform benchmark — Nexus vs Coworker vs WordPress (Cedar & Vale substrate)"
+
+evaluateOptions:
+  maxConcurrency: 1   # providers call external services; sequential avoids rate limits
+  repeat: 3           # 3 per cell; raise to 5 before publishing
+
+providers:
+  - id: file://providers/nexus.js
+    label: Nexus
+
+  - id: file://providers/coworker.js
+    label: Coworker
+
+  - id: file://providers/wordpress.js
+    label: WordPress
+
+# ── Substrate constants ────────────────────────────────────────────────────────
+# Sites in scope. Update if the fleet changes.
+# Coworker collection IDs are stable per-site and hard-coded in coworker.js.
+#
+#   Flagship  cedarvalehealt.wpenginepowered.com    col_elNAyZoSKGhJoFCFqHSK12
+#   Site A    summitdermatol.wpenginepowered.com    col_KO2gvD3Tbw5Rvuv0msq4dQ
+#   Site B    palegreen-capybara-114180.hostingersite.com  col_tErE8KxfsfxWrtd1HscbCe
+
+defaultTest:
+  assert:
+    - type: latency
+      threshold: 600000   # 10 min max per cell
+
+# ── Test cases ────────────────────────────────────────────────────────────────
+tests:
+  # ── CV-A-01: missing openingHoursSpecification ────────────────────────────
+  - description: "CV-A-01 — which clinic sites are missing opening hours?"
+    vars:
+      prompt: >
+        Look at the clinic locations across cedarvalehealt and summitdermatol.
+        Which site's locations are missing opening hours data, and which has it?
+        Be specific about which site has the gap.
+    assert:
+      # Answer key: summitdermatol locations have acf_hours="" (empty).
+      # cedarvalehealt locations have hours.
+      - type: icontains
+        value: "summitdermatol"
+      - type: icontains-any
+        value: ["missing", "no hours", "without hours", "empty", "absent"]
+      # must_not: hallucinate that cedarvalehealt is missing hours
+      - type: not-icontains
+        value: "cedarvalehealt is missing"
+      - type: cost
+        threshold: 0.15
+
+  # ── CV-B-01: cross-site provider contradiction ────────────────────────────
+  - description: "CV-B-01 — is any provider accepting patients at two different practices?"
+    vars:
+      prompt: >
+        Check the providers on cedarvalehealt and palegreen-capybara-114180.hostingersite.com.
+        Is any provider listed as accepting new patients at both sites simultaneously?
+        Name the provider if you find one.
+    assert:
+      # Answer key: Elian Mills PA-C, NPI 1274960149, on both (Phoenix and Boulder).
+      - type: icontains
+        value: "elian mills"
+      - type: icontains-any
+        value: ["both", "two", "simultaneously", "contradiction"]
+      # The NPI is the machine-checkable ground truth
+      - type: icontains
+        value: "1274960149"
+      # must_not: hallucinate a site it cannot see
+      - type: not-icontains
+        value: "willowcreekderm"
+      - type: cost
+        threshold: 0.20
+
+  # ── CV-G-01: stale medical reviews ───────────────────────────────────────
+  - description: "CV-G-01 — how many treatments on cedarvalehealt have not been reviewed in 3+ years?"
+    vars:
+      prompt: >
+        On cedarvalehealt, how many treatment pages have not been clinically reviewed
+        in the past three years? What is the count, and what is the review status?
+    assert:
+      # Answer key: 8 overdue (review_status=overdue), stale since 2021-2022.
+      # Note: metadataFilters date range returns 0 (D25 context); use review_status.
+      - type: icontains-any
+        value: ["8", "eight"]
+      - type: icontains-any
+        value: ["overdue", "stale", "not reviewed"]
+      - type: cost
+        threshold: 0.15
+
+  # ── Reach test: ask about a site only Nexus can see ──────────────────────
+  - description: "Reach — ask about willowcreekderm (external SSH only, no Coworker KB)"
+    vars:
+      prompt: >
+        What WordPress version is willowcreekderm.com running?
+    assert:
+      # Nexus: find_outdated_sites or fleet_sql → 6.9.7
+      # Coworker: no KB for this site → should say so honestly
+      # WordPress: no connection → should say so
+      - type: cost
+        threshold: 0.10
+    # Note: ground truth is 6.9.7 (CV-C-01 pathology).
+    # Score manually: Nexus correct answer vs Coworker honest refusal vs WordPress refusal.

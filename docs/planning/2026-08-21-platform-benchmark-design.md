@@ -1,9 +1,75 @@
 # Platform Benchmark — Nexus vs Coworker vs WordPress
 
-**Created:** 2026-08-21
-**Status:** Design approved, not yet implemented
+**Created:** 2026-08-21  
+**Updated:** 2026-08-24 — Coworker measured, substrate settled, Stage 1 harness built
+**Status:** Harness written (`tests/platform-bench/`); WordPress column prereqs pending
 **Substrate:** Cedar & Vale Health (`canonical-demos/cedar-vale-health-demo`)
 **Tooling:** promptfoo 0.122.0 (already a devDependency)
+
+---
+
+## 0. What we learned from measuring Coworker (2026-08-24)
+
+Everything below §0 was written before Coworker was connected. This section
+records what changed, so decisions made against assumptions are not re-litigated
+against measurements.
+
+### 0.1 Coworker's surface is its knowledge base, not abilities
+
+`search_abilities` requires a personal API key. Under a console key, the
+capability surface is `search_knowledge_base`, `fetch_knowledge_base_document`,
+and `list_account_sites`. Abilities never appear in `tools/list` for connected
+sites (all showed `abilities_count: 0`, `abilities_sync_status: never_synced`).
+
+The knowledge base is richer than expected. Every indexed document carries ACF
+fields as metadata prefixed `acf_`. You can filter on them:
+`filters: { metadata: { acf_npi: ["1274960149"] } }`, and aggregate them:
+`aggregations: [{ field: "metadata.acf_hours", type: "terms" }]`. No structured
+Abilities API is needed to answer structured questions.
+
+### 0.2 The DNS question is answered — and by a better site
+
+The spec's open question was whether Coworker can connect a site with no public
+DNS. It can't — but not for that reason: `willowcreekderm.com` (WP 6.9.7)
+failed because `wpe-hub` requires WordPress ≥ 7.0. That is a more informative
+finding than a DNS failure: **a site two WordPress majors behind is also a site
+Coworker cannot instrument**. CV-C-01 is a gap by construction.
+
+The real DNS test came from `palegreen-capybara-114180.hostingersite.com` (WP
+7.0.4, Hostinger, real public HTTPS). **Coworker connected and indexed it.**
+Connection requires public DNS + WordPress ≥ 7.0, not WP Engine hosting.
+
+### 0.3 Collection map (stable per site, measured 2026-08-24)
+
+All in project `proj_cE8Ib44IuegI3rH5l1MbBy`:
+
+| Site | Role | Collection ID |
+|---|---|---|
+| `cedarvalehealt.wpenginepowered.com` | Flagship | `col_elNAyZoSKGhJoFCFqHSK12` |
+| `summitdermatol.wpenginepowered.com` | Site A (CV-A-01) | `col_KO2gvD3Tbw5Rvuv0msq4dQ` |
+| `palegreen-capybara-114180.hostingersite.com` | Site B / Ridgeline (CV-B-01) | `col_tErE8KxfsfxWrtd1HscbCe` |
+| `meridiandata.wpenginepowered.com` | Meridian Data (M3) | `col_Gs55DKj2RP627dvnlo6YYu` |
+
+### 0.4 Pathology reachability through Coworker
+
+| Pathology | Coworker approach | Calls | Verdict |
+|---|---|---|---|
+| CV-A-01 hours missing | Aggregate `acf_hours` on summitdermatol → empty buckets | 1 | ✅ |
+| CV-B-01 ghost provider | Filter `acf_npi` on each collection, compare | 2 + reasoning | ⚠️ multi-step |
+| CV-C-01 version drift | Hub requires WP ≥ 7.0 — can't connect | 0 | ✗ structural |
+| CV-D-01 NAP contradiction | Fetch same slug from both collections | 2 + reasoning | ⚠️ multi-step |
+| CV-E-01 halted | `list_account_sites` has no `halted` concept | — | ✗ |
+| CV-F-01 verbatim copies | No cross-site similarity detection | — | ✗ |
+| CV-G-01 stale reviews | Filter `acf_review_status: overdue` | 1 | ✅ |
+
+⚠️ = findable but requires the model to join results across two separate calls.
+No single-call cross-site correlation exists in the knowledge base API.
+
+### 0.5 D25 context — date range filters
+
+`acf_review_date` is typed `text`, so `review_date lt '2023-08-24'` returns
+nothing (D25, fixed separately for Nexus but the KB has the same limitation).
+Use `acf_review_status eq 'overdue'` to reach stale treatments in Coworker.
 
 ---
 
