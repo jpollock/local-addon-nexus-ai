@@ -127,17 +127,38 @@ export const searchContentHandler: McpToolHandler = {
 
     // vectorSiteId: external ids are `ssh:<alias>`; the vector store stores them
     // colon-free. No-op for local/WPE ids, so applied unconditionally.
+    const metadataFilters = coerceMetadataFilters(args.metadataFilters);
     const results = await services.vectorStore.search(vectorSiteId(siteId), queryVector, {
       limit,
       postType: args.postType as string | undefined,
       relevanceFloor: args.min_score as number | undefined,
       searchMode: args.searchMode as 'semantic' | 'hybrid' | 'keyword' | undefined,
-      metadataFilters: coerceMetadataFilters(args.metadataFilters),
+      metadataFilters,
       queryText: args.query as string,
     });
 
+    // D23 — the census. Search decides which rows to SHOW; how many posts
+    // MATCH a structured filter is evaluated over the full population, so the
+    // count can never depend on how the query was worded (retrieve-then-filter
+    // returned 9 or 20 of 200 true matches for the same filter under two
+    // phrasings). Optional on the interface: no census beats a lying one.
+    let censusLine = '';
+    if (metadataFilters && metadataFilters.length > 0 && services.vectorStore.countMetadataMatches) {
+      const census = services.vectorStore.countMetadataMatches(
+        vectorSiteId(siteId), metadataFilters, args.postType as string | undefined,
+      );
+      censusLine =
+        `\n\n📊 Census: ${census.matched} post(s) match the metadata filter site-wide ` +
+        `(${census.examined} examined)` +
+        (results.length < census.matched
+          ? ` — the ${results.length} shown are the most relevant to your query, NOT the full match set. Raise limit to see more.`
+          : results.length === census.matched && census.matched > 0
+            ? ' — all matching posts shown.'
+            : '.');
+    }
+
     if (results.length === 0) {
-      return ok(`No results found for "${args.query}" in ${siteName}.`);
+      return ok(`No results found for "${args.query}" in ${siteName}.${censusLine}`);
     }
 
     const formatted = results
@@ -158,7 +179,7 @@ export const searchContentHandler: McpToolHandler = {
 
     const warning = indexEntry ? indexFreshnessWarning(indexEntry) : null;
     const suffix = warning ? `\n${warning}` : '';
-    return ok(`Found ${results.length} results in "${siteName}":\n\n${formatted}${suffix}`);
+    return ok(`Found ${results.length} results in "${siteName}":\n\n${formatted}${censusLine}${suffix}`);
   },
 };
 

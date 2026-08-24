@@ -6,6 +6,7 @@ import { VECTOR_DIMENSIONS } from '../../common/constants';
 import { VectorDocument, SearchOptions, SearchResult, SiteIndexStats } from '../../common/types';
 import type { IVectorStore } from './IVectorStore';
 import { applyMetadataFilters } from './metadata-filters';
+import type { MetadataFilter } from '../../common/types';
 import { secureDbFile } from '../db/secureDbFile';
 
 export class SqliteVecStore implements IVectorStore {
@@ -565,6 +566,53 @@ export class SqliteVecStore implements IVectorStore {
     }
 
     return results;
+  }
+
+  /**
+   * D23 — the census: how many POSTS on this site match a metadata filter,
+   * evaluated over the FULL document population, never a retrieval candidate
+   * set. `search()` decides which rows to SHOW (ranked by the query);
+   * membership in a structured filter must not depend on how the caller
+   * worded the query — the Meridian gate measured 9 vs 20 of 200 true
+   * matches for the same filter under two phrasings.
+   *
+   * One row per post (metadata is identical across a post's chunks).
+   * Throws UnorderableFilterError like the filter itself — a census over a
+   * filter that cannot work must refuse, not report zero.
+   */
+  countMetadataMatches(
+    siteId: string,
+    filters: MetadataFilter[],
+    postType?: string,
+  ): { matched: number; examined: number } {
+    if (!this.conn) throw new Error('SqliteVecStore not initialized');
+    if (postType) SqliteVecStore.validatePostType(postType);
+    const p = this.tablePrefix(siteId);
+    const tableExists = this.conn
+      .prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`)
+      .get(`${p}_docs`);
+    if (!tableExists) return { matched: 0, examined: 0 };
+
+    let sql = `SELECT post_type, metadata FROM "${p}_docs" GROUP BY post_id`;
+    const params: unknown[] = [];
+    if (postType) {
+      sql = `SELECT post_type, metadata FROM "${p}_docs" WHERE post_type = ? GROUP BY post_id`;
+      params.push(postType);
+    }
+    const rows = this.conn.prepare(sql).all(...params) as Array<{ post_type: string; metadata: string }>;
+
+    let matched = 0;
+    for (const row of rows) {
+      let custom: Record<string, unknown> = {};
+      try {
+        const meta = JSON.parse(row.metadata);
+        if (meta && typeof meta.customFields === 'object' && meta.customFields) custom = meta.customFields;
+      } catch {
+        /* malformed metadata → no fields; the filter fails closed on it */
+      }
+      if (applyMetadataFilters(custom, filters)) matched++;
+    }
+    return { matched, examined: rows.length };
   }
 
   // Implemented in Task 5

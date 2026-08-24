@@ -1,5 +1,5 @@
 // src/main/vector-store/IVectorStore.ts
-import { VectorDocument, SearchOptions, SearchResult, SiteIndexStats } from '../../common/types';
+import { VectorDocument, SearchOptions, SearchResult, SiteIndexStats, MetadataFilter } from '../../common/types';
 
 export interface IVectorStore {
   initialize(): Promise<void>;
@@ -12,6 +12,16 @@ export interface IVectorStore {
     concurrency?: number,
   ): Promise<Map<string, SearchResult[]>>;
   lookupById(siteId: string, docId: string): Promise<{ id: string; content: string; title: string } | null>;
+  /**
+   * D23 — how many posts match a metadata filter, evaluated over the FULL
+   * document population (never a retrieval candidate set). Optional so
+   * alternative stores degrade to "no census available" rather than lying.
+   */
+  countMetadataMatches?(
+    siteId: string,
+    filters: MetadataFilter[],
+    postType?: string,
+  ): { matched: number; examined: number };
   /**
    * Returns all indexed documents for a site, one entry per post (chunk_index = 0).
    * Includes embeddings for semantic clustering and analysis.

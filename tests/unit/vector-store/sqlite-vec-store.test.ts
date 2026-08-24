@@ -573,3 +573,70 @@ describe('D8 — keyword/hybrid search on hyphenated site ids', () => {
     expect(results).toEqual([]);
   });
 });
+
+/**
+ * D23 — the census: membership in a structured filter is evaluated over the
+ * FULL population, never a retrieval candidate set. The Meridian gate proved
+ * the defect: the same filter returned 9 or 20 of 200 true matches depending
+ * on the query wording, because filters only saw retrieval candidates.
+ */
+describe('D23 — countMetadataMatches', () => {
+  let store: SqliteVecStore;
+  let dbPath: string;
+
+  beforeEach(async () => {
+    dbPath = tmpDb();
+    store = new SqliteVecStore(dbPath);
+    await store.initialize();
+  });
+
+  afterEach(async () => {
+    await store.close();
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+  });
+
+  async function seed(counts: number[]) {
+    await store.upsert('census-site', counts.map((wc, i) => makeDoc({
+      siteId: 'census-site', id: `wp_c_${i}`, postId: i + 1,
+      title: `Post ${i}`, content: `content ${i}`,
+      metadata: JSON.stringify({ customFields: { word_count: String(wc) } }),
+    })));
+  }
+
+  test('counts every matching post — independent of any query or relevance', async () => {
+    await seed([100, 200, 900, 350, 4000]);
+    const census = store.countMetadataMatches('census-site',
+      [{ field: 'word_count', op: 'lt', value: 400 }]);
+    expect(census).toEqual({ matched: 3, examined: 5 });
+  });
+
+  test('postType narrows the population and the denominator says so', async () => {
+    await store.upsert('census-site', [
+      makeDoc({ siteId: 'census-site', id: 'wp_a_1', postId: 1, postType: 'doc',
+        metadata: JSON.stringify({ customFields: { v: '2.10' } }) }),
+      makeDoc({ siteId: 'census-site', id: 'wp_a_2', postId: 2, postType: 'post',
+        metadata: JSON.stringify({ customFields: { v: '1.0' } }) }),
+    ]);
+    const census = store.countMetadataMatches('census-site',
+      [{ field: 'v', op: 'gte', value: '2.9' }], 'doc');
+    expect(census).toEqual({ matched: 1, examined: 1 });
+  });
+
+  test('an unindexed site is a zero census, and chunks never double-count a post', async () => {
+    expect(store.countMetadataMatches('never-indexed', [{ field: 'x', op: 'eq', value: '1' }]))
+      .toEqual({ matched: 0, examined: 0 });
+
+    await store.upsert('census-site', [0, 1].map((chunk) => makeDoc({
+      siteId: 'census-site', id: `wp_m_1_${chunk}`, postId: 7, chunkIndex: chunk,
+      metadata: JSON.stringify({ customFields: { flag: 'on' } }),
+    })));
+    expect(store.countMetadataMatches('census-site', [{ field: 'flag', op: 'eq', value: 'on' }]))
+      .toEqual({ matched: 1, examined: 1 });
+  });
+
+  test('a filter that cannot work refuses the census too — never reports zero', async () => {
+    await seed([100]);
+    expect(() => store.countMetadataMatches('census-site',
+      [{ field: 'word_count', op: 'lt', value: 'stale' }])).toThrow(/cannot be applied/);
+  });
+});

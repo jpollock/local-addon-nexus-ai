@@ -1043,7 +1043,19 @@ document plus its slug at index time — or delete the claim from the tool
 description so nobody builds against it. Note the honest-advertising rule:
 a capability description is a contract, and this one is false today.
 
-## D23 — OPEN — `metadataFilters` is retrieve-then-filter, so structured counts under-report
+## D23 — FIXED 2026-08-24 — `metadataFilters` is retrieve-then-filter, so structured counts under-report
+
+> **FIXED with a census, not by changing retrieval.** `search()` still decides
+> which rows to SHOW (ranked by the query); how many posts MATCH is now
+> answered separately by `SqliteVecStore.countMetadataMatches` — a walk over
+> the FULL document population, one row per post, query-blind by construction.
+> `search_site_content` appends the census whenever filters are present:
+> "N post(s) match the metadata filter site-wide (P examined) — the K shown
+> are the most relevant to your query, NOT the full match set." It appears on
+> the zero-results path too, so "no results" can never read as "no matches."
+> A filter that cannot work refuses the census as well (D25's error). The
+> fleet screen's counts were already census-true by construction
+> (buildFleetCollapse walks populations, never candidates).
 
 **Verified 2026-08-24 (architecture):** `applyMetadataFilters`
 (`src/main/vector-store/metadata-filters.ts`) runs per-document over the
