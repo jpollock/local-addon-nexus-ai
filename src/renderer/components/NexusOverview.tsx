@@ -199,6 +199,8 @@ interface NexusOverviewState {
   collapse: FleetCollapse | null;
   collapseLoaded: boolean;
   collapseFailed: boolean;
+  /** Sheet 19: the enumerable facet values with counts, for the filter menu. */
+  filterOptions: any | null;
   selectedSiteIds: string[];
   /** The bulk job started from the Sites bar, or null. Replaces the selection bar. */
   bulkJob: BulkJobView | null;
@@ -343,6 +345,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     collapse: null,
     collapseLoaded: false,
     collapseFailed: false,
+    filterOptions: null,
     selectedSiteIds: [],
     bulkJob: null,
     aiProxy: null,
@@ -591,6 +594,10 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       if (!this.mounted) return;
       if (res?.success && res.collapse) {
         this.setState({ collapse: res.collapse as FleetCollapse, collapseLoaded: true, collapseFailed: false });
+        // The facet menu's values ride along; absence just hides the menu.
+        void ipc.invoke(IPC_CHANNELS.SITE_FINDER_GET_OPTIONS)
+          .then((o: any) => { if (this.mounted && o?.success) this.setState({ filterOptions: o }); })
+          .catch(() => { /* menu hidden */ });
       } else {
         this.setState({ collapseLoaded: true, collapseFailed: true });
       }
@@ -1031,6 +1038,21 @@ renderTabBar(): React.ReactNode {
       onCancelJob: this.cancelBulkJob,
       onDismissJob: this.dismissBulkJob,
       onOpenNow: () => this.setState({ activeTab: 'now' }),
+      // Sheet 19: the interpreter and the id resolver — the same IPC the
+      // Site Finder uses, so the two surfaces cannot drift.
+      onInterpret: async (text: string) => {
+        const res = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SITE_FINDER_AI_PARSE, {
+          conversation: [{ role: 'user', content: text }],
+        });
+        if (!res?.success) return { kind: 'error' as const, message: res?.error ?? 'The description could not be read.' };
+        if (res.needsClarification) return { kind: 'clarify' as const, question: res.question, facet: res.facet ?? null };
+        return { kind: 'filters' as const, filters: res.filters ?? {} };
+      },
+      onResolveFilterIds: async (filters: Record<string, unknown>) => {
+        const res = await this.props.electron.ipcRenderer.invoke(IPC_CHANNELS.SITE_FINDER_APPLY, filters);
+        return res?.success && Array.isArray(res.siteIds) ? res.siteIds : null;
+      },
+      filterOptions: this.state.filterOptions,
     });
   }
 

@@ -24,6 +24,61 @@ import type { BulkJobView } from './SitesTab';
 
 const h = React.createElement;
 
+/**
+ * Sheet 19: every interpreted filter renders as a READABLE CLAUSE — the
+ * operator lives inside the value (`Not updated in: more than 30 days`),
+ * because a bare `30 days` hides whether it means more or less. One chip per
+ * removable clause; removing it deletes exactly that key (or that value from
+ * its array).
+ */
+interface FilterChip { key: string; value?: string; label: string }
+
+export function filtersToChips(filters: Record<string, unknown>): FilterChip[] {
+  const chips: FilterChip[] = [];
+  const push = (key: string, label: string, value?: string) => chips.push({ key, value, label });
+  const f = filters as Record<string, any>;
+  for (const v of f.plugins ?? []) push('plugins', `Plugins: ${v}`, v);
+  for (const v of f.themes ?? []) push('themes', `Themes: ${v}`, v);
+  for (const v of f.phpVersions ?? []) push('phpVersions', `PHP: ${v}`, v);
+  for (const v of f.wpVersions ?? []) push('wpVersions', `WordPress: ${v}`, v);
+  if (f.contentQuery) push('contentQuery', `Content: "${f.contentQuery}"`);
+  if (f.searchText) push('searchText', `Name or domain: "${f.searchText}"`);
+  if (f.minPluginCount != null) push('minPluginCount', `Plugins: at least ${f.minPluginCount}`);
+  if (f.maxPluginCount != null) push('maxPluginCount', `Plugins: at most ${f.maxPluginCount}`);
+  if (f.minPostCount != null) push('minPostCount', `Posts: at least ${f.minPostCount}`);
+  if (f.maxPostCount != null) push('maxPostCount', `Posts: at most ${f.maxPostCount}`);
+  if (f.minUserCount != null) push('minUserCount', `Users: at least ${f.minUserCount}`);
+  if (f.maxUserCount != null) push('maxUserCount', `Users: at most ${f.maxUserCount}`);
+  if (f.minAdminCount != null) push('minAdminCount', `Admins: at least ${f.minAdminCount}`);
+  if (f.stalePostDays != null) push('stalePostDays', `Not updated in: more than ${f.stalePostDays} days`);
+  if (f.recentPostDays != null) push('recentPostDays', `Updated in: the last ${f.recentPostDays} days`);
+  if (f.phpEolOnly) push('phpEolOnly', 'PHP: end of life');
+  if (f.wpVersionOlderThan) push('wpVersionOlderThan', `WordPress: older than ${f.wpVersionOlderThan}`);
+  if (f.pluginVersion) push('pluginVersion', `${f.pluginVersion.slug}: older than ${f.pluginVersion.olderThan}`);
+  if (f.commentsDisabled != null) push('commentsDisabled', `Comments: ${f.commentsDisabled ? 'disabled' : 'enabled'}`);
+  if (f.hiddenFromSearch != null) push('hiddenFromSearch', `Search engines: ${f.hiddenFromSearch ? 'discouraged' : 'allowed'}`);
+  if (f.selfRegistrationOpen != null) push('selfRegistrationOpen', `Registration: ${f.selfRegistrationOpen ? 'open' : 'closed'}`);
+  if (f.staticFrontPage != null) push('staticFrontPage', `Front page: ${f.staticFrontPage ? 'static' : 'blog roll'}`);
+  if (f.plainPermalinks != null) push('plainPermalinks', `Permalinks: ${f.plainPermalinks ? 'plain' : 'pretty'}`);
+  if (f.wpeEnvironment) push('wpeEnvironment', `Environment: ${f.wpeEnvironment}`);
+  return chips;
+}
+
+/** Remove one chip's clause from the filter set. Arrays lose one value; scalars go. */
+export function removeChipFromFilters(
+  filters: Record<string, unknown>,
+  chip: FilterChip,
+): Record<string, unknown> {
+  const next: Record<string, any> = { ...filters };
+  if (chip.value !== undefined && Array.isArray(next[chip.key])) {
+    const arr = (next[chip.key] as string[]).filter((v) => v !== chip.value);
+    if (arr.length) next[chip.key] = arr; else delete next[chip.key];
+  } else {
+    delete next[chip.key];
+  }
+  return next;
+}
+
 type OriginFilter = 'all' | 'local' | 'wpe' | 'external';
 type StateFilter = 'all' | 'nothing' | 'copy' | 'attention' | 'ceiling';
 
@@ -44,6 +99,22 @@ interface PropertiesTabProps {
   onDismissJob?: () => void;
   /** Door into the Now panel for the unattributed remainder. */
   onOpenNow?: () => void;
+  /** Sheet 19: interpret a typed description (SITE_FINDER_AI_PARSE). */
+  onInterpret?: (text: string) => Promise<
+    | { kind: 'filters'; filters: Record<string, unknown> }
+    | { kind: 'clarify'; question: string; facet: string | null }
+    | { kind: 'error'; message: string }
+  >;
+  /** Sheet 19: resolve a filter set to matching site ids (SITE_FINDER_APPLY). */
+  onResolveFilterIds?: (filters: Record<string, unknown>) => Promise<string[] | null>;
+  /** The enumerable axes with counts (SITE_FINDER_GET_OPTIONS). */
+  filterOptions?: {
+    plugins: string[]; pluginCounts?: Record<string, number>;
+    wpVersions: string[]; wpVersionCounts?: Record<string, number>;
+    phpVersions: string[]; themes: string[];
+  } | null;
+  /** The no-dead-end door: hand the unresolved text to the composer. */
+  onOpenComposer?: (text: string) => void;
 }
 
 interface PropertiesTabState {
@@ -62,6 +133,14 @@ interface PropertiesTabState {
   removed: Record<string, boolean>;
   /** The decline door: read stopped sites are skipped instead of started. */
   declineStart: boolean;
+  /** Sheet 19: the interpreted filter set, its chips, and the resolved id set. */
+  interp: { filters: Record<string, unknown>; ids: string[] | null } | null;
+  interpreting: boolean;
+  /** Board F: the interpreter's question, with the facet whose menu opens beneath it. */
+  clarify: { question: string; facet: string | null; forText: string } | null;
+  /** The Add-a-filter menu: which axis's values are open, if any. */
+  menuAxis: 'plugins' | 'themes' | 'phpVersions' | 'wpVersions' | null;
+  menuOpen: boolean;
 }
 
 const ORIGIN_LABELS: Array<{ key: OriginFilter; label: string }> = [
@@ -159,7 +238,7 @@ function matchesState(p: PropertyView, state: StateFilter): boolean {
 export class PropertiesTab extends React.Component<PropertiesTabProps, PropertiesTabState> {
   constructor(props: PropertiesTabProps) {
     super(props);
-    this.state = { origin: 'all', state: 'all', query: '', open: {}, view: null, sortBy: 'consequence', armed: false, armedAt: null, removed: {}, declineStart: false };
+    this.state = { origin: 'all', state: 'all', query: '', open: {}, view: null, sortBy: 'consequence', armed: false, armedAt: null, removed: {}, declineStart: false, interp: null, interpreting: false, clarify: null, menuAxis: null, menuOpen: false };
   }
 
   /**
@@ -352,6 +431,75 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
     this.setState((s) => ({ open: { ...s.open, [key]: !s.open[key] } }));
   };
 
+  /** Sheet 19: Enter interprets; the query becomes controls or a question. */
+  private submitQuery = async (): Promise<void> => {
+    const text = this.state.query.trim();
+    if (!text || !this.props.onInterpret) return;
+    this.setState({ interpreting: true, clarify: null });
+    const result = await this.props.onInterpret(text).catch(
+      (e): { kind: 'error'; message: string } => ({ kind: 'error', message: String(e) }),
+    );
+    if (result.kind === 'clarify') {
+      // Board F: the question, with the named facet's menu open beneath it.
+      this.setState({ interpreting: false, clarify: { question: result.question, facet: result.facet, forText: text }, menuOpen: false });
+      return;
+    }
+    if (result.kind === 'error') {
+      this.setState({ interpreting: false, clarify: { question: result.message, facet: null, forText: text } });
+      return;
+    }
+    await this.applyFilters(result.filters, { clearQuery: true });
+  };
+
+  /**
+   * One control per axis: `source` presses the origin segment and never mints
+   * a chip beside it. Everything else becomes chips + a resolved id set.
+   */
+  private applyFilters = async (
+    rawFilters: Record<string, unknown>,
+    opts: { clearQuery?: boolean } = {},
+  ): Promise<void> => {
+    const filters: Record<string, any> = { ...rawFilters };
+    if (filters.source === 'local' || filters.source === 'wpe') {
+      this.setState({ origin: filters.source as OriginFilter });
+      delete filters.source;
+    }
+    if (Object.keys(filters).length === 0) {
+      if (opts.clearQuery) this.setState({ interpreting: false, interp: null, query: '' });
+      else this.setState({ interpreting: false, interp: null });
+      return;
+    }
+    const ids = this.props.onResolveFilterIds
+      ? await this.props.onResolveFilterIds(filters).catch(() => null)
+      : null;
+    const next = {
+      interpreting: false as const,
+      interp: { filters, ids },
+      clarify: null,
+      menuOpen: false,
+      menuAxis: null as PropertiesTabState['menuAxis'],
+    };
+    if (opts.clearQuery) this.setState({ ...next, query: '' });
+    else this.setState(next);
+  };
+
+  private removeChip = (chip: { key: string; value?: string; label: string }): void => {
+    if (!this.state.interp) return;
+    const next = removeChipFromFilters(this.state.interp.filters, chip);
+    if (Object.keys(next).length === 0) {
+      this.setState({ interp: null });
+    } else {
+      void this.applyFilters(next);
+    }
+  };
+
+  /** The clarification's pick, and the Add-a-filter menu's pick: one path. */
+  private pickFacetValue = (axis: 'plugins' | 'themes' | 'phpVersions' | 'wpVersions', value: string): void => {
+    const cur = (this.state.interp?.filters ?? {}) as Record<string, any>;
+    const arr = new Set<string>([...(cur[axis] ?? []), value]);
+    void this.applyFilters({ ...cur, [axis]: [...arr] });
+  };
+
   private scopeCheckbox(placeIds: string[], stop = true): React.ReactNode {
     const inScope = placeIds.filter((id) => !this.state.removed[id]);
     const mixed = inScope.length > 0 && inScope.length < placeIds.length;
@@ -480,6 +628,132 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
         h('span', { style: btn(false), onClick: () => this.setState({ armed: false, removed: {} }) }, 'Cancel'),
       ),
     );
+  }
+
+  /** A small self-contained X — the design system's Close shape, no emoji. */
+  private closeGlyph(onClick: () => void): React.ReactNode {
+    return h('svg', {
+      width: 11, height: 11, viewBox: '0 0 11 11', onClick,
+      style: { cursor: 'pointer', marginLeft: 6, flexShrink: 0 },
+    },
+      h('line', { x1: 2, y1: 2, x2: 9, y2: 9, stroke: 'var(--nxai-card-sub)', strokeWidth: 1.5 }),
+      h('line', { x1: 9, y1: 2, x2: 2, y2: 9, stroke: 'var(--nxai-card-sub)', strokeWidth: 1.5 }),
+    );
+  }
+
+  private facetValues(axis: 'plugins' | 'themes' | 'phpVersions' | 'wpVersions'): Array<{ value: string; count: number | null }> {
+    const o = this.props.filterOptions;
+    if (!o) return [];
+    const counts: Record<string, number> | undefined =
+      axis === 'plugins' ? o.pluginCounts : axis === 'wpVersions' ? o.wpVersionCounts : undefined;
+    return (o[axis] ?? []).map((v) => ({ value: v, count: counts?.[v] ?? null }));
+  }
+
+  /**
+   * Sheet 19, boards B–F in one region: interpreted chips (removable
+   * clauses), the clarification (the question with the named facet's menu
+   * open beneath it — no new mechanism), the Add-a-filter menu, and the
+   * searched composition with its stated zeros. Renders nothing when none
+   * of it applies.
+   */
+  private renderInterpretation(inView: Array<{ p: PropertyView }>): React.ReactNode {
+    const { interp, clarify, menuOpen, menuAxis, interpreting } = this.state;
+    const chipStyle: React.CSSProperties = {
+      display: 'inline-flex', alignItems: 'center', padding: '3px 8px 3px 10px',
+      borderRadius: 6, fontSize: 12, border: '1px solid var(--nxai-card-border)',
+      background: 'var(--nxai-card-bg)', color: 'var(--nxai-card-text)', marginRight: 6,
+    };
+    const AXES: Array<{ key: 'plugins' | 'themes' | 'phpVersions' | 'wpVersions'; label: string }> = [
+      { key: 'plugins', label: 'Plugins' }, { key: 'themes', label: 'Themes' },
+      { key: 'phpVersions', label: 'PHP' }, { key: 'wpVersions', label: 'WordPress' },
+    ];
+    const valueList = (axis: 'plugins' | 'themes' | 'phpVersions' | 'wpVersions'): React.ReactNode =>
+      h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 } },
+        ...this.facetValues(axis).slice(0, 40).map(({ value, count }) =>
+          h('span', {
+            key: value,
+            onClick: () => this.pickFacetValue(axis, value),
+            style: { ...chipStyle, cursor: 'pointer', color: 'var(--nxai-card-sub)' },
+          }, value, count !== null ? h('span', { style: { marginLeft: 5, fontSize: 11 } }, String(count)) : null),
+        ),
+      );
+
+    const parts: React.ReactNode[] = [];
+
+    if (interpreting) {
+      parts.push(h('div', { key: 'busy', style: { padding: '0 12px 8px', fontSize: 12, color: 'var(--nxai-card-sub)' } }, 'Reading your description…'));
+    }
+
+    // Board F: a question is not a filter — nothing has been narrowed — so
+    // it renders as the question with the named facet's menu beneath it.
+    if (clarify) {
+      parts.push(h('div', {
+        key: 'clarify',
+        style: { margin: '0 12px 10px', padding: '8px 12px', fontSize: 13, borderRadius: 6, border: '1px solid var(--nxai-card-border)', background: 'var(--nxai-section-bg)', color: 'var(--nxai-card-text)', position: 'relative' as const },
+      },
+        h('span', null, clarify.question, ' '),
+        clarify.facet === null && this.props.onOpenComposer
+          ? h('a', {
+              style: { cursor: 'pointer', color: 'var(--nxai-accent)' },
+              onClick: () => this.props.onOpenComposer!(clarify.forText),
+            }, 'Ask this in chat')
+          : null,
+        h('span', { style: { position: 'absolute' as const, right: 10, top: 10 } },
+          this.closeGlyph(() => this.setState({ clarify: null }))),
+        clarify.facet && ['plugins', 'themes', 'phpVersions', 'wpVersions'].indexOf(clarify.facet) !== -1
+          ? valueList(clarify.facet as 'plugins')
+          : null,
+      ));
+    }
+
+    const chips = interp ? filtersToChips(interp.filters) : [];
+    if (chips.length > 0 || this.props.filterOptions) {
+      parts.push(h('div', { key: 'chips', style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, padding: '0 12px 8px' } },
+        ...chips.map((c) =>
+          h('span', { key: `${c.key}:${c.value ?? ''}`, style: chipStyle },
+            c.label, this.closeGlyph(() => this.removeChip(c)))),
+        this.props.filterOptions
+          ? h('span', {
+              style: { fontSize: 12, color: 'var(--nxai-accent)', cursor: 'pointer', fontWeight: 600 },
+              onClick: () => this.setState({ menuOpen: !menuOpen, menuAxis: null }),
+            }, '+ Add a filter')
+          : null,
+        interp && interp.ids === null
+          ? h('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub)' } },
+              'The filter could not be resolved — the list is unchanged.')
+          : null,
+      ));
+    }
+    if (menuOpen && this.props.filterOptions) {
+      parts.push(h('div', {
+        key: 'menu',
+        style: { margin: '0 12px 10px', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--nxai-card-border)', background: 'var(--nxai-card-bg)' },
+      },
+        h('div', { style: { display: 'flex', gap: 8 } },
+          ...AXES.map((a) =>
+            h('span', {
+              key: a.key,
+              onClick: () => this.setState({ menuAxis: a.key }),
+              style: { fontSize: 12, cursor: 'pointer', fontWeight: menuAxis === a.key ? 700 : 400, color: menuAxis === a.key ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)' },
+            }, a.label)),
+          h('span', { style: { marginLeft: 'auto' } }, this.closeGlyph(() => this.setState({ menuOpen: false, menuAxis: null }))),
+        ),
+        menuAxis ? valueList(menuAxis) : h('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', marginTop: 4 } },
+          'Thresholds, dates and content have no fixed values — describe those in the field above.'),
+      ));
+    }
+
+    // The searched composition — a different sentence from the count, its
+    // zeros stated, rendered only when something was actually filtered.
+    if (interp && interp.ids) {
+      const by = { local: 0, wpe: 0, external: 0 };
+      for (const { p } of inView) by[p.origin]++;
+      const phrase = (n: number, word: string) => (n === 0 ? `none ${word}` : `${n} ${word}`);
+      parts.push(h('div', { key: 'comp', style: { padding: '0 12px 8px', fontSize: 11, color: 'var(--nxai-card-sub)' } },
+        `matched: ${phrase(by.local, 'on your machine')} · ${phrase(by.wpe, 'WP Engine')} · ${phrase(by.external, 'external')}`));
+    }
+
+    return parts.length ? h(React.Fragment, null, ...parts) : null;
   }
 
   private renderPlace(p: PropertyView, pl: PlaceView): React.ReactNode {
@@ -618,7 +892,9 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
         p.name.toLowerCase().includes(q) ||
         p.places.some((pl) => pl.name.toLowerCase().includes(q) || (pl.address ?? '').toLowerCase().includes(q));
       if (!matchesQ) continue;
-      const inFilter = (origin === 'all' || p.origin === origin) && matchesState(p, state);
+      const ids = this.state.interp?.ids;
+      const inInterp = !ids || p.places.some((pl) => ids.includes(pl.rowId));
+      const inFilter = inInterp && (origin === 'all' || p.origin === origin) && matchesState(p, state);
       if (!inFilter && !q) continue;
       inView.push({ p, outside: !inFilter });
     }
@@ -755,9 +1031,13 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
             h('line', { x1: 15.5, y1: 15.5, x2: 21, y2: 21, stroke: 'var(--nxai-card-sub)', strokeWidth: 2 }),
           ),
           h('input', {
-            placeholder: 'Search sites by name or domain',
+            placeholder: 'Name, domain, or a description',
             value: query,
             onChange: (e: React.ChangeEvent<HTMLInputElement>) => this.setState({ query: e.target.value }),
+            // Sheet 19: Enter hands the text to the interpreter; keystrokes
+            // keep the instant name/domain narrowing.
+            onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') void this.submitQuery(); },
+            disabled: this.state.interpreting,
             style: {
               minWidth: 220, fontSize: 12, padding: '5px 10px 5px 26px',
               border: '1px solid var(--nxai-input-border)', borderRadius: 6,
@@ -766,6 +1046,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
           }),
         ),
       ),
+      this.renderInterpretation(inView),
       this.renderBulkBar(inView, fromLabel),
       h('div', { style: { border: '1px solid var(--nxai-card-border)', borderRadius: 8, margin: '0 12px' } },
         h('div', { style: { ...gridRow, padding: '8px 12px', borderBottom: '1px solid var(--nxai-card-border)' } },

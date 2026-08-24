@@ -272,7 +272,7 @@ describe('designer round-2 findings', () => {
     const t = rendered(collapse([property()]));
     expect(t).not.toContain('most actionable');
     expect(t).not.toContain('register D20');
-    expect(t).toContain('Search sites by name or domain');
+    expect(t).toContain('Name, domain, or a description'); // sheet 19: the field admits descriptions
     expect(t).not.toContain('filters never hide');
   });
 });
