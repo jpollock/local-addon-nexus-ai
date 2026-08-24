@@ -1060,7 +1060,15 @@ metadata (a SQL walk over the docs table), not over retrieval candidates — or
 at minimum report how many candidates were examined so the caller can tell
 "6 matched" from "6 of the 40 examined matched".
 
-## D24 — OPEN — semver-shaped fields are typed numeric, so `2.10` sorts below `2.9`
+## D24 — FIXED 2026-08-24 — semver-shaped fields are typed numeric, so `2.10` sorts below `2.9`
+
+> **FIXED:** ordering in `applyMetadataFilters` compares segment-wise when a
+> dotted value has 2+ dots or when numeric coercion would lose information
+> (`String(Number("2.10")) !== "2.10"` — the discriminator that separates
+> versions from true decimals, so `1.5 > 1.25` still holds numerically).
+> Equality no longer launders precision (`"2.10" ne "2.1"`). The field
+> catalog types such fields `version` with a segment-ordered range, so
+> `describe_site_fields` stops offering numeric semantics for them.
 
 **Verified 2026-08-24:** `applyMetadataFilters` compares numerically whenever
 both sides parse as numbers (`metadata-filters.ts:20`), and
@@ -1071,7 +1079,16 @@ semver-shaped values (two-plus dot segments where a segment has a leading-zero
 or multi-digit minor) and compare segment-wise, or decline to offer numeric
 operators on them.
 
-## D25 — OPEN — ISO-date fields are typed text, so ordering filters silently match nothing
+## D25 — FIXED 2026-08-24 — ISO-date fields are typed text, so ordering filters silently match nothing
+
+> **FIXED:** ISO-8601-shaped values compare lexicographically (correct for
+> ISO) in every ordering op, and the field catalog types all-ISO fields
+> `date` with their range. An ordering op whose FILTER value is neither a
+> number, an ISO date, nor a dotted version now throws
+> `UnorderableFilterError` naming the field and op — surfaced verbatim as a
+> tool error by the registry — instead of silently matching nothing. A doc
+> value that cannot order against an orderable filter still fails closed, so
+> mixed corpora stay queryable. Both fixes mutation-killed.
 
 **Verified 2026-08-24:** the ordering ops in `applyMetadataFilters` require
 `bothNumeric` (`metadata-filters.ts:29-40`) — on a non-numeric value like

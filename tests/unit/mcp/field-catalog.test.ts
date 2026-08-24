@@ -103,3 +103,62 @@ describe('buildFieldCatalog (domain-agnostic field inference)', () => {
     expect(out).toContain('searchMode:"hybrid"');
   });
 });
+
+/**
+ * D24/D25 — the catalog stops offering operators that misfit the data.
+ * ISO dates were typed text (denied working ordering ops); "2.10"-style
+ * versions were typed number (offered ordering ops that misorder them).
+ */
+describe('D24/D25 — date and version typing', () => {
+  it('types an all-ISO field as date with its range', () => {
+    const p = [
+      { postType: 'post', customFields: { last_reviewed: '2025-05-15' } },
+      { postType: 'post', customFields: { last_reviewed: '2022-01-03' } },
+    ];
+    const field = buildFieldCatalog(p)[0].fields.find((f) => f.field === 'last_reviewed')!;
+    expect(field.type).toBe('date');
+    expect(field.minValue).toBe('2022-01-03');
+    expect(field.maxValue).toBe('2025-05-15');
+  });
+
+  it('types a field containing a lossy value ("2.10") as version, ordered segment-wise', () => {
+    const p = [
+      { postType: 'doc', customFields: { applies_to_version: '2.9' } },
+      { postType: 'doc', customFields: { applies_to_version: '2.10' } },
+      { postType: 'doc', customFields: { applies_to_version: '1.8' } },
+    ];
+    const field = buildFieldCatalog(p)[0].fields.find((f) => f.field === 'applies_to_version')!;
+    expect(field.type).toBe('version');
+    expect(field.minValue).toBe('1.8');
+    expect(field.maxValue).toBe('2.10');   // NOT 2.9 — segment order, not numeric
+  });
+
+  it('types multi-dot values as version even when none are lossy', () => {
+    const p = [
+      { postType: 'doc', customFields: { v: '1.2.3' } },
+      { postType: 'doc', customFields: { v: '1.10.0' } },
+    ];
+    expect(buildFieldCatalog(p)[0].fields.find((f) => f.field === 'v')!.type).toBe('version');
+  });
+
+  it('keeps faithful one-dot decimals as number — prices still get numeric range', () => {
+    const p = [
+      { postType: 'product', customFields: { price: '19.99' } },
+      { postType: 'product', customFields: { price: '4.5' } },
+    ];
+    const field = buildFieldCatalog(p)[0].fields.find((f) => f.field === 'price')!;
+    expect(field.type).toBe('number');
+    expect(field.min).toBe(4.5);
+  });
+
+  it('renders date and version lines with their comparison semantics', () => {
+    const p = [
+      { postType: 'doc', customFields: { reviewed: '2024-01-01', v: '2.10' } },
+      { postType: 'doc', customFields: { reviewed: '2024-06-01', v: '2.9' } },
+    ];
+    const out = formatFieldCatalog('S', buildFieldCatalog(p));
+    expect(out).toContain('reviewed: date 2024-01-01–2024-06-01');
+    expect(out).toContain('v: version 2.9–2.10');
+    expect(out).toContain('segment-wise');
+  });
+});
