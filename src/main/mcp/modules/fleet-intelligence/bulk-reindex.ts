@@ -18,6 +18,12 @@ export const bulkReindexHandler: McpToolHandler = {
           items: { type: 'string' },
           description: 'Array of site IDs to reindex',
         },
+        operation: {
+          type: 'string',
+          enum: ['reindex', 'index'],
+          description:
+            "'reindex' = content only (default). 'index' = the combined run the Properties view dispatches: metadata first, then content — one run, both depths (sheet 18).",
+        },
       },
       required: ['site_ids'],
     },
@@ -33,8 +39,9 @@ export const bulkReindexHandler: McpToolHandler = {
       return ok('No site IDs provided.');
     }
 
+    const operation = (args.operation as string) === 'index' ? 'index' as const : 'reindex' as const;
     const opId = await bulkOpManager.execute({
-      type: 'reindex',
+      type: operation,
       siteIds,
       // A halted Local site is started, indexed, and stopped again — the same
       // contract every other reindex dispatcher uses (`INDEX_SITE`,
