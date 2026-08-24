@@ -199,7 +199,8 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
   }
 
   private renderPropertyScreen(p: PropertyView): React.ReactNode {
-    const copy = p.places.find((pl) => pl.kind === 'copy');
+    const copies = p.places.filter((pl) => pl.kind === 'copy');
+    const copy = copies[0];
     const environments = p.places.filter((pl) => pl.kind !== 'copy');
     const sectionHead = (label: string): React.ReactNode =>
       h('div', { style: { fontSize: 11, fontWeight: 700, letterSpacing: '.06em', color: 'var(--nxai-card-sub)', textTransform: 'uppercase' as const, margin: '14px 0 6px' } }, label);
@@ -225,26 +226,29 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       h('div', { style: { fontSize: 12, color: 'var(--nxai-card-sub)', marginBottom: 12 } },
         `${p.places.length} ${p.places.length === 1 ? 'place' : 'places'}${p.accountName ? ` · ${p.accountName}` : ''}`),
 
-      // The agency rule: the copy IS the anchor — its own card, the two
-      // lineage legs inside it. Environments read as context below.
-      copy
-        ? h('div', {
-            onClick: () => this.setState({ view: { screen: 'place', key: p.key, rowId: copy.rowId } }),
-            style: {
-              cursor: 'pointer', padding: '12px 16px', borderRadius: 8, marginBottom: 4,
-              border: '2px solid var(--nxai-accent)', background: 'var(--nxai-card-bg)',
-            },
+      // The agency rule: a copy anchors — ONE CARD PER COPY, each carrying
+      // its own lineage legs. Two copies were pooling their sentences into
+      // one card while the second vanished as a place (the sentinel-sandbox
+      // screenshot defect).
+      ...copies.map((c) =>
+        h('div', {
+          key: c.rowId,
+          onClick: () => this.setState({ view: { screen: 'place', key: p.key, rowId: c.rowId } }),
+          style: {
+            cursor: 'pointer', padding: '12px 16px', borderRadius: 8, marginBottom: 8,
+            border: '2px solid var(--nxai-accent)', background: 'var(--nxai-card-bg)',
           },
-            h('div', { style: { fontWeight: 700, fontSize: 14, color: 'var(--nxai-card-text)' } },
-              'your copy',
-              h('span', { style: { fontWeight: 400, color: 'var(--nxai-card-sub)', marginLeft: 8 } }, copy.name)),
-            copy.address ? h('div', { style: { ...mono, margin: '2px 0 8px' } }, copy.address) : null,
-            h('div', { style: { marginBottom: 8, fontSize: 12, color: 'var(--nxai-card-sub)' } },
-              `${KNOWLEDGE_LABELS[copy.knowledge]} · ${checkedText(copy.checked, false)}`),
-            ...p.lineage.map((line, i) =>
-              h('p', { key: i, style: { margin: '0 0 4px', fontSize: 13, color: 'var(--nxai-card-text)' } }, line)),
-          )
-        : null,
+        },
+          h('div', { style: { fontWeight: 700, fontSize: 14, color: 'var(--nxai-card-text)' } },
+            'your copy',
+            h('span', { style: { fontWeight: 400, color: 'var(--nxai-card-sub)', marginLeft: 8 } }, c.name)),
+          c.address ? h('div', { style: { ...mono, margin: '2px 0 8px' } }, c.address) : null,
+          h('div', { style: { marginBottom: 8, fontSize: 12, color: 'var(--nxai-card-sub)' } },
+            `${KNOWLEDGE_LABELS[c.knowledge]} · ${checkedText(c.checked, false)}`),
+          ...(c.lineage ?? []).map((line, i) =>
+            h('p', { key: i, style: { margin: '0 0 4px', fontSize: 13, color: 'var(--nxai-card-text)' } }, line)),
+        ),
+      ),
 
       copy ? sectionHead('Environments') : null,
       copy ? h('div', null, ...environments.map(envRow)) : null,
@@ -270,11 +274,9 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
             ),
           )
         : null,
-      !copy ? sectionHead('Lineage') : null,
-      !copy
-        ? h('div', { style: { maxWidth: 560, fontSize: 13, color: 'var(--nxai-card-text)' } },
-            ...p.lineage.map((line, i) => h('p', { key: i, style: { margin: '0 0 6px' } }, line)))
-        : null,
+      sectionHead('Lineage'),
+      h('div', { style: { maxWidth: 560, fontSize: 13, color: 'var(--nxai-card-text)' } },
+        ...p.lineage.map((line, i) => h('p', { key: i, style: { margin: '0 0 6px' } }, line))),
 
       h('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', marginTop: 12 } },
         'Activity is read per place — open one.'),

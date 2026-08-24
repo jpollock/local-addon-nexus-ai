@@ -78,6 +78,13 @@ export interface PlaceView {
    * is a BACKED zero — nothing needs you here.
    */
   needsYou: { count: number; tier: number } | null;
+  /**
+   * A COPY's own two lineage legs (content, then the link). Lineage is a fact
+   * about a copy, not about the property — two copies each carry their own
+   * (the sentinel-sandbox screenshot defect: both copies' sentences were
+   * pooled into the first copy's card, and the second copy vanished).
+   */
+  lineage?: string[];
 }
 
 export interface PropertyView {
@@ -312,24 +319,28 @@ export function buildFleetCollapse(input: FleetCollapseInput): FleetCollapse {
         'No copy of this site exists on your machine. Each place stands alone until a pull or deploy is observed.',
       );
     } else {
+      // Each copy's legs are ITS OWN — written onto the place, never pooled
+      // into the property (two copies must render as two cards, each with
+      // its own sentences).
       for (const copy of copies) {
+        const legs: string[] = [];
         const link = input.siteLinks.find(
           (l) => copyLocalIds.includes(l.localSiteId) && l.localSiteId === copy.rowId,
         );
-        const linkedTo = link?.wpeInstallName ? ` — linked to ${link.wpeInstallName}` : '';
-        out.push(`A copy of this site lives on your machine (${copy.name})${linkedTo}.`);
+        if (link?.wpeInstallName) legs.push(`Linked to ${link.wpeInstallName}.`);
         const cs = input.contentStatus?.get(copy.rowId);
         if (cs?.state === 'pulled' && cs.sourceName) {
           const behind =
             typeof cs.behindSeconds === 'number' && cs.behindSeconds > 0
               ? ` — its content is ${Math.max(1, Math.round(cs.behindSeconds / 86_400))} day(s) behind`
               : '';
-          out.push(`Your copy's content was pulled from ${cs.sourceName}${behind}.`);
+          legs.push(`Its content was pulled from ${cs.sourceName}${behind}.`);
         } else {
-          out.push(
-            "No recorded pull links your copy's content to any place here — as far as Nexus can see, they are unrelated. Pulling again will record the link.",
+          legs.push(
+            "No recorded pull links this copy's content to any place here — as far as Nexus can see, they are unrelated. Pulling again will record the link.",
           );
         }
+        copy.lineage = legs;
       }
     }
     out.push(

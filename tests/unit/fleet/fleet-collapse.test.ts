@@ -256,10 +256,13 @@ describe('drill-in facts and lineage (Phase 2)', () => {
       siteLinks: [{ localSiteId: 'LocA', wpeInstallId: 'inst-benfischer', wpeInstallName: 'benfischer' }],
       contentStatus: new Map([['LocA', { state: 'pulled', sourceName: 'benfischer1stg', behindSeconds: 11 * 86_400 }]]),
     });
-    const lineage = buildFleetCollapse(input).properties[0].lineage;
-    expect(lineage.join(' ')).toContain('lives on your machine (ben-local) — linked to benfischer');
-    expect(lineage.join(' ')).toContain('pulled from benfischer1stg — its content is 11 day(s) behind');
-    expect(lineage.join(' ')).toContain('Code moves through git');
+    const prop = buildFleetCollapse(input).properties[0];
+    const copyPlace = prop.places.find((pl) => pl.kind === 'copy')!;
+    // The legs live ON the copy (a second copy carries its own), the code leg
+    // on the property.
+    expect(copyPlace.lineage!.join(' ')).toContain('Linked to benfischer');
+    expect(copyPlace.lineage!.join(' ')).toContain('pulled from benfischer1stg — its content is 11 day(s) behind');
+    expect(prop.lineage.join(' ')).toContain('Code moves through git');
   });
 
   test('lineage: absence is stated with a reason — never an empty block', () => {
@@ -277,8 +280,9 @@ describe('drill-in facts and lineage (Phase 2)', () => {
       siteLinks: [{ localSiteId: 'LocB', wpeInstallId: 'inst-a' }],
       // no contentStatus — no recorded pull
     });
-    expect(buildFleetCollapse(unlinkedCopy).properties[0].lineage.join(' '))
-      .toContain("No recorded pull links your copy's content");
+    const unlinked = buildFleetCollapse(unlinkedCopy).properties[0];
+    expect(unlinked.places.find((pl) => pl.kind === 'copy')!.lineage!.join(' '))
+      .toContain("No recorded pull links this copy's content");
 
     const localOnly = base({ localSites: [{ id: 'LocC', name: 'mine', wpVersion: '6.8' }] });
     expect(buildFleetCollapse(localOnly).properties[0].lineage.join(' '))

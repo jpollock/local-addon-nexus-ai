@@ -388,13 +388,19 @@ describe('designer round-4 — the visual layer', () => {
     const withCopy = property({
       key: 'wpe:p2', hasCopy: true,
       places: [place({ rowId: 'wpe-1' }),
-               place({ rowId: 'L1', kind: 'copy', source: 'local', name: 'ben-local', address: '/Users/j/ben' })],
-      lineage: ["Your copy's content was pulled from benfischer1stg — its content is 11 day(s) behind."],
+               place({ rowId: 'L1', kind: 'copy', source: 'local', name: 'ben-local', address: '/Users/j/ben',
+                       lineage: ["Its content was pulled from benfischer1stg — its content is 11 day(s) behind."] }),
+               place({ rowId: 'L2', kind: 'copy', source: 'local', name: 'sentinel-clone', address: '/Users/j/s',
+                       lineage: ["No recorded pull links this copy's content to any place here."] })],
+      lineage: ['Code moves through git; Nexus has no record of a deploy to any place here and says so rather than guessing.'],
     });
     const t = rendered(collapse([withCopy]), (inst) => { inst.state.view = { screen: 'property', key: 'wpe:p2' }; });
-    expect(t).toContain('your copy');
+    // ONE card per copy, each with ITS OWN legs — the sentinel-sandbox defect.
+    expect(t.split('your copy').length - 1).toBe(2);
     expect(t).toContain('pulled from benfischer1stg');
-    expect(t.indexOf('pulled from')).toBeLessThan(t.indexOf('Environments')); // legs inside the card, envs below
+    expect(t).toContain('sentinel-clone');
+    expect(t.indexOf('pulled from')).toBeLessThan(t.indexOf('sentinel-clone')); // legs stay in their own card
+    expect(t.indexOf('pulled from')).toBeLessThan(t.indexOf('Environments'));   // envs below the cards
   });
 });
 
