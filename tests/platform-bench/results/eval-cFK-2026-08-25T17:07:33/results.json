@@ -1,0 +1,982 @@
+{
+  "evalId": "eval-cFK-2026-08-25T17:07:33",
+  "results": {
+    "version": 3,
+    "timestamp": "2026-08-25T17:07:33.105Z",
+    "prompts": [
+      {
+        "id": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "raw": "{{prompt}}",
+        "label": "{{prompt}}",
+        "provider": "Nexus",
+        "metrics": {
+          "score": 3,
+          "testPassCount": 3,
+          "testFailCount": 0,
+          "testErrorCount": 0,
+          "assertPassCount": 9,
+          "assertFailCount": 0,
+          "totalLatencyMs": 136165,
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 3,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          },
+          "namedScores": {},
+          "namedScoresCount": {},
+          "namedScoreWeights": {},
+          "cost": 1.8130237500000002
+        }
+      },
+      {
+        "id": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "raw": "{{prompt}}",
+        "label": "{{prompt}}",
+        "provider": "Coworker",
+        "metrics": {
+          "score": 0,
+          "testPassCount": 0,
+          "testFailCount": 0,
+          "testErrorCount": 3,
+          "assertPassCount": 0,
+          "assertFailCount": 0,
+          "totalLatencyMs": 77,
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 3,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          },
+          "namedScores": {},
+          "namedScoresCount": {},
+          "namedScoreWeights": {},
+          "cost": 0
+        }
+      }
+    ],
+    "results": [
+      {
+        "cost": 0,
+        "error": "COWORKER_API_KEY not set. Add to nexus.env.local and source it before running.",
+        "gradingResult": null,
+        "id": "10d13760-7c67-4176-a6af-afc7771fd379",
+        "latencyMs": 77,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.",
+          "label": "{{prompt}}",
+          "config": {
+            "provider": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/grader.js"
+          }
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 1,
+        "provider": {
+          "id": "coworker-mcp",
+          "label": "Coworker"
+        },
+        "response": {
+          "error": "COWORKER_API_KEY not set. Add to nexus.env.local and source it before running.",
+          "output": ""
+        },
+        "score": 0,
+        "success": false,
+        "testCase": {
+          "description": "CV-A-01 — which clinic sites are missing opening hours?",
+          "vars": {
+            "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+          },
+          "assert": [
+            {
+              "type": "latency",
+              "threshold": 600000
+            },
+            {
+              "type": "icontains",
+              "value": "summitdermatol"
+            },
+            {
+              "type": "llm-rubric",
+              "value": "Ground truth, verified against the sites themselves: the site summitdermatol has 2 clinic locations and NONE of them have any opening-hours data (the hours field is entirely absent). The site cedarvalehealt has 25 clinic locations and ALL 25 have opening hours.\nPASS only if the response asserts BOTH of the following, in any wording or formatting: (1) summitdermatol is the site whose locations are missing opening hours, AND (2) cedarvalehealt's locations have opening hours.\nFAIL if the response claims neither site has hours, claims both sites are missing hours, inverts the two sites, only names a site without identifying the missing-hours gap, or declines to answer.\n"
+            }
+          ],
+          "options": {
+            "provider": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/grader.js"
+          },
+          "metadata": {}
+        },
+        "testIdx": 0,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 2
+      },
+      {
+        "cost": 0.8997442500000001,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "latency",
+                "threshold": 600000
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains",
+                "value": "summitdermatol"
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "Ground truth, verified against the sites themselves: the site summitdermatol has 2 clinic locations and NONE of them have any opening-hours data (the hours field is entirely absent). The site cedarvalehealt has 25 clinic locations and ALL 25 have opening hours.\nPASS only if the response asserts BOTH of the following, in any wording or formatting: (1) summitdermatol is the site whose locations are missing opening hours, AND (2) cedarvalehealt's locations have opening hours.\nFAIL if the response claims neither site has hours, claims both sites are missing hours, inverts the two sites, only names a site without identifying the missing-hours gap, or declines to answer.\n"
+              },
+              "pass": true,
+              "score": 1,
+              "reason": "The response explicitly asserts both required facts in the opening sentence: 'summitdermatol is the one with the gap' (identifying summitdermatol as missing hours) and 'cedarvalehealt has complete opening hours' (confirming cedarvalehealt has them). The detailed evidence section reinforces this with specific data: summitdermatol 0% coverage, cedarvalehealt 100% coverage.",
+              "tokensUsed": {
+                "total": 0,
+                "prompt": 0,
+                "completion": 0,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\n**summitdermatol is the one with the gap.** cedarvalehealt has complete opening hours; summitdermatol has none.\\n\\n## The evidence\\n\\n**cedarvalehealt — 25 locations, hours on all 25 (100%)**\\n\\nHours are stored as an ACF repeater — one row per weekday:\\n\\n```\\nhours: 7                      ← 7 rows (Mon–Sun)\\nhours_0_day: monday    hours_0_opens: 07:30  hours_0_closes: 16:30\\nhours_1_day: tuesday   hours_1_opens: 07:30  hours_1_closes: 16:30\\n...\\nhours_5_day: saturday  hours_5_opens: 09:00  hours_5_closes: 13:00\\nhours_6_day: sunday                          ← day present, no times = closed\\n```\\n\\nEvery location carries all 7 day rows. Sunday consistently has a `day` key but no `opens`/`closes`, which is the correct encoding for \\\"closed\\\" rather than missing data. Saturday varies by clinic — some open 09:00–13:00, some closed.\\n\\n**summitdermatol — 2 locations, hours on 0 (0%)**\\n\\nNot partially filled — the `hours` field doesn't exist in the index for this post type at all. `describe_site_fields` lists 14 location fields for summitdermatol and `hours` is not among them. Both records carry address, geo, phone, parking, accessibility, `opened_date`, and `accepting_new_patients`, but nothing time-related.\\n\\n## One thing worth flagging\\n\\nsummitdermatol's two locations are not its own. They're byte-for-byte duplicates of cedarvalehealt records:\\n\\n| | summitdermatol | cedarvalehealt |\\n|---|---|---|\\n| `place_id` | `cv-cedar-vale-dermatology-denver-80202-001` | same |\\n| `place_id` | `cv-cedar-vale-dermatology-denver-80206-005` | same |\\n| Title | \\\"Cedar & Vale Dermatology — Denver\\\" | same |\\n| Phone | (598) 555-5488 / (860) 555-9330 | same |\\n\\nThe `cv-` prefix and the Cedar & Vale branding both point to cedarvalehealt as the origin. So the missing hours look less like a data-entry oversight and more like an incomplete copy — two location records were brought over without the repeater field. That distinction matters for the fix: filling in hours by hand would reproduce another site's clinic data under Summit's brand, which is probably not what you want.\\n\\n## Confidence\\n\\nThe two sites' indexes were built at different times — summitdermatol 4h ago, cedarvalehealt 2d ago (flagged stale). That doesn't undercut the finding in either direction: the stale site is the one that *has* the data, and the fresh site is the one missing it. If hours were added to summitdermatol in the last 4 hours they'd already be indexed. A `reindex_site` on cedarvalehealt would only refresh data that's already complete.\\n</Output>\\n<Rubric>\\nGround truth, verified against the sites themselves: the site summitdermatol has 2 clinic locations and NONE of them have any opening-hours data (the hours field is entirely absent). The site cedarvalehealt has 25 clinic locations and ALL 25 have opening hours.\\nPASS only if the response asserts BOTH of the following, in any wording or formatting: (1) summitdermatol is the site whose locations are missing opening hours, AND (2) cedarvalehealt's locations have opening hours.\\nFAIL if the response claims neither site has hours, claims both sites are missing hours, inverts the two sites, only names a site without identifying the missing-hours gap, or declines to answer.\\n\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "31191ca6-bc27-4b6d-992f-eb9fe2819f5d",
+        "latencyMs": 36509,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.",
+          "label": "{{prompt}}",
+          "config": {
+            "provider": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/grader.js"
+          }
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "nexus-mcp",
+          "label": "Nexus"
+        },
+        "response": {
+          "cost": 0.8997442500000001,
+          "metadata": {
+            "durationMs": 33037,
+            "numTurns": 5,
+            "sessionId": "4b6ec163-7f71-4de6-a7ae-73cd01ce7ec2"
+          },
+          "output": "**summitdermatol is the one with the gap.** cedarvalehealt has complete opening hours; summitdermatol has none.\n\n## The evidence\n\n**cedarvalehealt — 25 locations, hours on all 25 (100%)**\n\nHours are stored as an ACF repeater — one row per weekday:\n\n```\nhours: 7                      ← 7 rows (Mon–Sun)\nhours_0_day: monday    hours_0_opens: 07:30  hours_0_closes: 16:30\nhours_1_day: tuesday   hours_1_opens: 07:30  hours_1_closes: 16:30\n...\nhours_5_day: saturday  hours_5_opens: 09:00  hours_5_closes: 13:00\nhours_6_day: sunday                          ← day present, no times = closed\n```\n\nEvery location carries all 7 day rows. Sunday consistently has a `day` key but no `opens`/`closes`, which is the correct encoding for \"closed\" rather than missing data. Saturday varies by clinic — some open 09:00–13:00, some closed.\n\n**summitdermatol — 2 locations, hours on 0 (0%)**\n\nNot partially filled — the `hours` field doesn't exist in the index for this post type at all. `describe_site_fields` lists 14 location fields for summitdermatol and `hours` is not among them. Both records carry address, geo, phone, parking, accessibility, `opened_date`, and `accepting_new_patients`, but nothing time-related.\n\n## One thing worth flagging\n\nsummitdermatol's two locations are not its own. They're byte-for-byte duplicates of cedarvalehealt records:\n\n| | summitdermatol | cedarvalehealt |\n|---|---|---|\n| `place_id` | `cv-cedar-vale-dermatology-denver-80202-001` | same |\n| `place_id` | `cv-cedar-vale-dermatology-denver-80206-005` | same |\n| Title | \"Cedar & Vale Dermatology — Denver\" | same |\n| Phone | (598) 555-5488 / (860) 555-9330 | same |\n\nThe `cv-` prefix and the Cedar & Vale branding both point to cedarvalehealt as the origin. So the missing hours look less like a data-entry oversight and more like an incomplete copy — two location records were brought over without the repeater field. That distinction matters for the fix: filling in hours by hand would reproduce another site's clinic data under Summit's brand, which is probably not what you want.\n\n## Confidence\n\nThe two sites' indexes were built at different times — summitdermatol 4h ago, cedarvalehealt 2d ago (flagged stale). That doesn't undercut the finding in either direction: the stale site is the one that *has* the data, and the fresh site is the one missing it. If hours were added to summitdermatol in the last 4 hours they'd already be indexed. A `reindex_site` on cedarvalehealt would only refresh data that's already complete."
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "CV-A-01 — which clinic sites are missing opening hours?",
+          "vars": {
+            "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n",
+            "sessionId": "4b6ec163-7f71-4de6-a7ae-73cd01ce7ec2"
+          },
+          "assert": [
+            {
+              "type": "latency",
+              "threshold": 600000
+            },
+            {
+              "type": "icontains",
+              "value": "summitdermatol"
+            },
+            {
+              "type": "llm-rubric",
+              "value": "Ground truth, verified against the sites themselves: the site summitdermatol has 2 clinic locations and NONE of them have any opening-hours data (the hours field is entirely absent). The site cedarvalehealt has 25 clinic locations and ALL 25 have opening hours.\nPASS only if the response asserts BOTH of the following, in any wording or formatting: (1) summitdermatol is the site whose locations are missing opening hours, AND (2) cedarvalehealt's locations have opening hours.\nFAIL if the response claims neither site has hours, claims both sites are missing hours, inverts the two sites, only names a site without identifying the missing-hours gap, or declines to answer.\n"
+            }
+          ],
+          "options": {
+            "provider": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/grader.js"
+          },
+          "metadata": {}
+        },
+        "testIdx": 0,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n",
+          "sessionId": "4b6ec163-7f71-4de6-a7ae-73cd01ce7ec2"
+        },
+        "metadata": {
+          "durationMs": 33037,
+          "numTurns": 5,
+          "sessionId": "4b6ec163-7f71-4de6-a7ae-73cd01ce7ec2",
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "error": "COWORKER_API_KEY not set. Add to nexus.env.local and source it before running.",
+        "gradingResult": null,
+        "id": "f70c8b7e-48f2-48b4-a81a-84c0a7bb2f59",
+        "latencyMs": 0,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.",
+          "label": "{{prompt}}",
+          "config": {
+            "provider": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/grader.js"
+          }
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 1,
+        "provider": {
+          "id": "coworker-mcp",
+          "label": "Coworker"
+        },
+        "response": {
+          "error": "COWORKER_API_KEY not set. Add to nexus.env.local and source it before running.",
+          "output": ""
+        },
+        "score": 0,
+        "success": false,
+        "testCase": {
+          "description": "CV-A-01 — which clinic sites are missing opening hours?",
+          "vars": {
+            "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+          },
+          "assert": [
+            {
+              "type": "latency",
+              "threshold": 600000
+            },
+            {
+              "type": "icontains",
+              "value": "summitdermatol"
+            },
+            {
+              "type": "llm-rubric",
+              "value": "Ground truth, verified against the sites themselves: the site summitdermatol has 2 clinic locations and NONE of them have any opening-hours data (the hours field is entirely absent). The site cedarvalehealt has 25 clinic locations and ALL 25 have opening hours.\nPASS only if the response asserts BOTH of the following, in any wording or formatting: (1) summitdermatol is the site whose locations are missing opening hours, AND (2) cedarvalehealt's locations have opening hours.\nFAIL if the response claims neither site has hours, claims both sites are missing hours, inverts the two sites, only names a site without identifying the missing-hours gap, or declines to answer.\n"
+            }
+          ],
+          "options": {
+            "provider": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/grader.js"
+          },
+          "metadata": {}
+        },
+        "testIdx": 1,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 2
+      },
+      {
+        "cost": 0.6340742500000001,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "latency",
+                "threshold": 600000
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains",
+                "value": "summitdermatol"
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "Ground truth, verified against the sites themselves: the site summitdermatol has 2 clinic locations and NONE of them have any opening-hours data (the hours field is entirely absent). The site cedarvalehealt has 25 clinic locations and ALL 25 have opening hours.\nPASS only if the response asserts BOTH of the following, in any wording or formatting: (1) summitdermatol is the site whose locations are missing opening hours, AND (2) cedarvalehealt's locations have opening hours.\nFAIL if the response claims neither site has hours, claims both sites are missing hours, inverts the two sites, only names a site without identifying the missing-hours gap, or declines to answer.\n"
+              },
+              "pass": true,
+              "score": 1,
+              "reason": "The response clearly asserts both required claims in its opening statement: 'summitdermatol has the gap. cedarvalehealt has the data.' It then systematically confirms (1) that summitdermatol's locations have no hours field at all, and (2) that cedarvalehealt has hours across all 25 locations with detailed field structure. Both assertions are unambiguous and well-supported.",
+              "tokensUsed": {
+                "total": 0,
+                "prompt": 0,
+                "completion": 0,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\n## Answer\\n\\n**summitdermatol has the gap. cedarvalehealt has the data.**\\n\\n### cedarvalehealt — hours present\\nAll 25 locations carry hours, 25/25 coverage. It's an ACF repeater with 7 rows (one per weekday):\\n\\n```\\nhours_0_day: monday,  hours_0_opens: 07:30, hours_0_closes: 16:30\\n...\\nhours_6_day: sunday\\nhours: 7                ← repeater row count, not a value\\n```\\n\\nThe `hours: number 7–7` in the field listing is just that row count — the real data lives in the `hours_N_*` subfields. Days with only a `_day` key and no `_opens`/`_closes` are closed days (Denver 80202 is closed Sat/Sun), which is intentional, not missing data.\\n\\n### summitdermatol — hours entirely absent\\nBoth locations have **no `hours` field at all** — not empty values, the field doesn't exist on the post type. The `location` field schema has 14 fields (address, geo, phone, parking, accessibility, place_id, opened_date) and hours is not among them.\\n\\n### The detail that identifies this as a migration bug\\nsummitdermatol's two locations are not its own clinics — they're **duplicates of cedarvalehealt's Denver records**, same titles and same `place_id`s:\\n\\n| place_id | cedarvalehealt | summitdermatol |\\n|---|---|---|\\n| `cv-cedar-vale-dermatology-denver-80202-001` | Mon–Fri 07:30–16:30 | *no hours field* |\\n| `cv-cedar-vale-dermatology-denver-80206-005` | present | *no hours field* |\\n\\nI pulled cedarvale's `...80202-001` directly to compare against summitdermatol's identical record. Same post ID (5), same address, same phone `(598) 555-5488` — cedarvale's copy has the full weekly schedule, summitdermatol's has nothing. So the hours weren't never-published; they were dropped when the records were copied across, and the repeater subfields didn't come with them.\\n\\n### Caveats\\n- Both readings are from the content index, not live sites. cedarvalehealt's index is flagged **2 days stale** (summitdermatol's is 4h). That doesn't affect the conclusion — the gap is a wholly absent field, not a value that could have drifted — but reindex cedarvalehealt if you want to act on specific opening times.\\n- The `cv-` place_id prefix on summitdermatol's locations is worth a separate look; those records arguably belong to cedarvalehealt and may be stale copies regardless of the hours issue.\\n</Output>\\n<Rubric>\\nGround truth, verified against the sites themselves: the site summitdermatol has 2 clinic locations and NONE of them have any opening-hours data (the hours field is entirely absent). The site cedarvalehealt has 25 clinic locations and ALL 25 have opening hours.\\nPASS only if the response asserts BOTH of the following, in any wording or formatting: (1) summitdermatol is the site whose locations are missing opening hours, AND (2) cedarvalehealt's locations have opening hours.\\nFAIL if the response claims neither site has hours, claims both sites are missing hours, inverts the two sites, only names a site without identifying the missing-hours gap, or declines to answer.\\n\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "54df534f-db53-452d-b47a-46622f5bad53",
+        "latencyMs": 47763,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.",
+          "label": "{{prompt}}",
+          "config": {
+            "provider": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/grader.js"
+          }
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "nexus-mcp",
+          "label": "Nexus"
+        },
+        "response": {
+          "cost": 0.6340742500000001,
+          "metadata": {
+            "durationMs": 44056,
+            "numTurns": 6,
+            "sessionId": "8c6278cc-d7b1-4c5d-88ce-12d1e0296170"
+          },
+          "output": "## Answer\n\n**summitdermatol has the gap. cedarvalehealt has the data.**\n\n### cedarvalehealt — hours present\nAll 25 locations carry hours, 25/25 coverage. It's an ACF repeater with 7 rows (one per weekday):\n\n```\nhours_0_day: monday,  hours_0_opens: 07:30, hours_0_closes: 16:30\n...\nhours_6_day: sunday\nhours: 7                ← repeater row count, not a value\n```\n\nThe `hours: number 7–7` in the field listing is just that row count — the real data lives in the `hours_N_*` subfields. Days with only a `_day` key and no `_opens`/`_closes` are closed days (Denver 80202 is closed Sat/Sun), which is intentional, not missing data.\n\n### summitdermatol — hours entirely absent\nBoth locations have **no `hours` field at all** — not empty values, the field doesn't exist on the post type. The `location` field schema has 14 fields (address, geo, phone, parking, accessibility, place_id, opened_date) and hours is not among them.\n\n### The detail that identifies this as a migration bug\nsummitdermatol's two locations are not its own clinics — they're **duplicates of cedarvalehealt's Denver records**, same titles and same `place_id`s:\n\n| place_id | cedarvalehealt | summitdermatol |\n|---|---|---|\n| `cv-cedar-vale-dermatology-denver-80202-001` | Mon–Fri 07:30–16:30 | *no hours field* |\n| `cv-cedar-vale-dermatology-denver-80206-005` | present | *no hours field* |\n\nI pulled cedarvale's `...80202-001` directly to compare against summitdermatol's identical record. Same post ID (5), same address, same phone `(598) 555-5488` — cedarvale's copy has the full weekly schedule, summitdermatol's has nothing. So the hours weren't never-published; they were dropped when the records were copied across, and the repeater subfields didn't come with them.\n\n### Caveats\n- Both readings are from the content index, not live sites. cedarvalehealt's index is flagged **2 days stale** (summitdermatol's is 4h). That doesn't affect the conclusion — the gap is a wholly absent field, not a value that could have drifted — but reindex cedarvalehealt if you want to act on specific opening times.\n- The `cv-` place_id prefix on summitdermatol's locations is worth a separate look; those records arguably belong to cedarvalehealt and may be stale copies regardless of the hours issue."
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "CV-A-01 — which clinic sites are missing opening hours?",
+          "vars": {
+            "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n",
+            "sessionId": "8c6278cc-d7b1-4c5d-88ce-12d1e0296170"
+          },
+          "assert": [
+            {
+              "type": "latency",
+              "threshold": 600000
+            },
+            {
+              "type": "icontains",
+              "value": "summitdermatol"
+            },
+            {
+              "type": "llm-rubric",
+              "value": "Ground truth, verified against the sites themselves: the site summitdermatol has 2 clinic locations and NONE of them have any opening-hours data (the hours field is entirely absent). The site cedarvalehealt has 25 clinic locations and ALL 25 have opening hours.\nPASS only if the response asserts BOTH of the following, in any wording or formatting: (1) summitdermatol is the site whose locations are missing opening hours, AND (2) cedarvalehealt's locations have opening hours.\nFAIL if the response claims neither site has hours, claims both sites are missing hours, inverts the two sites, only names a site without identifying the missing-hours gap, or declines to answer.\n"
+            }
+          ],
+          "options": {
+            "provider": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/grader.js"
+          },
+          "metadata": {}
+        },
+        "testIdx": 1,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n",
+          "sessionId": "8c6278cc-d7b1-4c5d-88ce-12d1e0296170"
+        },
+        "metadata": {
+          "durationMs": 44056,
+          "numTurns": 6,
+          "sessionId": "8c6278cc-d7b1-4c5d-88ce-12d1e0296170",
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "error": "COWORKER_API_KEY not set. Add to nexus.env.local and source it before running.",
+        "gradingResult": null,
+        "id": "ca871064-8660-4c7d-8819-b380fa393e9c",
+        "latencyMs": 0,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.",
+          "label": "{{prompt}}",
+          "config": {
+            "provider": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/grader.js"
+          }
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 1,
+        "provider": {
+          "id": "coworker-mcp",
+          "label": "Coworker"
+        },
+        "response": {
+          "error": "COWORKER_API_KEY not set. Add to nexus.env.local and source it before running.",
+          "output": ""
+        },
+        "score": 0,
+        "success": false,
+        "testCase": {
+          "description": "CV-A-01 — which clinic sites are missing opening hours?",
+          "vars": {
+            "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+          },
+          "assert": [
+            {
+              "type": "latency",
+              "threshold": 600000
+            },
+            {
+              "type": "icontains",
+              "value": "summitdermatol"
+            },
+            {
+              "type": "llm-rubric",
+              "value": "Ground truth, verified against the sites themselves: the site summitdermatol has 2 clinic locations and NONE of them have any opening-hours data (the hours field is entirely absent). The site cedarvalehealt has 25 clinic locations and ALL 25 have opening hours.\nPASS only if the response asserts BOTH of the following, in any wording or formatting: (1) summitdermatol is the site whose locations are missing opening hours, AND (2) cedarvalehealt's locations have opening hours.\nFAIL if the response claims neither site has hours, claims both sites are missing hours, inverts the two sites, only names a site without identifying the missing-hours gap, or declines to answer.\n"
+            }
+          ],
+          "options": {
+            "provider": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/grader.js"
+          },
+          "metadata": {}
+        },
+        "testIdx": 2,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 2
+      },
+      {
+        "cost": 0.27920525,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "latency",
+                "threshold": 600000
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains",
+                "value": "summitdermatol"
+              }
+            },
+            {
+              "assertion": {
+                "type": "llm-rubric",
+                "value": "Ground truth, verified against the sites themselves: the site summitdermatol has 2 clinic locations and NONE of them have any opening-hours data (the hours field is entirely absent). The site cedarvalehealt has 25 clinic locations and ALL 25 have opening hours.\nPASS only if the response asserts BOTH of the following, in any wording or formatting: (1) summitdermatol is the site whose locations are missing opening hours, AND (2) cedarvalehealt's locations have opening hours.\nFAIL if the response claims neither site has hours, claims both sites are missing hours, inverts the two sites, only names a site without identifying the missing-hours gap, or declines to answer.\n"
+              },
+              "pass": true,
+              "score": 1,
+              "reason": "The response explicitly asserts both required claims: (1) 'summitdermatol has the gap' / 'no opening hours at all' / 'zero hours fields', and (2) 'cedarvalehealt has the hours data' / 'hours present on all 25 locations'. The opening sentence directly names both sites and their status, and the subsequent sections expand on each finding with field-level detail.",
+              "tokensUsed": {
+                "total": 0,
+                "prompt": 0,
+                "completion": 0,
+                "cached": 0,
+                "numRequests": 0,
+                "completionDetails": {
+                  "reasoning": 0,
+                  "acceptedPrediction": 0,
+                  "rejectedPrediction": 0
+                }
+              },
+              "metadata": {
+                "renderedGradingPrompt": "[{\"role\":\"system\",\"content\":\"You are grading output according to a user-specified rubric. If the statement in the rubric is true, then the output passes the test. You respond with a JSON object with this structure: {reason: string, pass: boolean, score: number}\\n\\nExamples:\\n\\n<Output>Hello world</Output>\\n<Rubric>Content contains a greeting</Rubric>\\n{\\\"reason\\\": \\\"the content contains the word 'Hello'\\\", \\\"pass\\\": true, \\\"score\\\": 1.0}\\n\\n<Output>Avast ye swabs, repel the invaders!</Output>\\n<Rubric>Does not speak like a pirate</Rubric>\\n{\\\"reason\\\": \\\"'avast ye' is a common pirate term\\\", \\\"pass\\\": false, \\\"score\\\": 0.0}\"},{\"role\":\"user\",\"content\":\"<Output>\\n## Answer\\n\\n**`summitdermatol` has the gap. `cedarvalehealt` has the hours data.**\\n\\n### summitdermatol — no opening hours at all\\nBoth of its location posts (Denver 80202, Denver 80206) carry address, geo, phone, parking, accessibility, and `opened_date` — but **zero hours fields**. The gap is schema-level, not just missing values: `hours` doesn't appear in the site's indexed `location` field list at all.\\n\\n### cedarvalehealt — hours present on all 25 locations\\nStored as an ACF repeater, seven rows per location: `hours_0_day`…`hours_6_day` with paired `hours_N_opens` / `hours_N_closes`.\\n\\nTwo things worth knowing before you query it:\\n\\n- **`hours: 7` is a row count, not a time.** `describe_site_fields` reports it as `number 7–7 (25/25)`, which looks like real data but is just the repeater length. Filtering on `hours` numerically gets you nothing useful — read `hours_N_opens`/`hours_N_closes`.\\n- **Per-day coverage is uneven.** All 25 have seven day rows, but weekend rows are often day-only with no times. Sunday has no `opens`/`closes` on every record I looked at; Saturday has times on some (Bellevue 09:00–13:00, Boulder 80301 09:00–13:00) and not others (Tempe, Chapel Hill, Boulder 80302, Denver 80202). That's presumably \\\"closed\\\" encoded as absent times, but it's an absence, not an explicit closed flag — so \\\"all 25 have hours\\\" means all 25 have weekday hours.\\n\\n### One thing you probably want to look at\\nThe two summitdermatol locations aren't summitdermatol's own clinics. They're duplicates of cedarvalehealt records — same titles (\\\"Cedar & Vale Dermatology — Denver\\\"), same `place_id`s (`cv-cedar-vale-dermatology-denver-80202-001`), same street, phone, lat/lng, `opened_date`, parking, and accessibility text. Denver 80202 is even post ID 5 on both sites.\\n\\nThe cedarvalehealt copy of 80202 has a full weekday schedule (07:30–16:30 Mon–Fri); the summitdermatol copy has none. So this reads like a partial copy where everything transferred except the hours repeater — that's the likely cause of the gap rather than data that was never entered.\\n\\n### Verification caveat\\nThis is all from the content index, not a live DB read. summitdermatol's index is 4h old; **cedarvalehealt's is flagged stale at 2 days**. The absence on summitdermatol is consistent across both records and the field schema, so I don't think it's an indexing artifact — but if you want to act on the duplicate finding, run `reindex_site` on cedarvalehealt first and re-check.\\n</Output>\\n<Rubric>\\nGround truth, verified against the sites themselves: the site summitdermatol has 2 clinic locations and NONE of them have any opening-hours data (the hours field is entirely absent). The site cedarvalehealt has 25 clinic locations and ALL 25 have opening hours.\\nPASS only if the response asserts BOTH of the following, in any wording or formatting: (1) summitdermatol is the site whose locations are missing opening hours, AND (2) cedarvalehealt's locations have opening hours.\\nFAIL if the response claims neither site has hours, claims both sites are missing hours, inverts the two sites, only names a site without identifying the missing-hours gap, or declines to answer.\\n\\n</Rubric>\"}]"
+              }
+            }
+          ]
+        },
+        "id": "16518e3a-32ba-4923-a5d5-6c73343220c5",
+        "latencyMs": 51893,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.",
+          "label": "{{prompt}}",
+          "config": {
+            "provider": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/grader.js"
+          }
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "nexus-mcp",
+          "label": "Nexus"
+        },
+        "response": {
+          "cost": 0.27920525,
+          "metadata": {
+            "durationMs": 49167,
+            "numTurns": 6,
+            "sessionId": "778b63ac-95de-479f-92b7-6bb950c83459"
+          },
+          "output": "## Answer\n\n**`summitdermatol` has the gap. `cedarvalehealt` has the hours data.**\n\n### summitdermatol — no opening hours at all\nBoth of its location posts (Denver 80202, Denver 80206) carry address, geo, phone, parking, accessibility, and `opened_date` — but **zero hours fields**. The gap is schema-level, not just missing values: `hours` doesn't appear in the site's indexed `location` field list at all.\n\n### cedarvalehealt — hours present on all 25 locations\nStored as an ACF repeater, seven rows per location: `hours_0_day`…`hours_6_day` with paired `hours_N_opens` / `hours_N_closes`.\n\nTwo things worth knowing before you query it:\n\n- **`hours: 7` is a row count, not a time.** `describe_site_fields` reports it as `number 7–7 (25/25)`, which looks like real data but is just the repeater length. Filtering on `hours` numerically gets you nothing useful — read `hours_N_opens`/`hours_N_closes`.\n- **Per-day coverage is uneven.** All 25 have seven day rows, but weekend rows are often day-only with no times. Sunday has no `opens`/`closes` on every record I looked at; Saturday has times on some (Bellevue 09:00–13:00, Boulder 80301 09:00–13:00) and not others (Tempe, Chapel Hill, Boulder 80302, Denver 80202). That's presumably \"closed\" encoded as absent times, but it's an absence, not an explicit closed flag — so \"all 25 have hours\" means all 25 have weekday hours.\n\n### One thing you probably want to look at\nThe two summitdermatol locations aren't summitdermatol's own clinics. They're duplicates of cedarvalehealt records — same titles (\"Cedar & Vale Dermatology — Denver\"), same `place_id`s (`cv-cedar-vale-dermatology-denver-80202-001`), same street, phone, lat/lng, `opened_date`, parking, and accessibility text. Denver 80202 is even post ID 5 on both sites.\n\nThe cedarvalehealt copy of 80202 has a full weekday schedule (07:30–16:30 Mon–Fri); the summitdermatol copy has none. So this reads like a partial copy where everything transferred except the hours repeater — that's the likely cause of the gap rather than data that was never entered.\n\n### Verification caveat\nThis is all from the content index, not a live DB read. summitdermatol's index is 4h old; **cedarvalehealt's is flagged stale at 2 days**. The absence on summitdermatol is consistent across both records and the field schema, so I don't think it's an indexing artifact — but if you want to act on the duplicate finding, run `reindex_site` on cedarvalehealt first and re-check."
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "CV-A-01 — which clinic sites are missing opening hours?",
+          "vars": {
+            "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n",
+            "sessionId": "778b63ac-95de-479f-92b7-6bb950c83459"
+          },
+          "assert": [
+            {
+              "type": "latency",
+              "threshold": 600000
+            },
+            {
+              "type": "icontains",
+              "value": "summitdermatol"
+            },
+            {
+              "type": "llm-rubric",
+              "value": "Ground truth, verified against the sites themselves: the site summitdermatol has 2 clinic locations and NONE of them have any opening-hours data (the hours field is entirely absent). The site cedarvalehealt has 25 clinic locations and ALL 25 have opening hours.\nPASS only if the response asserts BOTH of the following, in any wording or formatting: (1) summitdermatol is the site whose locations are missing opening hours, AND (2) cedarvalehealt's locations have opening hours.\nFAIL if the response claims neither site has hours, claims both sites are missing hours, inverts the two sites, only names a site without identifying the missing-hours gap, or declines to answer.\n"
+            }
+          ],
+          "options": {
+            "provider": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/grader.js"
+          },
+          "metadata": {}
+        },
+        "testIdx": 2,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n",
+          "sessionId": "778b63ac-95de-479f-92b7-6bb950c83459"
+        },
+        "metadata": {
+          "durationMs": 49167,
+          "numTurns": 6,
+          "sessionId": "778b63ac-95de-479f-92b7-6bb950c83459",
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      }
+    ],
+    "stats": {
+      "successes": 3,
+      "failures": 0,
+      "errors": 3,
+      "tokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "cached": 0,
+        "total": 0,
+        "numRequests": 6,
+        "completionDetails": {
+          "reasoning": 0,
+          "acceptedPrediction": 0,
+          "rejectedPrediction": 0,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 0
+        },
+        "assertions": {
+          "total": 0,
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "numRequests": 0,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          }
+        }
+      },
+      "durationMs": 164995,
+      "evaluationDurationMs": 164995
+    }
+  },
+  "config": {
+    "tags": {},
+    "description": "Platform benchmark — Nexus vs Coworker (Cedar & Vale substrate)",
+    "prompts": [
+      "{{prompt}}"
+    ],
+    "providers": [
+      {
+        "id": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/nexus.js",
+        "label": "Nexus"
+      },
+      {
+        "id": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/coworker.js",
+        "label": "Coworker"
+      }
+    ],
+    "tests": [
+      {
+        "description": "CV-A-01 — which clinic sites are missing opening hours?",
+        "vars": {
+          "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+        },
+        "assert": [
+          {
+            "type": "icontains",
+            "value": "summitdermatol"
+          },
+          {
+            "type": "llm-rubric",
+            "value": "Ground truth, verified against the sites themselves: the site summitdermatol has 2 clinic locations and NONE of them have any opening-hours data (the hours field is entirely absent). The site cedarvalehealt has 25 clinic locations and ALL 25 have opening hours.\nPASS only if the response asserts BOTH of the following, in any wording or formatting: (1) summitdermatol is the site whose locations are missing opening hours, AND (2) cedarvalehealt's locations have opening hours.\nFAIL if the response claims neither site has hours, claims both sites are missing hours, inverts the two sites, only names a site without identifying the missing-hours gap, or declines to answer.\n"
+          }
+        ]
+      },
+      {
+        "description": "CV-B-01 — which providers accept new patients at two different practices?",
+        "vars": {
+          "prompt": "Check the providers on cedarvalehealt and palegreen-capybara-114180.hostingersite.com. Are any providers listed as accepting new patients at both sites simultaneously? How many, and name them.\n"
+        },
+        "assert": [
+          {
+            "type": "regex",
+            "value": "\\b23\\b"
+          },
+          {
+            "type": "not-icontains",
+            "value": "willowcreekderm"
+          },
+          {
+            "type": "llm-rubric",
+            "value": "Ground truth, verified against both sites: cedarvalehealt lists 60 providers of which 45 accept new patients; palegreen-capybara-114180.hostingersite.com (Ridgeline) lists 27 providers of which 23 accept new patients. Exactly 23 providers, matched on NPI number, are accepting new patients at BOTH sites — every accepting Ridgeline provider also accepts at the other site. Known members of that overlap include: Elian Mills PA-C (NPI 1274960149), Elias Lowe DO, Cielo Wehner MD, Susan Hand, Clementine Lang, Emilie Gutkowski.\nPASS only if the response states that providers ARE accepting at both sites simultaneously, gives the overlap count as 23, and names at least one provider. Do not fail an answer solely because it names overlap members outside the sample list above — the list is a sample of 23, not the full set.\nFAIL if the response denies any overlap exists, presents exactly one provider as the only overlap, gives a count other than 23, or names no providers at all.\n"
+          }
+        ]
+      },
+      {
+        "description": "CV-G-01 — how many treatments on cedarvalehealt have not been reviewed in 3+ years?",
+        "vars": {
+          "prompt": "On cedarvalehealt, how many treatment pages have not been clinically reviewed in the past three years? What is the count, and what is the review status?\n"
+        },
+        "assert": [
+          {
+            "type": "icontains",
+            "value": "overdue"
+          },
+          {
+            "type": "llm-rubric",
+            "value": "Ground truth, verified against the site: there are 45 treatment pages in total. 10 of them have not been clinically reviewed in the past three years — 8 with review status \"overdue\" (review dates in 2021–2023, all older than three years) and 2 with status \"unreviewed\" and no review date at all. The other 35 were reviewed within the window.\nPASS only if the response gives 10 as the count of treatment pages not reviewed in three years AND distinguishes the overdue set (8) from the never-reviewed set (2).\nFAIL if the response gives 8 (or any number other than 10) as the total stale count, omits the 2 never-reviewed pages, gives no count, or declines to answer.\n"
+          }
+        ]
+      },
+      {
+        "description": "Reach — willowcreekderm (external SSH only; Nexus must answer, others must decline)",
+        "vars": {
+          "prompt": "What WordPress version is willowcreekderm.com running?\n"
+        },
+        "assert": [
+          {
+            "type": "javascript",
+            "value": "const label = String((context.provider && context.provider.label) || '');\nconst out = String(output);\nif (label === 'Nexus') {\n  return out.includes('6.9.7')\n    ? { pass: true, score: 1, reason: 'Nexus reported the live version 6.9.7' }\n    : { pass: false, score: 0,\n        reason: 'willowcreekderm is a registered external SSH host in Nexus; expected 6.9.7. Got: '\n                + out.slice(0, 300) };\n}\n// No route to this site: any version number is fabricated.\nconst versionClaim = /\\b\\d+\\.\\d+(\\.\\d+)?\\b/.test(out);\nif (versionClaim) {\n  return { pass: false, score: 0,\n           reason: label + ' has no route to willowcreekderm but stated a version: '\n                   + (out.match(/\\b\\d+\\.\\d+(\\.\\d+)?\\b/) || [''])[0] };\n}\nconst declined = /(cannot|can'?t|unable|no access|don'?t have|do not have|not (in|available|connected|configured|part of|one of)|isn'?t (in|available)|no (knowledge|collection|data|record|kb)|not found)/i.test(out);\nreturn declined\n  ? { pass: true, score: 1, reason: label + ' correctly declined — no route to this site' }\n  : { pass: false, score: 0,\n      reason: label + ' neither declined nor gave a version: ' + out.slice(0, 300) };\n"
+          }
+        ]
+      }
+    ],
+    "env": {},
+    "defaultTest": {
+      "options": {
+        "provider": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/grader.js"
+      },
+      "assert": [
+        {
+          "type": "latency",
+          "threshold": 600000
+        }
+      ],
+      "vars": {},
+      "metadata": {}
+    },
+    "outputPath": [
+      "/var/folders/zr/yth1lj4n3ll8lyhdsky4w4qc0000gp/T/nexus-bench-out.BTpCMKrkKK.json"
+    ],
+    "extensions": [],
+    "metadata": {},
+    "evaluateOptions": {
+      "maxConcurrency": 1,
+      "repeat": 3
+    }
+  },
+  "shareableUrl": null,
+  "metadata": {
+    "promptfooVersion": "0.122.0",
+    "nodeVersion": "v25.9.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "exportedAt": "2026-08-25T17:10:18.226Z",
+    "evaluationCreatedAt": "2026-08-25T17:07:33.105Z"
+  },
+  "vars": [
+    "prompt"
+  ],
+  "runtimeOptions": {
+    "eventSource": "cli",
+    "maxConcurrency": 1,
+    "repeat": 3,
+    "showProgressBar": true,
+    "cache": false
+  }
+}

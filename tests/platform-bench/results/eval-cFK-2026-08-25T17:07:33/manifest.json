@@ -1,0 +1,79 @@
+{
+  "evalId": "eval-cFK-2026-08-25T17:07:33",
+  "createdAt": "2026-08-25T17:10:18.793Z",
+  "harnessGitSha": "6c71086d38be2d6ef912d68fc356ca2d56bced9b",
+  "harnessDirty": true,
+  "benchModel": "claude-opus-5",
+  "graderModel": "claude-haiku-4-5-20251001",
+  "claudeCliVersion": "2.1.245 (Claude Code)",
+  "promptfooVersion": "0.122.0",
+  "repeat": 3,
+  "keysSha256": "32d59629ecee302d35514ca815694bbfa9365fb2f1e85242780aace86f86cd9e",
+  "substrateSnapshot": {
+    "measuredAt": "2026-08-25T17:07:30.884Z",
+    "sites": {
+      "cedarvalehealt": {
+        "providers_total": 60,
+        "providers_accepting": 45,
+        "treatments_total": 45,
+        "treatments_overdue": 8,
+        "treatments_unreviewed": 2,
+        "treatments_stale_total": 10,
+        "locations_total": 25,
+        "locations_with_hours": 25,
+        "fingerprint": {
+          "published_posts": 848,
+          "last_modified_gmt": "2026-08-10 20:42:59"
+        }
+      },
+      "summitdermatol": {
+        "locations_total": 2,
+        "locations_with_hours": 0,
+        "fingerprint": {
+          "published_posts": 117,
+          "last_modified_gmt": "2026-08-11 19:04:12"
+        }
+      },
+      "ridgeline": {
+        "providers_total": 27,
+        "providers_accepting": 23,
+        "fingerprint": {
+          "published_posts": 113,
+          "last_modified_gmt": "2026-08-24 19:43:19"
+        }
+      },
+      "willowcreekderm": {
+        "wp_version": "6.9.7"
+      }
+    },
+    "npi_overlap": {
+      "count": 23,
+      "names": [
+        "Anne Schoen, DO",
+        "Cielo Wehner, MD",
+        "Clementina Stark-Medhurst, DO",
+        "Clementine Lang, MD",
+        "Edgardo Nader, MD",
+        "Elian Mills, PA-C",
+        "Elias Lowe, DO",
+        "Emilie Gutkowski, DO",
+        "Kayden Wisoky, DO",
+        "Lavern Kris, DO",
+        "Milford Lang, NP",
+        "Mortimer Thompson, MD",
+        "Nickolas Dach, PA-C",
+        "Oral Jacobson, MD",
+        "Ransom Abshire, DO",
+        "Seamus Gorczany, DO",
+        "Selina Boyer, MD",
+        "Stephen Altenwerth, NP",
+        "Susan Hand, DO",
+        "Trey Greenholt, MD",
+        "Verdie Pouros, MD",
+        "Vicente Nolan, MD",
+        "Wilburn Champlin, PA-C"
+      ]
+    }
+  },
+  "backfilled": false
+}
