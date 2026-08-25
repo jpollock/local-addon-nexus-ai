@@ -99,7 +99,7 @@ Native modules (sqlite-vec, onnxruntime) can register background threads/handles
 
 ## Scheduler Settings — Non-Reactivity
 
-**`HaltedSiteRefreshScheduler` and `WpeRefreshScheduler` read interval settings once at startup**, then become reactive via `onSettingsUpdated` callback (which calls `scheduler.restart(newIntervalMs)`). If you add a new scheduler with a settings-driven interval, wire it into the `onSettingsUpdated` block in `src/main/index.ts:525` (line drifts — grep for `const onSettingsUpdated = ` rather than trusting this number). As of this writing that function restarts/stops **six** schedulers: the opportunistic/local-content scheduler, halted-site refresh, WPE refresh, WPE content-index, external host refresh, and external content-index.
+**`HaltedSiteRefreshScheduler` and `WpeRefreshScheduler` read interval settings once at startup**, then become reactive via `onSettingsUpdated` callback (which calls `scheduler.restart(newIntervalMs)`). If you add a new scheduler with a settings-driven interval, wire it into the `onSettingsUpdated` block in `src/main/index.ts:654` (line drifts — grep for `const onSettingsUpdated = ` rather than trusting this number). As of this writing that function restarts/stops **six** schedulers: the opportunistic/local-content scheduler, halted-site refresh, WPE refresh, WPE content-index, external host refresh, and external content-index.
 
 **Default values for WPE sync settings:**
 - `wpeSyncAutoEnabled` — **false** (opt-in). The type comment used to say "default: true" — that was wrong.
@@ -387,13 +387,14 @@ does not start or stop a remote host.
 
 **Update availability is not persisted anywhere.** Neither `plugins` nor
 `themes` has an `update_version` / `latest_version` column, and
-`GraphService.upsertPlugin` writes only eight columns across 11 call sites.
+`GraphService.upsertPlugin` writes only eight columns across 9 live call sites
+(10 counting the dead `resolvers/twin.ts`; measured 2026-08-25).
 Every `updateAvailable` in the codebase is computed live from WP-CLI's
 `update_version` at query time, or from a live wp.org lookup in
 `SiteDataResolver`. Fleet-wide outdated counts therefore **cannot** be served
 from the graph, and are reported as `null` — never `0`. A `0` in an *outdated*
 field reads as an all-clear on the one number a user acts on. If you add
-persistence for this, it needs a column, a migration, all 11 writers, and a
+persistence for this, it needs a column, a migration, every writer, and a
 staleness policy.
 
 **Plugin and theme totals cover only sites the graph has scanned** — 312 of the
@@ -448,13 +449,13 @@ for 14% of production installs. The calculator already has the honest path
 identical default on the *local* path is pre-existing and left alone: Local's
 store supplies a real version there.)
 
-Note: for an **external** host, the `|| '8.0'` fallback at
-`get-site-health.ts:83` is structurally unreachable in scoring, because
-`externalScoreable` (line 91) gates on the raw `row.php_version` column. The
-fabrication risk applies to the **WPE** branch, which is scored unconditionally.
+Note: the remote-branch `|| '8.0'` fallback in `get-site-health.ts` was
+**deleted** (C3, ~line 83: `phpVersion: row.php_version || undefined`, with a
+comment naming why). Only the *local* path (~line 51) keeps the pre-existing
+`|| '8.0'`, where Local's store supplies a real version.
 
 **The external health-scoring gate is duplicated** between
-`src/main/graphql/resolvers.ts:2950` (GraphQL/CLI path) and
+`src/main/graphql/resolvers.ts:3003` (GraphQL/CLI path) and
 `src/main/mcp/modules/fleet-intelligence/get-site-health.ts:91` (MCP path).
 The two are NOT pinned together by any test — a change to one must be mirrored
 to the other. This repo already has that duplicated-rule pattern documented for
@@ -546,12 +547,13 @@ security and performance credit for something never observed).
 write (the same closure `src/main/index.ts` hands the IPC handler), so
 `nexus settings set externalRefreshAutoEnabled true` starts the scheduler
 immediately. Before that wiring, only the IPC path was reactive, so a renderer
-toggle worked but the CLI silently required a Local restart. **A renderer UI
-row for `externalRefreshAutoEnabled` now exists** (`SettingsTab.tsx`) — this
-section used to say none did, which was true at the time but is stale now.
-`externalContentIndexAutoEnabled` is the one that is genuinely CLI-only today
-(zero references in `SettingsTab.tsx`) — `nexus settings set
-externalContentIndexAutoEnabled true` remains the only way to enable it. A new
+toggle worked but the CLI silently required a Local restart. **Renderer UI rows
+for BOTH `externalRefreshAutoEnabled` and `externalContentIndexAutoEnabled` now
+exist** — in `src/renderer/components/settings/derived.ts` (`JOB_SPECS`, the
+`ext` group), rendered by `BackgroundWorkSection.tsx`, NOT in `SettingsTab.tsx`
+(a refactor moved the settings rows out; this paragraph previously tracked
+`SettingsTab.tsx` and went stale twice — measured 2026-08-25, zero references
+there). Neither toggle is CLI-only anymore. A new
 settings-driven scheduler must be wired into `onSettingsUpdated`, not into one
 caller of it.
 
@@ -647,16 +649,16 @@ whole run across both streams.
   `toString`, invalid dates and a null event. A dropped event still emits a
   line saying so — a swallowed event is a lost event.
 - **`mutation` events are emitted by the runtime, not by agents.**
-  `NexusToolProvider.ts:92` emits `event: 'mutation'` for Tier 2/3 tool calls
+  `NexusToolProvider.ts:156` (line drifts — grep for `event: 'mutation'`) emits
+  it for Tier 2/3 tool calls
   that complete. `ctx.log.mutation()` exists but has no agent callers — agents
   forgot to call it, which is exactly why the runtime emits it instead.
-- **`agent_runs.run_id` is written but not read back.** The column is populated
-  (`AgentRunner.ts` writes it), but `getLastRun()` and `getRunHistory()` in
-  `AgentStateStore.ts` both return types (`AgentResult`, `AgentRunRow`) that
-  exclude it — the `SELECT *` fetches it, the mapping drops it. The UI's Run
+- **`agent_runs.run_id` is read back by `getRunHistory()` since WP-57**
+  (`AgentStateStore.ts:190-193` maps `runId` and `taskId` — the comment there
+  records it was fetched-and-dropped from WP-19 until then). `getLastRun()`
+  still drops it: its typed row doesn't select the column. The UI's Run
   Now broadcasts the runner's real `r_…` ids (`runIds`, collected via
-  `runNowIds.ts` and rendered in `RunDrawer.tsx`), so a user can copy one, but
-  the historical runs list has no id column.
+  `runNowIds.ts` and rendered in `RunDrawer.tsx`).
 - **`localDay` exists twice** — `src/main/logging/eventLog.ts` and
   `src/renderer/components/localDay.ts` — pinned by a shared case table in
   `tests/unit/renderer/localDay.test.ts`. Main and renderer do not share a
@@ -692,8 +694,9 @@ There are **three** places that write `operation-audit.log`, not two:
 
 1. **`ToolRegistry.call()`** (`src/main/mcp/tool-registry.ts`) — the chokepoint
    for every MCP tool call, on both the success path and the `catch` branch.
-   MCP tools, the chat assistant, the 8 GraphQL resolvers that call
-   `registry.call(...)`, and agent-internal tool calls (via `NexusToolProvider`)
+   MCP tools, the chat assistant, the six GraphQL resolvers that call
+   `registry.call(...)` (7 call sites — `nexusFleetCompare` calls twice),
+   and agent-internal tool calls (via `NexusToolProvider`)
    all funnel through here.
 2. **`AgentDispatcher.dispatch()`** (`src/main/agent-runtime/AgentDispatcher.ts`)
    — its *own separate* write. Agent-contributed tools dispatch straight to
@@ -701,8 +704,9 @@ There are **three** places that write `operation-audit.log`, not two:
 3. **`auditDirectOperation()`** (`src/main/audit/auditDirectOperation.ts`) — the
    entry point for mutating GraphQL resolvers and IPC handlers that call
    `services.localServices` directly and therefore reach neither chokepoint.
-   That is roughly thirty paths, including arbitrary WP-CLI against production
-   WP Engine installs and `DELETE /installs/{id}`.
+   That is ~23 distinct operations across ~47 live call sites
+   (success+failure pairs; measured 2026-08-25), including arbitrary WP-CLI
+   against production WP Engine installs and `DELETE /installs/{id}`.
 
 `McpSafetyWrapper.auditLog()` (`src/main/mcp/mcp-safety-wrapper.ts`) writes
 **in-memory only** — durable responsibility moved to `ToolRegistry.call()`,
@@ -761,12 +765,12 @@ WP-CLI, `nexus:sentinel:execute`; `BulkOperationManager` per-site plugin updates
 
 **Known gaps — do not assume completeness:**
 
-- **Run id reaches `operation-audit.log` from only ONE of three audit
-  writers.** `ToolRegistry.call()` passes `runId` through; `AgentDispatcher.
-  dispatch()` does not (and that is a real gap — agent-contributed tools are
-  agent runs); `auditDirectOperation()` does not either (mostly honest — those
-  are GraphQL/IPC paths that generally are not agent runs). The join between
-  the compliance record and the diagnostic log is therefore incomplete.
+- **Run id reaches `operation-audit.log` from TWO of three audit
+  writers.** `ToolRegistry.call()` passes `runId` through, and since WP-57
+  `AgentDispatcher.dispatch()` does too (`AgentDispatcher.ts:122,150` — the
+  gap this bullet used to record is closed). `auditDirectOperation()` still
+  does not (mostly honest — those
+  are GraphQL/IPC paths that generally are not agent runs).
 - `nexusWpeDomainCheck` (`/domains/{id}/check_status`) is POST-shaped but a
   read-only DNS check, so it is deliberately not audited.
 - `nexus:sentinel:execute-sandbox` runs WP-CLI against a *local* sandbox site
@@ -930,7 +934,7 @@ through it. (`wp_eval`'s `code` was the original motivating example; it is now
 withheld outright rather than masked.)
 
 Tier 1 (read-only) is deliberately not written to disk. Tier 2 is the **default**
-tier for any tool absent from `TIER_OVERRIDES` (`src/main/mcp/safety.ts:283` —
+tier for any tool absent from `TIER_OVERRIDES` (`src/main/mcp/safety.ts:341` —
 grep for `TIER_OVERRIDES\[toolName\] ?? 2` rather than trusting this line number,
 it has drifted before) — `getToolSafety()` falls back to
 `TIER_OVERRIDES[toolName] ?? 2` — so new tools are audited by default unless
@@ -1047,14 +1051,15 @@ built and rejected) is in the designer's `handoff_log_sources_v3/DECISIONS.md`.
 
 ## Known Pitfalls
 
-- [Smart Search MU plugin pitfalls](feedback_smart_search_mu_plugin.md) — `is_plugin_active()` fires too early in WordPress bootstrap; `siteStarted` races MySQL startup. Use filesystem checks in Node.js, not WP-CLI.
+- **Smart Search MU plugin pitfalls** — `is_plugin_active()` fires too early in WordPress bootstrap; `siteStarted` races MySQL startup. Use filesystem checks in Node.js, not WP-CLI. (Was a link to `feedback_smart_search_mu_plugin.md`, which lives in the session-memory directory, not this repo — inlined 2026-08-25.)
 - **`wpeAllowedEnvironments` is dead code — it blocks nothing.** This entry used to
   say it "blocks SSH/WP-CLI on excluded environments, default excludes production."
   That is false: all four exported functions of
   `src/main/mcp/utils/environment-filter.ts` have **zero callers** outside their own
-  test file. It was superseded by the granular permissions — `types.ts:299` says
-  "Replaces wpeAllowedEnvironments", `schemas.ts:77` marks it "legacy — kept for
-  migration", and `operation-permissions.ts:133` is the one-way converter.
+  test file. It was superseded by the granular permissions — `types.ts:343` says
+  "Replaces wpeAllowedEnvironments", `schemas.ts:106` marks it "legacy — kept for
+  migration", and `operation-permissions.ts:153` is the one-way converter
+  (`migrateFromLegacyEnvFilter`; lines drift — grep the names).
   The gate that actually runs is `isOperationAllowed` against
   `remoteOperationPermissions`, whose defaults
   (`operation-permissions.ts:22`) are: `wpcli_read` **allowed on every
@@ -1078,14 +1083,14 @@ built and rejected) is in the designer's `handoff_log_sources_v3/DECISIONS.md`.
   surface as an actionable message, not a silent no-op — if you touch
   `SentinelExecutor`'s error strings, keep them that specific.
 
-## Intelligence Layer (`src/intelligence/` + `src/main/intelligence-host/`) — branch `poc/nexintelligence`
+## Intelligence Layer (`src/intelligence/` + `src/main/intelligence-host/`)
 
 An event-sourced intelligence spine runs alongside the legacy caches: every
 observation about the fleet (webhook events, graph writes, live re-checks)
 becomes a provenance-stamped envelope in an append-only SQLite ledger
 (`~/Library/Application Support/Local/nexus-ai/ledger.db`), and `twin_facts`
 is a **materialized view folded from that ledger** — rebuildable, never
-authoritative. Design record: `docs/intelligence/architecture.md` (ADRs 1–19).
+authoritative. Design record: `docs/intelligence/architecture.md` (ADRs 1–24).
 Roadmap: `INTELLIGENCE_ROADMAP.md`. Task-shaped how-tos:
 `docs/intelligence/patterns/`. Assignable work: `docs/intelligence/WORK_PACKETS.md`.
 Multi-agent rules: `docs/intelligence/PARALLEL_PROTOCOL.md`. Read the packet
