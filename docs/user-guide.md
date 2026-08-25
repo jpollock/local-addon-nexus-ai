@@ -103,7 +103,7 @@ Changes to sync settings take effect immediately — no Local restart required.
 ollama pull llama3.2
 ```
 
-Configure other providers in Preferences > Nexus AI.
+Configure providers and API keys in the Settings tab → Chat.
 
 **How it works:**
 1. You type a message
@@ -302,11 +302,11 @@ Nexus AI can configure WordPress sites for AI features with one click. The "Setu
 
 ## Credential Management
 
-API keys configured in Preferences (OpenAI, Anthropic, Google, etc.) can be synced to WordPress sites so their AI features use your configured providers.
+API keys configured in Settings → Chat (OpenAI, Anthropic, Google, etc.) can be synced to WordPress sites so their AI features use your configured providers.
 
-- **Auto-sync:** When you save an API key in Preferences, it's automatically broadcast to all running WordPress 7.0+ sites
-- **Manual sync:** Click "Sync All" in Preferences or "Sync Keys" on a per-site basis
-- **Sync status:** The Preferences panel shows which sites have synced credentials and when
+- **Auto-sync:** When you save an API key, it's automatically broadcast to all running WordPress 7.0+ sites
+- **Manual sync:** "Sync Keys" on a per-site basis from the site's Nexus section
+- **Sync status:** the per-site Nexus section shows when credentials last synced
 
 Keys are stored in WordPress as `nexus_ai_credentials` in wp_options, accessible through the Connector Screen API.
 
@@ -316,7 +316,7 @@ The AI Proxy is an OpenAI-compatible HTTP server backed by local Ollama. It's bu
 
 **What it's for:** Enhanced AI clients that want tool injection or agentic mode. WordPress AI features don't need the proxy — they talk directly to Ollama via the provider plugin.
 
-**Connection info:** Shown in Preferences under "AI Proxy Server" (port + status).
+**Connection info:** shown in Settings → Advanced (port + status).
 
 **Tool modes** (set via `X-Nexus-Tools` header):
 - `passthrough` (default) — forwards tools as-is

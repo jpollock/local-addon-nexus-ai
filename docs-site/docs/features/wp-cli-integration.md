@@ -639,7 +639,7 @@ for install in $(nexus wpe installs --environment production --format json | jq 
 done
 
 # Check health across all sites
-for site in $(nexus list --local --running --format json | jq -r '.[].name'); do
+for site in $(nexus sites list --running --format json | jq -r '.[].name'); do
   echo "Health check: $site"
   nexus wp $site site health
 done

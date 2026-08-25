@@ -103,7 +103,7 @@ nexus mcp setup --agent claude-desktop --write
 
 **Key features:**
 - 📊 **Sites (Properties) view** — the whole fleet in one list
-- 🔎 **Site Finder** with AI-powered search
+- 🔎 **Search-becomes-filters** in the Sites tab, plus AI-powered semantic search
 - 💬 **AI Chat** interface with streaming
 - 🔄 **WPE Sync** for remote sites
 - ⚙️ **Bulk Operations** panel
@@ -149,7 +149,7 @@ Stores vectors in sqlite-vec (`vec0` tables) with cosine distance search.
 
 ```bash
 # AI assistant queries indexed content
-nexus search "how to optimize images"
+nexus content search-all "how to optimize images"
 
 # Returns relevant content from ALL sites
 ```

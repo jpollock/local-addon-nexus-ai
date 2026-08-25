@@ -458,7 +458,7 @@ chmod +x ~/bin/aider-nexus
 aider-nexus
 
 # Manual tool calls
-> /run nexus list
+> /run nexus sites list
 
 # AI can't directly call MCP tools
 # You must manually run nexus CLI commands

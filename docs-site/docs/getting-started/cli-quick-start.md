@@ -114,7 +114,7 @@ Local Sites (3 running, 1 halted)
 Index your WordPress content into the vector database for AI-powered search:
 
 ```bash
-nexus scan
+nexus fleet reindex
 ```
 
 **Output:**
@@ -138,7 +138,7 @@ Total indexed: 15,567 documents (89MB)
 Use semantic search to find content across all sites:
 
 ```bash
-nexus search "how to optimize images"
+nexus content search-all "how to optimize images"
 ```
 
 **Output:**
@@ -180,13 +180,13 @@ List and manage plugins on your sites:
 
 ```bash
 # List all plugins
-nexus plugin list mysite
+nexus wp plugin list mysite
 
 # List active plugins only
-nexus plugin list mysite --status active
+nexus wp plugin list mysite --status active
 
 # List plugins with updates available
-nexus plugin list mysite --updates
+nexus wp plugin list mysite --updates
 ```
 
 **Output:**
@@ -210,10 +210,10 @@ Inactive Plugins:
 
 ```bash
 # Update specific plugin
-nexus plugin update mysite akismet
+nexus wp plugin update mysite akismet
 
 # Update all plugins
-nexus plugin update mysite --all
+nexus wp plugin update mysite --all
 ```
 
 ### 5. Run WP-CLI Commands
@@ -321,11 +321,11 @@ nexus mcp setup --agent claude-code --write # Claude Code
 nexus sites list
 
 # Scan for new content
-nexus scan
+nexus fleet reindex
 
 # Check for plugin updates
 for site in $(nexus sites list --json | jq -r '.[].name'); do
-  nexus plugin list $site --updates
+  nexus wp plugin list $site --updates
 done
 ```
 
@@ -335,7 +335,7 @@ done
 # Update plugins on all running sites
 for site in $(nexus sites list --json | jq -r '.[].name'); do
   echo "Updating plugins on $site..."
-  nexus plugin update $site --all
+  nexus wp plugin update $site --all
 done
 ```
 
@@ -343,13 +343,13 @@ done
 
 ```bash
 # Find all posts about a topic
-nexus search "WordPress security" --type post --limit 20
+nexus content search-all "WordPress security" --limit 20
 
 # Search specific site
-nexus search "shipping options" --site shop
+nexus content search shop "shipping options"
 
 # Search products only
-nexus search "blue widgets" --type product
+nexus content search-all "blue widgets"
 ```
 
 ## WP Engine Integration
@@ -396,10 +396,10 @@ nexus wpe promote mysite
 nexus wp mysite-production core version
 
 # List plugins on production
-nexus plugin list mysite-production
+nexus wp plugin list mysite-production
 
 # Update plugins on staging
-nexus plugin update mysite-staging --all
+nexus wp plugin update mysite-staging --all
 ```
 
 [WP Engine Guide →](../mcp-tools/wpe-sites.md)
@@ -412,13 +412,13 @@ Scan your sites regularly to keep the index fresh:
 
 ```bash
 # Force re-scan of all sites
-nexus scan --force
+nexus fleet reindex
 
 # Scan only local sites
-nexus scan --local-only
+nexus fleet reindex
 
 # Scan specific site
-nexus scan mysite
+nexus content index mysite
 ```
 
 **Recommendation:** Scan daily or after major content changes.
@@ -429,7 +429,7 @@ Always check current state before modifications:
 
 ```bash
 # Check plugins before updating
-nexus plugin list mysite
+nexus wp plugin list mysite
 
 # Check WordPress version before upgrading
 nexus wp mysite core version
@@ -445,11 +445,11 @@ For fleet management, use bulk operations instead of loops:
 ```bash
 # Bad: Sequential updates (slow)
 for site in site1 site2 site3; do
-  nexus plugin update $site akismet
+  nexus wp plugin update $site akismet
 done
 
 # Good: Parallel bulk operation (fast)
-nexus bulk update-plugin akismet --sites site1,site2,site3
+nexus fleet plugin-update akismet --sites site1,site2,site3
 ```
 
 ### 4. Version Control Your Scripts
@@ -460,9 +460,9 @@ Save common workflows as scripts:
 # morning-check.sh
 #!/bin/bash
 nexus sites list
-nexus scan --local-only
+nexus fleet reindex
 for site in $(nexus sites list --json | jq -r '.[].name'); do
-  nexus plugin list $site --updates
+  nexus wp plugin list $site --updates
 done
 ```
 
@@ -517,7 +517,7 @@ If `nexus sites list` shows no sites:
 
 ### Scan Fails
 
-If `nexus scan` fails:
+If `nexus fleet reindex` fails:
 
 1. **Check site is running:**
    ```bash
@@ -526,7 +526,7 @@ If `nexus scan` fails:
 
 2. **Try scanning individual site:**
    ```bash
-   nexus scan mysite --debug
+   nexus content index mysite --debug
    ```
 
 3. **Check database connection:**
@@ -567,14 +567,14 @@ If AI assistant doesn't see Nexus tools:
 export NEXUS_DB_PATH=/custom/path/nexus.db
 
 # Or configure permanently
-nexus config set db.path /custom/path/nexus.db
+nexus settings set db.path /custom/path/nexus.db
 ```
 
 ### Disable Telemetry
 
 ```bash
 # Disable anonymous usage analytics
-nexus telemetry disable
+NEXUS_TELEMETRY=0   # env var; or the set_telemetry_enabled MCP tool
 
 # Or via environment variable
 export NEXUS_TELEMETRY=false
@@ -584,8 +584,8 @@ export NEXUS_TELEMETRY=false
 
 ```bash
 # Use different AI provider for embeddings
-nexus config set ai.provider ollama
-nexus config set ai.model nomic-embed-text
+nexus settings set ai.provider ollama
+nexus settings set ai.model nomic-embed-text
 ```
 
 [Command Reference →](../reference/cli-command-reference.md)
@@ -625,7 +625,7 @@ nexus config set ai.model nomic-embed-text
 
 ```bash
 # Scan all sites
-nexus scan
+nexus fleet reindex
 
 # Connect to Claude Desktop (auto-configure, then restart)
 nexus mcp setup --agent claude-desktop --write

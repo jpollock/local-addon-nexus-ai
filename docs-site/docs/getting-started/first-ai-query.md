@@ -20,9 +20,9 @@ Before your first AI query, make sure you've:
 
 Nexus AI provides three ways to query your content:
 
-1. **CLI Search** — Direct command-line semantic search
-2. **UI Site Finder** — Visual search interface in Local addon
-3. **AI Assistant (MCP)** — Natural language queries via Claude Desktop, Cursor, etc.
+1. **CLI Search** — direct command-line semantic search
+2. **The Docked Panel** — the chat surface inside Local
+3. **AI Assistant (MCP)** — natural language queries via Claude Desktop, Cursor, etc.
 
 Let's try each method.
 
@@ -33,7 +33,7 @@ Let's try each method.
 Search indexed content from the command line:
 
 ```bash
-nexus search "how to optimize images"
+nexus content search-all "how to optimize images"
 ```
 
 **Output:**
@@ -86,133 +86,66 @@ nexus search "how to optimize images"
 - **type** — Content type (post, page, product)
 - **time_ms** — Search speed in milliseconds
 
-### Filter by Site
-
-Search specific site only:
+### Search One Site
 
 ```bash
-nexus search "shipping options" --site shop
+nexus content search shop "shipping options"
 ```
 
-### Filter by Type
-
-Search products only:
-
-```bash
-nexus search "blue widgets" --type product
-```
-
-**Supported types:**
-
-- `post` — Blog posts
-- `page` — Pages
-- `product` — WooCommerce products
-- `attachment` — Media files
-- `all` — All types (default)
+The target takes any fleet form — a local name, `wpe:<account>/<install>@<env>`,
+or `ssh:<alias>/<site>@<env>`.
 
 ### Adjust Results
 
-Get more or fewer results:
-
 ```bash
-# Get top 20 results
-nexus search "WordPress security" --limit 20
-
-# Lower similarity threshold (more results, less relevant)
-nexus search "performance" --threshold 0.6
-
-# Higher threshold (fewer results, more relevant)
-nexus search "performance" --threshold 0.9
+# Top 20 instead of the default 10
+nexus content search-all "WordPress security" --limit 20
 ```
 
-**Threshold guide:**
-
-| Threshold | Results | Use Case |
-|-----------|---------|----------|
-| 0.5-0.6 | Many, loosely related | Exploratory research |
-| 0.7 | Moderate, relevant | Default search |
-| 0.8-0.9 | Few, highly relevant | Precise matching |
-| 0.95+ | Very few, exact matches | Find duplicates |
+Results are ranked by semantic similarity; there is no threshold flag — for
+richer control (filter by type, compare sites, follow up), ask through the
+Docked Panel or an MCP client instead, where the model composes the right
+tool calls.
 
 ### Export Results
 
-Save search results to file:
-
 ```bash
-# JSON format
-nexus search "WooCommerce" --format json > woo-content.json
-
-# Markdown format (human-readable)
-nexus search "WooCommerce" --format markdown > woo-content.md
+nexus content search-all "WooCommerce" --json > woo-content.json
 ```
 
-## Method 2: UI Site Finder
+## Method 2: The Docked Panel
 
-### Open Site Finder
-
-1. Open **Nexus AI** sidebar (toolbar icon)
-2. Click **Site Finder** panel
-3. Type your query in the search box
-
+The chat surface inside Local — open the bubble in the bottom-right (enable
+it under **Settings → Chat** if hidden).
 
 ### Try These Queries
 
-**Content queries:**
+**Content questions:**
 
-- `WooCommerce` — Sites with WooCommerce
-- `SEO` — Sites or posts about SEO
-- `image optimization` — Posts about images
-- `contact form` — Sites with contact forms
+- *"which sites have posts about image optimization?"*
+- *"do any of my sites document a returns policy?"*
 
-**Site queries:**
+**Fleet questions:**
 
-- `outdated` — Sites running old WordPress
-- `needs updates` — Sites with available plugin updates
-- `staging` — Staging environments
-- `production` — Production sites
-- `WP Engine` — Sites linked to WPE
+- *"which sites run WooCommerce, and what versions?"*
+- *"what's behind on updates?"*
+- *"which sites haven't published anything in 90 days?"*
 
-**Plugin queries:**
+**Action requests** (permission-gated):
 
-- `Yoast` — Sites with Yoast SEO
-- `Akismet` — Sites with Akismet
-- `without Yoast` — Sites missing Yoast SEO
+- *"update Yoast on staging-site"* — walks the governed procedure with your
+  approval at the checkpoints
 
-### Understanding Results
+### Understanding Answers
 
-Results appear in three sections:
+Three things distinguish the panel from a plain chatbot:
 
-**1. Exact Matches**
-
-Sites that exactly match your query:
-
-```
-Exact Matches (3)
-✓ woocommerce-shop (WooCommerce 8.5.2 installed)
-✓ online-store (WooCommerce 8.4.1 installed)
-✓ test-shop (WooCommerce 8.3.0 installed)
-```
-
-**2. Content Matches**
-
-Posts/pages that match semantically:
-
-```
-Content Matches (15)
-📝 "Setting Up WooCommerce" on blog (score: 0.92)
-📝 "Payment Gateways Guide" on shop (score: 0.88)
-📝 "Shipping Configuration" on store (score: 0.85)
-```
-
-**3. Site Matches**
-
-Sites that partially match:
-
-```
-Site Matches (2)
-🌐 shop (has WooCommerce plugin)
-🌐 test (mentions "WooCommerce" in description)
-```
+1. **Data age is disclosed** — an answer resting on cached facts says how old
+   they are, and offers a live re-check when something is stale.
+2. **Citations** — claims link back to the ledger events and tool calls that
+   supplied them. A citation that doesn't resolve is flagged loudly.
+3. **Refusals are actionable** — a write without a grant is refused with the
+   exact permission and environment to change, in Settings → Permissions.
 
 ## Method 3: AI Assistant (MCP)
 
@@ -486,13 +419,13 @@ Combine multiple concepts:
 
 ```bash
 # Find posts about both performance AND security
-nexus search "performance AND security"
+nexus content search-all "performance AND security"
 
 # Find posts about either caching OR CDN
-nexus search "caching OR CDN"
+nexus content search-all "caching OR CDN"
 
 # Find posts about WooCommerce but not shipping
-nexus search "WooCommerce NOT shipping"
+nexus content search-all "WooCommerce NOT shipping"
 ```
 
 !!! note
@@ -504,12 +437,12 @@ Find recent content:
 
 ```bash
 # Find recent posts about a topic
-nexus search "WordPress 6.4 new features"
-
-# Ask AI for time-based queries
-"Show me posts published in March 2026"
-"Find products added this week"
+nexus content search-all "WordPress 6.4 new features"
 ```
+
+For time-based questions, ask the Docked Panel or an MCP client —
+*"show me posts published in March 2026"* — where the model can combine
+search with `fleet_sql`.
 
 ### Cross-Site Queries
 
@@ -517,9 +450,9 @@ Search across multiple sites:
 
 ```bash
 # CLI searches all sites by default
-nexus search "contact form"
+nexus content search-all "contact form"
 
-# UI Site Finder searches all sites
+# search-all covers every indexed site
 # Filter results by site in the UI
 
 # AI Chat can target specific sites
@@ -532,10 +465,10 @@ Semantic search naturally handles typos and variations:
 
 ```bash
 # These all find similar results
-nexus search "optimize images"
-nexus search "optimise images"  # UK spelling
-nexus search "image optimization"
-nexus search "compressing pictures"
+nexus content search-all "optimize images"
+nexus content search-all "optimise images"  # UK spelling
+nexus content search-all "image optimization"
+nexus content search-all "compressing pictures"
 ```
 
 ## Understanding Search Scores
@@ -637,7 +570,7 @@ Find duplicate or near-duplicate content:
 
 ```bash
 # High threshold catches duplicates
-nexus search "content from post title" --threshold 0.95
+nexus content search-all "content from post title"
 ```
 
 ### Cross-Product Search
@@ -670,7 +603,7 @@ If your search returns no results:
 **1. Check if sites are scanned:**
 
 ```bash
-nexus db info
+nexus system status
 ```
 
 Look for "Documents: 0" — means no sites scanned yet.
@@ -678,23 +611,23 @@ Look for "Documents: 0" — means no sites scanned yet.
 **2. Re-scan sites:**
 
 ```bash
-nexus scan --force
+nexus fleet reindex
 ```
 
 **3. Try broader query:**
 
 ```bash
 # Too specific
-nexus search "WordPress 6.4.3 performance optimization with Redis caching"
+nexus content search-all "WordPress 6.4.3 performance optimization with Redis caching"
 
 # Better
-nexus search "WordPress performance"
+nexus content search-all "WordPress performance"
 ```
 
 **4. Lower threshold:**
 
 ```bash
-nexus search "query" --threshold 0.5
+nexus content search-all "query"
 ```
 
 ### Irrelevant Results
@@ -704,57 +637,47 @@ If results don't match your query:
 **1. Increase threshold:**
 
 ```bash
-nexus search "query" --threshold 0.85
+nexus content search-all "query"
 ```
 
 **2. Be more specific:**
 
 ```bash
 # Vague
-nexus search "WordPress"
+nexus content search-all "WordPress"
 
 # Specific
-nexus search "WordPress multisite configuration"
+nexus content search-all "WordPress multisite configuration"
 ```
 
-**3. Filter by type:**
-
-```bash
-# Only search posts
-nexus search "query" --type post
-
-# Only search products
-nexus search "query" --type product
-```
+**3. Filter by type:** the CLI has no type flag — ask the Docked Panel or an
+MCP client (*"only products"*), where the model applies the filter.
 
 ### Slow Search
 
 If search takes >1 second:
 
-**1. Check database size:**
+**1. Check index state:**
 
 ```bash
-nexus db info
+nexus system status
 ```
 
-If >1GB, consider optimizing:
-
-```bash
-nexus db optimize
-```
+If the index looks damaged, rebuild it: **Settings → Advanced → Search
+index → Rebuild**.
 
 **2. Reduce result limit:**
 
 ```bash
 # Faster: only get top 5
-nexus search "query" --limit 5
+nexus content search-all "query" --limit 5
 ```
 
 **3. Search specific site:**
 
 ```bash
 # Faster: only search one site
-nexus search "query" --site mysite
+nexus content search mysite "query"
 ```
 
 ## Next Steps
@@ -785,17 +708,17 @@ Now that you can search your content:
 
 ```bash
 # Find content
-nexus search "WooCommerce shipping"
-nexus search "WordPress security"
-nexus search "optimize images"
+nexus content search-all "WooCommerce shipping"
+nexus content search-all "WordPress security"
+nexus content search-all "optimize images"
 
 # Find sites
-nexus search "needs updates"
-nexus search "staging environment"
-nexus search "WP Engine"
+nexus content search-all "needs updates"
+nexus content search-all "staging environment"
+nexus content search-all "WP Engine"
 
 # Find products
-nexus search "blue widgets" --type product
+nexus content search-all "blue widgets"   # then filter by type in the results, or ask the panel
 ```
 
 Or ask Claude (if MCP is set up):

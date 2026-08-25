@@ -670,13 +670,13 @@ Claude will show both sets of tools prefixed by the server name.
 
 1. **Check Local is running:**
    ```bash
-   nexus list
+   nexus sites list
    ```
 
 2. **Test Nexus CLI directly:**
    ```bash
-   nexus scan
-   nexus search "test"
+   nexus fleet reindex
+   nexus content search-all "test"
    ```
 
 3. **Enable debug mode:**
@@ -707,12 +707,12 @@ Claude will show both sets of tools prefixed by the server name.
 
 1. **Check database size:**
    ```bash
-   nexus db info
+   nexus system status
    ```
 
 2. **Optimize database:**
    ```bash
-   nexus db optimize
+   # rebuild via Settings → Advanced → Search index → Rebuild
    ```
 
 3. **Reduce scan frequency:**

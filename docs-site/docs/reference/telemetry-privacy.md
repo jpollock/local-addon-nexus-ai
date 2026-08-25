@@ -10,7 +10,7 @@ Telemetry is **enabled by default** but you can opt out at any time. No account,
 
 **Disable via CLI:**
 ```bash
-nexus telemetry disable
+NEXUS_TELEMETRY=0   # env var; or the set_telemetry_enabled MCP tool
 ```
 
 **Disable via environment variable** (useful for CI/CD):
@@ -22,12 +22,12 @@ NEXUS_TELEMETRY=0 nexus ...
 
 **Re-enable:**
 ```bash
-nexus telemetry enable
+# telemetry controls: NEXUS_TELEMETRY env var + get_telemetry_status/set_telemetry_enabled MCP tools
 ```
 
 **Check current status:**
 ```bash
-nexus telemetry status
+# telemetry controls: NEXUS_TELEMETRY env var + get_telemetry_status/set_telemetry_enabled MCP tools
 ```
 
 ---
@@ -110,7 +110,7 @@ MCP telemetry (from AI tool invocations) is written to a local JSONL file before
 ~/Library/Application Support/Local/nexus-ai/telemetry/events.jsonl
 ```
 
-This file is capped at 10,000 events (oldest are pruned when the limit is reached). You can inspect it, clear it with `nexus telemetry clear`, or delete it manually.
+This file is capped at 10,000 events (oldest are pruned when the limit is reached). You can inspect it, clear it with `# telemetry controls: NEXUS_TELEMETRY env var + get_telemetry_status/set_telemetry_enabled MCP tools`, or delete it manually.
 
 CLI telemetry transmits directly to the analytics endpoint — it does not write to the local queue.
 
@@ -150,19 +150,19 @@ The data is never sold, shared with third parties, or used for advertising.
 
 ```bash
 # Check status
-nexus telemetry status
+# telemetry controls: NEXUS_TELEMETRY env var + get_telemetry_status/set_telemetry_enabled MCP tools
 
 # View queued events (local only)
 # cat ~/Library/Application\ Support/Local/nexus-ai/telemetry/events.jsonl
 
 # Clear local queue
-nexus telemetry clear
+# telemetry controls: NEXUS_TELEMETRY env var + get_telemetry_status/set_telemetry_enabled MCP tools
 
 # Disable permanently
-nexus telemetry disable
+NEXUS_TELEMETRY=0   # env var; or the set_telemetry_enabled MCP tool
 
 # Full reset (new installation ID, disables telemetry)
-nexus telemetry reset --confirm
+# telemetry controls: NEXUS_TELEMETRY env var + get_telemetry_status/set_telemetry_enabled MCP tools --confirm
 ```
 
-To request deletion of server-side data associated with your `installationId`, open a GitHub issue at [github.com/jpollock/local-addon-nexus-ai](https://github.com/jpollock/local-addon-nexus-ai/issues) with the subject "Telemetry data deletion request" and include your `installationId` from `nexus telemetry status`.
+To request deletion of server-side data associated with your `installationId`, open a GitHub issue at [github.com/jpollock/local-addon-nexus-ai](https://github.com/jpollock/local-addon-nexus-ai/issues) with the subject "Telemetry data deletion request" and include your `installationId` from `# telemetry controls: NEXUS_TELEMETRY env var + get_telemetry_status/set_telemetry_enabled MCP tools`.

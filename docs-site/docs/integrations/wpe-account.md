@@ -144,8 +144,8 @@ Access: Full
 # my.wpengine.com → API Access → Generate Credentials
 
 # 2. Configure Nexus AI
-nexus config set wpe.api_user "your-api-user"
-nexus config set wpe.api_password "your-api-password"
+nexus settings set wpe.api_user "your-api-user"
+nexus settings set wpe.api_password "your-api-password"
 
 # 3. Test connection
 nexus wpe accounts
@@ -225,7 +225,7 @@ nexus wpe accounts
 nexus wpe sites --account "agency-account"
 
 # Set default account
-nexus config set wpe.default_account "personal-account"
+nexus settings set wpe.default_account "personal-account"
 ```
 
 ### Account-Specific Operations
@@ -320,8 +320,8 @@ SSH Keys:
 
 ```bash
 # Per-account SSH keys
-nexus config set wpe.accounts.personal.ssh_key "~/.ssh/wpe_personal"
-nexus config set wpe.accounts.agency.ssh_key "~/.ssh/wpe_agency"
+nexus settings set wpe.accounts.personal.ssh_key "~/.ssh/wpe_personal"
+nexus settings set wpe.accounts.agency.ssh_key "~/.ssh/wpe_agency"
 ```
 
 ## Permissions & Access Levels

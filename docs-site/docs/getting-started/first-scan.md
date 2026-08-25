@@ -32,23 +32,26 @@ graph LR
 
 ### Via UI
 
-1. Open **Nexus AI** sidebar (toolbar icon)
-2. Open the **Sites** tab
-3. Click **Scan All Sites** button
-4. Watch progress in real-time
-
+1. Open **Nexus AI** and go to the **Sites** tab
+2. Tick the site(s) to index — or filter first, then select
+3. Click **⚡ Index** in the bulk bar (a halted local site can be
+   auto-started for the run when offered)
+4. Watch the row's data level move toward **Searchable**
 
 ### Via CLI
 
 ```bash
-# Scan all sites
-nexus scan
+# Index one site
+nexus content index mysite
 
-# Scan specific site
-nexus scan mysite
+# Check its status
+nexus content index-status mysite
 
-# Force re-scan (even if recently scanned)
-nexus scan --force
+# Bulk reindex across the fleet
+nexus fleet reindex
+
+# See pipeline coverage and recent failures
+nexus pipeline status
 ```
 
 ## What Happens During a Scan
@@ -532,12 +535,14 @@ Scan failed for 1 site.
 Now that content is indexed, try searching:
 
 ```bash
-# Via CLI
-nexus search "optimize images"
+# Via CLI — one site
+nexus content search mysite "optimize images"
 
-# Via UI
-Open Site Finder → Type "image optimization"
+# Or across every indexed site
+nexus content search-all "optimize images"
 ```
+
+Or ask the Docked Panel: *"which of my posts talk about image optimization?"*
 
 **Expected results:**
 
@@ -581,26 +586,11 @@ AI: Found 12 posts about SEO:
   ...
 ```
 
-### Check Database Size
+### Check Index State
 
 ```bash
-# Via CLI
-nexus db info
-```
-
-**Output:**
-
-```
-Database: /Users/me/.nexus/nexus.db
-Size: 245MB
-Documents: 45,678
-Vectors: 123,456
-Tables:
-  - documents (45,678 rows)
-  - embeddings (123,456 rows)
-  - sites (25 rows)
-  - scans (157 rows)
-Last optimized: 3 days ago
+nexus system status          # content index + metadata cache state, all local sites
+nexus content list-indexed   # which sites have a search index
 ```
 
 ## Scan Performance
@@ -626,31 +616,14 @@ Last optimized: 3 days ago
 
 ### Optimization Tips
 
-**Scan faster:**
+**Keep runs cheap:**
 
-```bash
-# Increase parallelization (default: 10)
-nexus scan --parallel 20
-
-# Skip recently scanned sites (default behavior)
-nexus scan  # Auto-skips sites scanned in last 24h
-
-# Force re-scan only specific site
-nexus scan mysite --force
-```
-
-**Reduce index size:**
-
-```bash
-# Optimize database (VACUUM, rebuild indices)
-nexus db optimize
-
-# Export and re-import (defragments)
-nexus db export backup.db.gz --compress
-nexus db reset
-nexus db import backup.db.gz
-nexus scan --force
-```
+- Index only what changed context: re-run `nexus content index <site>` for
+  the site you edited rather than the whole fleet.
+- Bulk runs skip work the index registry already shows current; a site's
+  row in the Sites tab tells you its state before you spend a run.
+- If the index seems damaged, **Settings → Advanced → Search index →
+  Rebuild** recreates it.
 
 ## Keeping Scans Fresh
 
@@ -658,19 +631,17 @@ nexus scan --force
 
 Set up automatic scanning:
 
-**Via UI:**
+**Via UI:** **Settings → Background work** — enable **Index sites on this
+Mac** (default 8h interval; off by default). WPE and external hosts have
+their own "Make content searchable" switches, also opt-in.
 
-1. **Preferences → General**
-2. **Auto-scan on startup:** Enabled
-3. **Scan interval:** Daily
-
-**Via cron:**
+**Via CLI:**
 
 ```bash
-# Add to crontab
-# Scan all sites at 2 AM daily
-0 2 * * * /usr/local/bin/nexus scan --quiet
+nexus settings set localContentIndexAutoEnabled true
 ```
+
+Schedules take effect immediately — no restart.
 
 ### When to Re-Scan
 
@@ -693,11 +664,11 @@ Set up automatic scanning:
 If search results seem stale:
 
 ```bash
-# Force re-scan all sites
-nexus scan --force
+# Re-index a specific site now
+nexus content index mysite
 
-# Force re-scan specific site
-nexus scan mysite --force
+# Bulk reindex
+nexus fleet reindex
 ```
 
 ## Troubleshooting
@@ -708,17 +679,15 @@ If scan time is excessive:
 
 1. **Check site size:**
    ```bash
-   nexus wp mysite post list --format=count
+   nexus wp plugin list mysite   # site responds? then check content volume in the Sites tab
    ```
 
 2. **Check CPU usage:**
    - Embeddings are CPU-intensive
    - Close other apps during scan
 
-3. **Reduce parallelization:**
-   ```bash
-   nexus scan --parallel 5  # Default: 10
-   ```
+3. **Index one site at a time** rather than a bulk run, and check
+   `nexus pipeline status` for where time is going.
 
 ### Scan Fails Immediately
 
@@ -726,17 +695,17 @@ If scan fails without starting:
 
 1. **Check site is running:**
    ```bash
-   nexus list --running
+   nexus sites list
    ```
 
 2. **Check site health:**
    ```bash
-   nexus wp mysite core verify-checksums
+   # open the site shell in Local and run: wp core verify-checksums
    ```
 
 3. **Check database:**
    ```bash
-   nexus wp mysite db check
+   nexus wp db scan mysite
    ```
 
 ### Partial Results
@@ -755,9 +724,9 @@ If scan completes but some content is missing:
    SELECT post_type, COUNT(*) FROM wp_posts GROUP BY post_type;
    ```
 
-3. **Re-scan with debug:**
+3. **Check the pipeline's own record:**
    ```bash
-   NEXUS_DEBUG=true nexus scan mysite
+   nexus pipeline status   # per-source coverage + latest failures with reasons
    ```
 
 ## Next Steps

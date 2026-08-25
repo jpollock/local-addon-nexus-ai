@@ -317,7 +317,7 @@ Common issues and solutions when using Nexus AI.
 **Solutions:**
 
 1. **Check credentials configured:**
-   - UI → Preferences → Nexus AI
+   - UI → Nexus AI view → Settings tab
    - Enter OpenAI/Anthropic API key
 
 2. **Site must have AI plugin:**

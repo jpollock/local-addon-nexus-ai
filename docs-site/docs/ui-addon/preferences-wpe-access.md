@@ -23,7 +23,7 @@ The **WPE Access & Permissions** card lives in **Local → Nexus AI → Settings
 4. Click the row to expand it (look for the ▶ arrow)
 
 **Nexus Preferences** (for more detail):
-1. Local → Preferences → Nexus AI → WP Engine
+1. Nexus AI view → **Settings** tab → **Permissions**
 
 ---
 

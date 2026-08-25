@@ -261,7 +261,7 @@ export OLLAMA_GPU_LAYERS=35
 
 ```bash
 # Use custom Ollama host
-OLLAMA_HOST=http://192.168.1.100:11434 nexus scan mysite
+OLLAMA_HOST=http://192.168.1.100:11434 nexus content index mysite
 ```
 
 ## Performance Tuning
@@ -670,15 +670,15 @@ tar -xzf ollama-models.tar.gz -C ~/
 
 ```
 1. Export existing embeddings:
-   nexus db export-embeddings > embeddings.json
+   # embeddings live in vectors.db; there is no export command — query via search tools
 
 2. Install Ollama + nomic-embed-text
 
 3. Re-scan sites:
-   nexus scan --all
+   nexus fleet reindex --all
 
 4. Compare search quality:
-   nexus search "test query" > new-results.txt
+   nexus content search-all "test query" > new-results.txt
 ```
 
 ## Updates & Maintenance

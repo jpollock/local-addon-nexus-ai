@@ -826,13 +826,13 @@ async function cleanupOldData() {
 
 ```bash
 # List indexed documents
-nexus db query "SELECT post_id, title, post_type FROM documents WHERE site_id = 'mysite' LIMIT 10"
+# ad-hoc SQL: use the fleet_sql MCP tool "SELECT post_id, title, post_type FROM documents WHERE site_id = 'mysite' LIMIT 10"
 
 # Check specific post
-nexus db query "SELECT * FROM documents WHERE post_id = 123"
+# ad-hoc SQL: use the fleet_sql MCP tool "SELECT * FROM documents WHERE post_id = 123"
 
 # Count by type
-nexus db query "SELECT post_type, COUNT(*) FROM documents GROUP BY post_type"
+# ad-hoc SQL: use the fleet_sql MCP tool "SELECT post_type, COUNT(*) FROM documents GROUP BY post_type"
 ```
 
 ## Troubleshooting
@@ -845,7 +845,7 @@ nexus db query "SELECT post_type, COUNT(*) FROM documents GROUP BY post_type"
 
 ```bash
 # Check if post was indexed
-nexus db query "SELECT * FROM documents WHERE post_id = 123"
+# ad-hoc SQL: use the fleet_sql MCP tool "SELECT * FROM documents WHERE post_id = 123"
 
 # Check post status
 nexus wp mysite post get 123 --field=post_status
@@ -869,10 +869,10 @@ tail -f ~/.nexus/logs/scan.log
 
 ```bash
 # Check database size
-nexus db info
+nexus system status
 
 # Optimize (remove orphaned data)
-nexus db optimize
+# rebuild via Settings → Advanced → Search index → Rebuild
 
 # Exclude post types
 # Edit ~/.nexus/config.json
@@ -883,8 +883,8 @@ nexus db optimize
 }
 
 # Re-scan
-nexus db reset
-nexus scan
+# reset via Settings → Advanced (or full factory reset: nexus reset)
+nexus fleet reindex
 ```
 
 ### Privacy Concerns
@@ -895,13 +895,13 @@ nexus scan
 
 ```bash
 # Check for email addresses (should be 0)
-nexus db query "SELECT COUNT(*) FROM documents WHERE content LIKE '%@%'"
+# ad-hoc SQL: use the fleet_sql MCP tool "SELECT COUNT(*) FROM documents WHERE content LIKE '%@%'"
 
 # Check for passwords (should be 0)
-nexus db query "SELECT COUNT(*) FROM documents WHERE content LIKE '%password%'"
+# ad-hoc SQL: use the fleet_sql MCP tool "SELECT COUNT(*) FROM documents WHERE content LIKE '%password%'"
 
 # Export and review
-nexus db export /tmp/nexus-export.db
+# the vector index is a single file: back up ~/Library/Application Support/Local/nexus-ai/vectors.db
 sqlite3 /tmp/nexus-export.db "SELECT * FROM documents LIMIT 10"
 ```
 

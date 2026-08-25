@@ -340,7 +340,7 @@ sequenceDiagram
     participant Ollama
     participant vec as sqlite-vec
 
-    User->>CLI: nexus search "optimize images"
+    User->>CLI: nexus content search-all "optimize images"
     CLI->>Ollama: Generate embedding
     Ollama-->>CLI: [0.12, -0.45, ...]
     CLI->>vec: Vector similarity search
@@ -460,13 +460,13 @@ Control result precision vs recall:
 
 ```bash
 # High threshold = precise (few, highly relevant)
-nexus search "query" --threshold 0.9
+nexus content search-all "query"
 
 # Medium threshold = balanced (default)
-nexus search "query" --threshold 0.7
+nexus content search-all "query"
 
 # Low threshold = broad (many, loosely related)
-nexus search "query" --threshold 0.5
+nexus content search-all "query"
 ```
 
 **Recommendation:**
@@ -485,13 +485,13 @@ Control number of results:
 
 ```bash
 # Top 5 only
-nexus search "query" --limit 5
+nexus content search-all "query" --limit 5
 
 # Top 20
-nexus search "query" --limit 20
+nexus content search-all "query" --limit 20
 
 # Top 100 (may be slow)
-nexus search "query" --limit 100
+nexus content search-all "query" --limit 100
 ```
 
 **Performance:**
@@ -536,9 +536,9 @@ Combine multiple searches for better coverage:
 
 ```bash
 # Search multiple related queries
-nexus search "WordPress performance" --limit 10
-nexus search "page speed optimization" --limit 10
-nexus search "caching strategies" --limit 10
+nexus content search-all "WordPress performance" --limit 10
+nexus content search-all "page speed optimization" --limit 10
+nexus content search-all "caching strategies" --limit 10
 
 # Merge and deduplicate results
 ```
@@ -551,7 +551,7 @@ nexus search "caching strategies" --limit 10
 
 ```bash
 # Single query
-nexus search "e-commerce online store shopping cart" --limit 20
+nexus content search-all "e-commerce online store shopping cart" --limit 20
 
 # Results:
 # - WooCommerce setup guides
@@ -573,7 +573,7 @@ nexus search "e-commerce online store shopping cart" --limit 20
 **Goal:** Find solutions to a specific error.
 
 ```bash
-nexus search "WordPress white screen of death after plugin update"
+nexus content search-all "WordPress white screen of death after plugin update"
 
 # Results:
 # - "Debugging WordPress Crashes"
@@ -594,7 +594,7 @@ nexus search "WordPress white screen of death after plugin update"
 **Goal:** Find products across all WooCommerce sites.
 
 ```bash
-nexus search "blue widgets under $50" --type product
+nexus content search-all "blue widgets under $50"
 
 # Results across multiple sites:
 # shop: Blue Widget Pro ($49.99)
@@ -614,7 +614,7 @@ nexus search "blue widgets under $50" --type product
 
 ```bash
 # Search for a topic
-nexus search "WordPress REST API" --limit 20
+nexus content search-all "WordPress REST API" --limit 20
 
 # If few results (< 3), it's a content gap!
 # Create content to fill the gap
@@ -627,7 +627,7 @@ nexus search "WordPress REST API" --limit 20
 TOPICS="REST-API Gutenberg WP-CLI Multisite Custom-Post-Types"
 
 for topic in $TOPICS; do
-  count=$(nexus search "$topic" --format json | jq 'length')
+  count=$(nexus content search-all "$topic" --json | jq 'length')
   if [ $count -lt 3 ]; then
     echo "Content gap: $topic ($count posts)"
   fi
@@ -640,7 +640,7 @@ done
 
 ```bash
 # English query
-nexus search "WordPress performance optimization"
+nexus content search-all "WordPress performance optimization"
 
 # Can find:
 # - English posts about performance
@@ -660,7 +660,7 @@ nexus search "WordPress performance optimization"
 
 ```bash
 # Compact database
-nexus db optimize
+# rebuild via Settings → Advanced → Search index → Rebuild
 
 # Rebuilds indices, runs VACUUM, analyzes query plans
 ```
@@ -730,19 +730,19 @@ const overlap = 0.1; // 10%
 
 1. **Sites not scanned:**
    ```bash
-   nexus db info  # Check document count
-   nexus scan --force  # Re-scan
+   nexus system status  # Check document count
+   nexus fleet reindex  # Re-scan
    ```
 
 2. **Threshold too high:**
    ```bash
-   nexus search "query" --threshold 0.5
+   nexus content search-all "query"
    ```
 
 3. **Content doesn't exist:**
    ```bash
    # Try broader query
-   nexus search "WordPress" --limit 50
+   nexus content search-all "WordPress" --limit 50
    ```
 
 ### Irrelevant Results
@@ -751,21 +751,21 @@ const overlap = 0.1; // 10%
 
 1. **Increase threshold:**
    ```bash
-   nexus search "query" --threshold 0.85
+   nexus content search-all "query"
    ```
 
 2. **Be more specific:**
    ```bash
    # Too broad
-   nexus search "WordPress"
+   nexus content search-all "WordPress"
 
    # More specific
-   nexus search "WordPress REST API authentication with JWT"
+   nexus content search-all "WordPress REST API authentication with JWT"
    ```
 
 3. **Filter by type:**
    ```bash
-   nexus search "query" --type post
+   nexus content search-all "query"
    ```
 
 ### Slow Search
@@ -774,23 +774,23 @@ const overlap = 0.1; // 10%
 
 1. **Optimize database:**
    ```bash
-   nexus db optimize
+   # rebuild via Settings → Advanced → Search index → Rebuild
    ```
 
 2. **Reduce limit:**
    ```bash
-   nexus search "query" --limit 10
+   nexus content search-all "query" --limit 10
    ```
 
 3. **Filter by site:**
    ```bash
-   nexus search "query" --site mysite
+   nexus content search mysite "query"
    ```
 
 4. **Rebuild index:**
    ```bash
-   nexus db reset
-   nexus scan --force
+   # reset via Settings → Advanced (or full factory reset: nexus reset)
+   nexus fleet reindex
    ```
 
 ## Next Steps

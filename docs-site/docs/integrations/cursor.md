@@ -614,8 +614,8 @@ Speed up your workflow with Cursor shortcuts:
 
 1. **Test CLI directly:**
    ```bash
-   nexus list
-   nexus search "test"
+   nexus sites list
+   nexus content search-all "test"
    ```
 
 2. **Check Local is running:**
@@ -650,7 +650,7 @@ Speed up your workflow with Cursor shortcuts:
 
 1. **Optimize database:**
    ```bash
-   nexus db optimize
+   # rebuild via Settings → Advanced → Search index → Rebuild
    ```
 
 2. **Reduce scan frequency:**

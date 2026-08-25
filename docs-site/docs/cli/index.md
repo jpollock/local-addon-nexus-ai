@@ -18,7 +18,7 @@ Direct command execution from your terminal.
 nexus sites
 
 # Search across all sites
-nexus search "woocommerce setup"
+nexus content search-all "woocommerce setup"
 
 # List plugins on a site
 nexus wp plugin list --site mysite
@@ -88,7 +88,7 @@ WP Engine Sites (12 installs):
 ### 2. Search Content
 
 ```bash
-nexus search "optimize database" --limit 5
+nexus content search-all "optimize database" --limit 5
 ```
 
 Output:
@@ -355,10 +355,10 @@ Run 'nexus wpe auth' to connect your account.
 
 ```bash
 # Find all WooCommerce product content
-nexus search "woocommerce products" --type product
+nexus content search-all "woocommerce products"
 
 # Find posts about a topic
-nexus search "wordpress security" --type post --limit 10
+nexus content search-all "wordpress security" --limit 10
 ```
 
 ### Site Management

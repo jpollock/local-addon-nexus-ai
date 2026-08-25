@@ -8,10 +8,17 @@ pulled forward from Phase 6). All Phase 4–5 gates green, incl.
 executed at `162074fd` (cli-command-reference regenerated from src/cli;
 ai-context/features corrected; architecture/overview gains the
 intelligence layer; net-new: docked-panel, agents, procedures,
-external-hosts, whats-new-august-2026 — all nav'd). Trailing, non-gating:
-depth rewrites of ui-addon/preferences.md and wpe-management.md, and
-richer first-scan / first-ai-query walkthroughs (falsehoods already
-swept; what remains is completeness).
+external-hosts, whats-new-august-2026 — all nav'd). Trailing work COMPLETE
+(same day): preferences.md rewritten against the real six Settings
+sections (Connections/Chat/Background work/Permissions/Capabilities/
+Advanced — NB: the Preferences → Nexus AI page no longer exists,
+src/renderer/index.tsx:125 comment); wpe-management.md rewritten
+(L1/L2/L3 collection, permission grid, pull/push, ~75-tool surface);
+first-scan + first-ai-query re-grounded on the real CLI (`nexus content
+search/search-all/index`, no --threshold/--type/--site flags); a global
+dead-command sweep retired every remaining `nexus search/scan/list/
+plugin/bulk/db/config/telemetry` invocation across 15 more files.
+THE SWEEP IS COMPLETE — all gates zero, strict build green.
 
 *2026-08-25 · branch `poc/nexintelligence-data` (= local `main` at plan time) ·
 Author: the 2026-08-25 review session. Every finding below was verified by

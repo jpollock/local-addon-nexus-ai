@@ -385,7 +385,7 @@ npm run rebuild
 
     Use AI-powered search to find content across your sites.
 
-    [→ Site Finder](../mcp-tools/fleet.md)
+    [→ Fleet tools](../mcp-tools/fleet.md)
 
 - **WPE Management**
 

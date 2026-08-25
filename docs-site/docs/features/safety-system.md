@@ -40,13 +40,13 @@ graph TB
 
 ```bash
 # List sites
-nexus list
+nexus sites list
 
 # Search content
-nexus search "query"
+nexus content search-all "query"
 
 # List plugins
-nexus plugin list mysite
+nexus wp plugin list mysite
 
 # Get WordPress version
 nexus wp mysite core version
@@ -87,11 +87,11 @@ These operations are inherently safe:
 
 ```bash
 # Update plugins
-nexus plugin update mysite akismet
+nexus wp plugin update mysite akismet
 # → Prompt: "Update Akismet to 5.3.1 on mysite? (yes/no)"
 
 # Activate plugin
-nexus plugin activate mysite yoast-seo
+nexus wp plugin activate mysite yoast-seo
 # → Prompt: "Activate Yoast SEO on mysite? (yes/no)"
 
 # Create backup
@@ -178,7 +178,7 @@ nexus wpe delete-install mysite-staging
 # → Requires: DELETE mysite-staging
 
 # Reset database
-nexus db reset
+# reset via Settings → Advanced (or full factory reset: nexus reset)
 # → Prompt: "⚠️ WARNING: This will delete ALL indexed data!"
 # → "Sites: 25, Documents: 45,678, Size: 233MB"
 # → "Type 'DELETE' to confirm:"
@@ -378,13 +378,13 @@ Many commands support `--dry-run`:
 
 ```bash
 # Check what would be updated (doesn't actually update)
-nexus plugin update mysite --all --dry-run
+nexus wp plugin update mysite --all --dry-run
 
 # Check search/replace results before applying
 nexus wp mysite search-replace 'old-domain.com' 'new-domain.com' --dry-run
 
 # Check what would be deleted
-nexus db reset --dry-run
+# reset via Settings → Advanced (or full factory reset: nexus reset) --dry-run
 ```
 
 ### 4. Review Before Confirming
@@ -452,14 +452,14 @@ curl -I https://mysite.com  # Check HTTP response
 ```bash
 # Disable all safety checks (DANGEROUS!)
 export NEXUS_SKIP_SAFETY=true
-nexus db reset  # No confirmation required
+# reset via Settings → Advanced (or full factory reset: nexus reset)  # No confirmation required
 ```
 
 ### Command Flag
 
 ```bash
 # Skip confirmation for specific command
-nexus db reset --yes
+# reset via Settings → Advanced (or full factory reset: nexus reset) --yes
 
 # Force operation without checks
 nexus wpe promote mysite --force

@@ -12,11 +12,11 @@ Real-world usage patterns and workflows for common WordPress management tasks.
 
 | Task | Command |
 |------|---------|
-| List all sites | `nexus list` |
-| Scan all sites | `nexus scan` |
-| Search content | `nexus search "query"` |
-| List plugins | `nexus plugin list mysite` |
-| Update plugins | `nexus plugin update mysite --all` |
+| List all sites | `nexus sites list` |
+| Scan all sites | `nexus fleet reindex` |
+| Search content | `nexus content search-all "query"` |
+| List plugins | `nexus wp plugin list mysite` |
+| Update plugins | `nexus wp plugin update mysite --all` |
 | Run WP-CLI | `nexus wp mysite core version` |
 | Diagnose WPE site | `nexus wpe diagnose mysite-prod` |
 | Start MCP server | `nexus mcp` |
@@ -37,13 +37,13 @@ echo "=== Daily Site Health Check ==="
 echo ""
 
 # List all sites with status
-nexus list
+nexus sites list
 
 # Check for plugin updates
 echo ""
 echo "=== Plugin Updates Available ==="
-for site in $(nexus list --local --running --format json | jq -r '.[].name'); do
-  updates=$(nexus plugin list $site --updates 2>/dev/null | wc -l)
+for site in $(nexus sites list --running --format json | jq -r '.[].name'); do
+  updates=$(nexus wp plugin list $site --updates 2>/dev/null | wc -l)
   if [ $updates -gt 0 ]; then
     echo "$site: $updates updates available"
   fi
@@ -52,7 +52,7 @@ done
 # Check WordPress core versions
 echo ""
 echo "=== WordPress Versions ==="
-for site in $(nexus list --local --running --format json | jq -r '.[].name'); do
+for site in $(nexus sites list --running --format json | jq -r '.[].name'); do
   version=$(nexus wp $site core version 2>/dev/null)
   echo "$site: WordPress $version"
 done
@@ -60,7 +60,7 @@ done
 # Scan new content
 echo ""
 echo "=== Scanning for new content ==="
-nexus scan --local-only
+nexus fleet reindex
 
 echo ""
 echo "=== Check complete ==="
@@ -119,12 +119,12 @@ done
 # Update all plugins on staging sites
 echo ""
 echo "=== Updating Plugins (Staging) ==="
-nexus bulk update-plugins --wpe --environment staging
+nexus fleet plugin-update --wpe --environment staging
 
 # Update WordPress core on staging
 echo ""
 echo "=== Updating WordPress Core (Staging) ==="
-nexus bulk update-core --wpe --environment staging
+nexus fleet update-core --wpe --environment staging
 
 # Run diagnostics
 echo ""
@@ -154,7 +154,7 @@ Search for content and optionally update it.
 
 ```bash
 # Find posts about a topic
-nexus search "WordPress performance" --type post --limit 20
+nexus content search-all "WordPress performance" --limit 20
 
 # Find products in a price range (using WP-CLI)
 nexus wp shop post list \
@@ -207,7 +207,7 @@ nexus wp $TARGET_SITE import \
 
 # Re-index target site
 echo "Re-indexing target site..."
-nexus scan $TARGET_SITE --force
+nexus fleet reindex $TARGET_SITE --force
 
 echo "Migration complete"
 ```
@@ -231,8 +231,8 @@ echo ""
 TMPFILE=$(mktemp)
 
 # Collect plugin data from all sites
-for site in $(nexus list --local --format json | jq -r '.[].name'); do
-  nexus plugin list $site --format json | jq -r ".[] | \"$site,\(.name),\(.version),\(.status)\"" >> $TMPFILE
+for site in $(nexus sites list --format json | jq -r '.[].name'); do
+  nexus wp plugin list $site --format json | jq -r ".[] | \"$site,\(.name),\(.version),\(.status)\"" >> $TMPFILE
 done
 
 # Analyze results
@@ -286,23 +286,23 @@ Update or activate plugins across multiple sites.
 
 ```bash
 # Update Akismet on all sites
-for site in $(nexus list --local --running --format json | jq -r '.[].name'); do
+for site in $(nexus sites list --running --format json | jq -r '.[].name'); do
   echo "Updating Akismet on $site..."
-  nexus plugin update $site akismet
+  nexus wp plugin update $site akismet
 done
 
 # Or use bulk operations (faster)
-nexus bulk update-plugin akismet --local --running
+nexus fleet plugin-update akismet --local --running
 
 # Activate Yoast SEO on all sites
-nexus bulk activate-plugin yoast-seo --all
+nexus fleet activate-plugin yoast-seo --all
 
 # Deactivate Hello Dolly everywhere
-nexus bulk deactivate-plugin hello-dolly --all
+nexus fleet deactivate-plugin hello-dolly --all
 
 # Install and activate WooCommerce on e-commerce sites
 for site in shop shop2 shop3; do
-  nexus plugin install $site woocommerce --activate
+  nexus wp plugin install $site woocommerce --activate
 done
 ```
 
@@ -458,16 +458,16 @@ Find related content across all sites.
 
 ```bash
 # Find all posts about image optimization
-nexus search "optimize images" --type post
+nexus content search-all "optimize images"
 
 # Find products related to a topic
-nexus search "blue widgets" --site shop --type product
+nexus content search shop "blue widgets" --type product
 
 # Cross-site content search
-nexus search "WordPress security" --limit 50 --threshold 0.8
+nexus content search-all "WordPress security" --limit 50 --threshold 0.8
 
 # Save search results to file
-nexus search "WooCommerce" --format json > woocommerce-content.json
+nexus content search-all "WooCommerce" --json > woocommerce-content.json
 ```
 
 **Example: Building a content inventory**
@@ -484,7 +484,7 @@ mkdir -p $OUTPUT_DIR
 echo "Building content inventory for: $TOPIC"
 
 # Search across all sites
-RESULTS=$(nexus search "$TOPIC" --limit 100 --format json)
+RESULTS=$(nexus content search-all "$TOPIC" --limit 100 --format json)
 
 # Extract unique sites
 SITES=$(echo $RESULTS | jq -r '.[].site' | sort -u)
@@ -533,7 +533,7 @@ for topic in $COMPETITOR_TOPICS; do
   echo "Topic: $topic"
 
   # Count my content
-  MY_COUNT=$(nexus search "$topic" --site $MY_SITE --format json | jq 'length')
+  MY_COUNT=$(nexus content search $MY_SITE "$topic" --format json | jq 'length')
 
   # Count competitor content (simulated - would be from scraping)
   COMPETITOR_COUNT=15  # Example
@@ -674,7 +674,7 @@ nexus wp mysite user list --role=administrator --format=table
 echo "=== User Audit ==="
 echo ""
 
-for site in $(nexus list --local --format json | jq -r '.[].name'); do
+for site in $(nexus sites list --format json | jq -r '.[].name'); do
   echo "Site: $site"
 
   # Count users by role
@@ -762,7 +762,7 @@ nexus wp $SITE db query "
 # Check plugin count
 echo ""
 echo "Active plugins:"
-nexus plugin list $SITE --status active --format=count
+nexus wp plugin list $SITE --status active --format=count
 
 echo ""
 echo "=== Check complete ==="
@@ -781,10 +781,10 @@ Set up a cron job to scan sites nightly.
 # crontab -e
 
 # Scan all sites at 2 AM daily
-0 2 * * * /usr/local/bin/nexus scan --quiet >> /var/log/nexus-scan.log 2>&1
+0 2 * * * /usr/local/bin/nexus fleet reindex --quiet >> /var/log/nexus-scan.log 2>&1
 
 # Update plugins on staging sites at 3 AM on Sundays
-0 3 * * 0 /usr/local/bin/nexus bulk update-plugins --wpe --environment staging >> /var/log/nexus-update.log 2>&1
+0 3 * * 0 /usr/local/bin/nexus fleet plugin-update --wpe --environment staging >> /var/log/nexus-update.log 2>&1
 
 # Weekly health check on Mondays at 9 AM
 0 9 * * 1 /home/user/scripts/weekly-maintenance.sh >> /var/log/nexus-maintenance.log 2>&1
@@ -846,7 +846,7 @@ Enable debug output for troubleshooting.
 ```bash
 # Enable debug logging
 export NEXUS_DEBUG=true
-nexus scan mysite
+nexus content index mysite
 
 # Or inline
 NEXUS_DEBUG=true nexus wp mysite plugin list
@@ -863,7 +863,7 @@ Test connectivity to Local and WP Engine.
 
 ```bash
 # Check Local connectivity
-nexus list --local
+nexus sites list
 
 # Check WPE authentication
 nexus wpe accounts
@@ -883,10 +883,10 @@ Diagnose and fix database problems.
 
 ```bash
 # Check database info
-nexus db info
+nexus system status
 
 # Optimize database
-nexus db optimize
+# rebuild via Settings → Advanced → Search index → Rebuild
 
 # Check for corruption
 nexus wp mysite db check
@@ -895,8 +895,8 @@ nexus wp mysite db check
 nexus wp mysite db repair
 
 # Re-index from scratch
-nexus db reset --yes
-nexus scan --force
+# reset via Settings → Advanced (or full factory reset: nexus reset) --yes
+nexus fleet reindex
 ```
 
 ---

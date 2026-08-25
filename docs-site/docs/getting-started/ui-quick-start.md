@@ -128,11 +128,12 @@ ticked rows — an empty selection never means "everything".
 1. **Sites** → filter to what's behind → tick → refresh/index
 2. Review agent findings under **Agents**
 
-## Preferences
+## Settings
 
-AI provider keys, the gateway, and WPE credentials live in **Local's
-Preferences → Nexus AI**. Operational settings (schedules, access
-permissions) live in the **Settings** tab of the Nexus AI view.
+Everything is configured in the **Settings** tab of the Nexus AI view:
+connections (WPE account, SSH hosts, AWS), the chat panel and its AI
+provider + API key, background schedules, write permissions, capability
+grants, and advanced tools. There is no separate Preferences → Nexus AI page.
 
 ## Troubleshooting
 
