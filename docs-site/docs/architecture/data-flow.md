@@ -432,58 +432,21 @@ sequenceDiagram
 
 ### Phase 3: Vector Storage
 
-**Insert into LanceDB:**
+**Insert into sqlite-vec:**
 
-```typescript
-async function indexEmbeddings(embeddings: Embedding[]) {
-  const db = await lancedb.connect('~/.nexus-ai/vector-index.db');
-  const table = await db.openTable('embeddings');
+`SqliteVecStore` (`src/main/vector-store/SqliteVecStore.ts`) writes each
+chunk's 384-dim vector plus metadata into the site's `vec0` virtual table in
+`~/Library/Application Support/Local/nexus-ai/vectors.db`. Table names are the
+site id (sanitized at the boundary for `ssh:` ids); inserts are batched in one
+transaction.
 
-  // Prepare records for batch insert
-  const records = embeddings.map(emb => ({
-    chunk_id: emb.chunkId,
-    vector: emb.vector, // 384d Float32Array
-    site_id: emb.metadata.siteId,
-    post_id: emb.metadata.postId,
-    post_type: emb.metadata.postType,
-    chunk_index: emb.metadata.chunkIndex,
-    indexed_at: new Date().toISOString()
-  }));
-
-  // Batch insert (1000 at a time)
-  const batchSize = 1000;
-  for (let i = 0; i < records.length; i += batchSize) {
-    const batch = records.slice(i, i + batchSize);
-    await table.add(batch);
-  }
-
-  // Create ANN index for fast search
-  await table.createIndex({
-    column: 'vector',
-    type: 'IVF_PQ',
-    num_partitions: 256,
-    num_sub_vectors: 96
-  });
-}
-```
-
-**Database schema:**
+**Database schema (per-site `vec0` virtual table):**
 
 ```sql
--- LanceDB schema (Arrow format)
-CREATE TABLE embeddings (
-  chunk_id VARCHAR PRIMARY KEY,
-  vector FLOAT[384],            -- Embedding vector
-  site_id VARCHAR,
-  post_id INTEGER,
-  post_type VARCHAR,
-  chunk_index INTEGER,
-  indexed_at TIMESTAMP,
-
-  -- Indexes
-  INDEX idx_site (site_id),
-  INDEX idx_post (post_id),
-  VECTOR INDEX ivf_pq ON vector  -- ANN index
+CREATE VIRTUAL TABLE "<site_id>" USING vec0(
+  embedding float[384],         -- the vector, cosine distance
+  -- auxiliary metadata columns: chunk id, post id, post type,
+  -- chunk index, title, url (see SqliteVecStore for the full set)
 );
 ```
 
@@ -567,41 +530,12 @@ async function processSearchQuery(query: string): Promise<SearchRequest> {
 
 ### Phase 2: Vector Search
 
-**Query LanceDB with ANN:**
+**Query sqlite-vec:**
 
-```typescript
-async function vectorSearch(request: SearchRequest): Promise<SearchResult[]> {
-  const db = await lancedb.connect('~/.nexus-ai/vector-index.db');
-  const table = await db.openTable('embeddings');
-
-  // Vector similarity search
-  let query = table
-    .search(request.vector)
-    .limit(request.limit)
-    .distanceType('cosine'); // Cosine similarity
-
-  // Apply filters if provided
-  if (request.filters.siteId) {
-    query = query.where(`site_id = '${request.filters.siteId}'`);
-  }
-  if (request.filters.postType) {
-    query = query.where(`post_type = '${request.filters.postType}'`);
-  }
-
-  const results = await query.toArray();
-
-  return results.map(r => ({
-    chunkId: r.chunk_id,
-    siteId: r.site_id,
-    postId: r.post_id,
-    score: 1 - r._distance, // Convert distance to similarity
-    metadata: {
-      postType: r.post_type,
-      chunkIndex: r.chunk_index
-    }
-  }));
-}
-```
+The query embedding is matched against the site's `vec0` table with a
+`MATCH` + `ORDER BY distance` SELECT (exact cosine search — per-site corpora
+are small enough that no approximate index is needed), then results are
+filtered by threshold and joined back to chunk metadata.
 
 **ANN algorithm:**
 
@@ -893,7 +827,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 ## Next Steps
 
-- **[Vector Database](smart-search.md)** - LanceDB deep dive
+- **[Vector Database](smart-search.md)** - vector store deep dive
 - **[MCP Protocol](mcp-protocol.md)** - MCP implementation details
 - **[Shared Core](shared-core.md)** - Reusable business logic
 - **[UI Architecture](ui-architecture.md)** - Component structure

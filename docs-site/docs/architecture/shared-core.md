@@ -150,15 +150,15 @@ export async function handleListSites() {
 
 ```typescript
 // src/core/vector-db.ts
-import * as lancedb from '@lancedb/lancedb';
+import Database from 'better-sqlite3'; // sqlite-vec loaded as an extension
 import { OllamaClient } from './ollama-client.js';
 
 export class VectorSearch {
-  private db: lancedb.Connection;
+  private db: Database.Database; // SqliteVecStore owns vectors.db
   private ollama: OllamaClient;
 
   async initialize(dbPath: string) {
-    this.db = await lancedb.connect(dbPath);
+    this.db = new Database(dbPath); // vec0 virtual tables per site
     this.ollama = new OllamaClient();
   }
 

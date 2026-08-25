@@ -287,7 +287,7 @@ export const FleetOverview: React.FC = () => {
   }
 
   return React.createElement('div', { className: 'fleet-overview' },
-    React.createElement('h2', null, 'Fleet Overview'),
+    React.createElement('h2', null, 'Sites'),
     React.createElement('div', { className: 'stats' },
       React.createElement('span', null, `Total Sites: ${sites.length}`)
     ),

@@ -53,7 +53,7 @@ Search for "WooCommerce payment gateway" across all sites
 2. MySQLExtractor → Pull content from database
 3. ContentPipeline → Chunk at sentence boundaries
 4. EmbeddingService → Generate 384-dim vectors (ONNX)
-5. VectorStore → Store in LanceDB
+5. VectorStore → Store in sqlite-vec
 
 **Tools:**
 - `index_site` - Trigger full reindex
@@ -190,7 +190,7 @@ SELECT wp_version, COUNT(*) as sites FROM sites GROUP BY wp_version ORDER BY sit
 
 **Status:** ✅ Fully implemented
 
-**UI Panel:** ✅ BulkOperationsPanel visible in Fleet Overview
+**UI:** ✅ bulk bar in the Sites tab (Properties view)
 
 **Capabilities:**
 - Multi-site operations with progress tracking
@@ -370,7 +370,7 @@ Setup AI on 10 sites:
 
 **Reality:**
 - Code exists (SiteGroupsPanel.tsx) but not rendered
-- Not visible in Fleet Overview
+- Not visible in the Sites tab
 - Site grouping is a core Local feature, not ours
 
 **What works instead:**
@@ -385,7 +385,7 @@ Setup AI on 10 sites:
 
 **Reality:**
 - Code exists (SmartFiltersPanel.tsx) but not rendered
-- Not visible in Fleet Overview
+- Not visible in the Sites tab
 - Advanced filtering not exposed in UI
 
 **What works instead:**

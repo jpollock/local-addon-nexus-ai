@@ -36,9 +36,9 @@ Nexus AI brings AI-assisted management to local WordPress development, spanning 
 
 ### Ship-Ready AI Stack
 
-- **MCP Server** — 161 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
+- **MCP Server** — ~190 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
 - **CLI** — Terminal commands for local and WPE site management (hosting + WordPress)
-- **Open Source AI** — Ships with LanceDB (vector database), ONNX embeddings, and Ollama integration
+- **Open Source AI** — Ships with sqlite-vec (vector search), ONNX embeddings, and Ollama integration
 - **Local AI Gateway** — Centralized credential proxy, usage tracking, and cost monitoring for your entire fleet
 
 ### Secure Enterprise Connections
@@ -71,7 +71,7 @@ Leverages Local's secure channels to WP Engine:
 graph LR
     A[AI Assistant] -->|MCP Protocol| B[Nexus AI]
     C[Local Addon UI] -->|GraphQL/IPC| B
-    B -->|Vector Search| D[LanceDB]
+    B -->|Vector Search| D[sqlite-vec]
     B -->|WP-CLI| E[Local Sites]
     B -->|CAPI+SSH| F[WP Engine Sites]
 ```
@@ -90,7 +90,7 @@ nexus mcp setup --agent claude-desktop --write
 ```
 
 **Key capabilities:**
-- 🤖 **160+ MCP tools** for WordPress operations
+- 🤖 **~190 MCP tools** for WordPress operations
 - 🔍 **Semantic search** across all sites
 - ⚡ **Bulk operations** with parallel execution
 - 🌐 **Local + WPE** unified management
@@ -102,7 +102,7 @@ nexus mcp setup --agent claude-desktop --write
 **For visual workflows** — Built into Local app.
 
 **Key features:**
-- 📊 **Fleet Overview** dashboard
+- 📊 **Sites (Properties) view** — the whole fleet in one list
 - 🔎 **Site Finder** with AI-powered search
 - 💬 **AI Chat** interface with streaming
 - 🔄 **WPE Sync** for remote sites
@@ -145,7 +145,7 @@ Splits content at sentence boundaries and generates 384-dimensional vectors.
 ```
 
 ### 3. Index & Search
-Stores vectors in LanceDB with cosine distance search.
+Stores vectors in sqlite-vec (`vec0` tables) with cosine distance search.
 
 ```bash
 # AI assistant queries indexed content
@@ -233,7 +233,7 @@ nexus sites list
 
 **What you get:**
 - ✅ **CLI** — Terminal commands for all operations
-- ✅ **MCP Server** — 161 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
+- ✅ **MCP Server** — ~190 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
 - ✅ **UI Addon** — Visual dashboards built into Local app
 
 **Supported platforms:** macOS (Apple Silicon/Intel), Windows, Linux
@@ -282,7 +282,7 @@ graph TB
     subgraph "Nexus AI"
         B[MCP Server/CLI]
         C[Tool Registry]
-        D[LanceDB]
+        D[sqlite-vec]
         E[WP-CLI Executor]
     end
 
@@ -339,7 +339,7 @@ graph TB
 
     ---
 
-    Explore 160+ MCP tools for WordPress operations.
+    Explore ~190 MCP tools for WordPress operations.
 
     [Tool Reference →](mcp-tools/index.md)
 

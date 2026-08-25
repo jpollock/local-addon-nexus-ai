@@ -6,7 +6,7 @@ keywords: [smart-search, ai-toolkit, atlas-search, semantic-search, local-develo
 
 # WP Engine Smart Search — Locally
 
-Nexus AI makes **WP Engine Smart Search** work in Local by acting as a local drop-in for WPE's cloud backend — running the same GraphQL API on your machine using LanceDB and ONNX embeddings.
+Nexus AI makes **WP Engine Smart Search** work in Local by acting as a local drop-in for WPE's cloud backend — running the same GraphQL API on your machine using sqlite-vec and ONNX embeddings.
 
 ## What Is WP Engine Smart Search?
 
@@ -46,7 +46,7 @@ WordPress Site (Local)
     
             └── POST /smart-search/graphql → Nexus AI
                     ├── ONNX embeddings (all-MiniLM-L6-v2, local)
-                    ├── LanceDB vector store (local)
+                    ├── sqlite-vec vector store (local)
                     └── SQLite (synonyms, tracker, config)
 ```
 
@@ -83,7 +83,7 @@ The MU plugin (`nexus-ai-connector-config.php`) is auto-generated when your site
          │
 5. Developer syncs content (WP Admin → Smart Search → Sync)
          │
-6. atlas-search sends bulkIndex → Nexus embeds + stores in LanceDB
+6. atlas-search sends bulkIndex → Nexus embeds + stores in sqlite-vec
          │
 7. WordPress search uses local semantic index ✅
 ```
@@ -113,7 +113,7 @@ See [Known Limitations](limitations.md) for details on partial support.
 |--|---------------|----------------|
 | Backend | `127.0.0.1:13000` | WPE Smart Search cloud |
 | Credentials | Local token | WPE-provisioned |
-| Vector index | LanceDB on your Mac | WPE managed cloud |
+| Vector index | sqlite-vec on your Mac | WPE managed cloud |
 | MU plugin | Auto-generated, excluded from push | Not present |
 | Synonyms / tracker | Local SQLite | WPE cloud |
 

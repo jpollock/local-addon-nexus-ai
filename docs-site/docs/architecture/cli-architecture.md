@@ -32,7 +32,7 @@ graph TB
     end
 
     subgraph "Data Layer"
-        I[LanceDB]
+        I[sqlite-vec]
         J[SQLite]
         K[Filesystem]
     end
@@ -557,29 +557,28 @@ ssh -o ControlMaster=auto \
 
 ### 5. Vector Search Engine
 
-Semantic search using LanceDB and Ollama embeddings.
+Semantic search using sqlite-vec and ONNX/Ollama embeddings.
 
 **Location:** `src/cli/vector-search.ts`
 
 **Responsibilities:**
 
 - Generate embeddings via Ollama
-- Index vectors in LanceDB
+- Index vectors in sqlite-vec (vectors.db)
 - Perform similarity search
 - Rank and filter results
 
 **Implementation:**
 
 ```typescript
-import * as lancedb from 'vectordb';
+import Database from 'better-sqlite3'; // sqlite-vec extension
 import ollama from 'ollama';
 
 class VectorSearch {
-  private db: lancedb.Connection;
-  private table: lancedb.Table;
+  private db: Database.Database; // one vec0 virtual table per site
 
   async initialize() {
-    this.db = await lancedb.connect('~/.nexus/vectors.lance');
+    this.db = new Database(vectorsDbPath); // nexus-ai/vectors.db
     this.table = await this.db.openTable('embeddings');
   }
 
@@ -592,7 +591,7 @@ class VectorSearch {
       chunks.map(chunk => this.embed(chunk.text))
     );
 
-    // Insert into LanceDB
+    // Insert into the site's vec0 table
     const records = chunks.map((chunk, i) => ({
       id: `${document.id}_${i}`,
       site: document.site,
@@ -654,7 +653,7 @@ class VectorSearch {
     // Generate query embedding
     const queryVector = await this.embed(query);
 
-    // Search LanceDB with cosine distance
+    // Search the vec0 table with cosine distance
     const results = await this.table
       .search(queryVector)
       .limit(options.limit || 10)
@@ -700,7 +699,7 @@ graph LR
     C --> D[Send to Ollama]
     D --> E[nomic-embed-text]
     E --> F[384-dim vector]
-    F --> G[Store in LanceDB]
+    F --> G[Store in sqlite-vec]
 ```
 
 **Search Pipeline:**
@@ -708,7 +707,7 @@ graph LR
 ```mermaid
 graph LR
     A[Search Query] --> B[Generate Embedding]
-    B --> C[LanceDB Vector Search]
+    B --> C[sqlite-vec Vector Search]
     C --> D[Cosine Similarity]
     D --> E[Apply Threshold]
     E --> F[Filter by Site/Type]
@@ -1124,7 +1123,7 @@ sequenceDiagram
 | **WP-CLI (local)** | ~200-500ms | PHP process startup |
 | **WP-CLI (remote)** | ~100ms | With ControlMaster pooling |
 | **WP-CLI (remote, first)** | ~2-3s | Establishes SSH connection |
-| **Vector search** | ~50-100ms | LanceDB ANN search |
+| **Vector search** | <50ms | sqlite-vec exact cosine search |
 | **Embedding generation** | ~50ms | Ollama (CPU) |
 | **Database query** | ~1-5ms | SQLite |
 | **WPE API call** | ~200-500ms | HTTPS + network latency |
@@ -1163,5 +1162,5 @@ Configuration is stored in `~/.nexus/config.json`:
 - [UI Architecture](ui-architecture.md) - Local addon architecture
 - [Data Flow](data-flow.md) - End-to-end data flow
 - [MCP Protocol](mcp-protocol.md) - Protocol details
-- [Vector Database](smart-search.md) - LanceDB internals
+- [Vector Database](smart-search.md) - vector store internals
 - WPE Integration - WP Engine integration

@@ -235,7 +235,7 @@ Step-by-step workflows for common Nexus AI operations.
    ```
 
 3. **Monitor progress in UI:**
-   - Fleet Overview → Bulk Operations Panel
+   - Sites tab → bulk bar
    - Shows per-site status
    - Expandable results
    - Cancel if needed
@@ -299,7 +299,7 @@ Step-by-step workflows for common Nexus AI operations.
    ```
 
 3. **View in UI:**
-   - Fleet Overview → AI Gateway Usage Panel
+   - Now tab → AI gateway usage
    - Shows cost over time
    - Breakdown by caller
    - Recent requests

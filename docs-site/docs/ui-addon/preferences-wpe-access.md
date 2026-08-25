@@ -174,7 +174,7 @@ Keep defaults, then add a site exception:
 
 **Why do some installs still show as stale even though I enabled WP-CLI (Read) on production?**
 
-Check account scope — if the install's account is excluded, it won't sync. Also check that the WPE metadata sync has run recently (Operations tab → Sync metadata).
+Check account scope — if the install's account is excluded, it won't sync. Also check that the WPE metadata sync has run recently (Sites tab → Refresh).
 
 **Does blocking an operation affect already-cached data?**
 

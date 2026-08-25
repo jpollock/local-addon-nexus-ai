@@ -30,7 +30,7 @@ Every `⚠️` or `❌` includes the exact command to fix it.
 
 No API key required. ~2 minutes.
 
-Your AI assistant (Claude Code, Cursor, Claude Desktop, etc.) gets 160+ tools to search, manage, and audit your entire WordPress fleet.
+Your AI assistant (Claude Code, Cursor, Claude Desktop, etc.) gets ~190 tools to search, manage, and audit your entire WordPress fleet.
 
 ```bash
 nexus mcp setup

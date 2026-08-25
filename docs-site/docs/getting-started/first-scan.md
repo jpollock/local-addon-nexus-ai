@@ -15,7 +15,7 @@ A **scan** is the process of:
 1. **Reading** your WordPress site's content and structure
 2. **Chunking** content into searchable segments
 3. **Embedding** text into 384-dimensional vectors
-4. **Indexing** vectors into the LanceDB database
+4. **Indexing** vectors into sqlite-vec (`vectors.db`)
 
 After scanning, you can use semantic search, AI chat, and other intelligent features across all your WordPress content.
 
@@ -24,7 +24,7 @@ graph LR
     A[WordPress Site] -->|Read| B[Content Extraction]
     B -->|Chunk| C[Text Chunks]
     C -->|Embed| D[Vectors]
-    D -->|Index| E[LanceDB]
+    D -->|Index| E[sqlite-vec]
     E -->|Search| F[AI Assistant]
 ```
 
@@ -33,7 +33,7 @@ graph LR
 ### Via UI
 
 1. Open **Nexus AI** sidebar (toolbar icon)
-2. Click **Fleet Overview**
+2. Open the **Sites** tab
 3. Click **Scan All Sites** button
 4. Watch progress in real-time
 
@@ -182,7 +182,7 @@ Result 2: "install WordPress"   → [-0.23, 0.67, -0.12, ...] ✗ Not similar
 
 ### Phase 4: Indexing (1-2 seconds)
 
-Vectors are stored in LanceDB with metadata for fast retrieval.
+Vectors are stored in sqlite-vec (`vectors.db`) with metadata for fast retrieval.
 
 **What gets stored:**
 
@@ -207,7 +207,7 @@ nexus.db (SQLite + Lance files)
 ├── sites                 ← Site metadata (25 rows)
 ├── scans                 ← Scan history (157 rows)
 ├── documents             ← Document metadata (45,678 rows)
-└── embeddings.lance/     ← Vector index (LanceDB)
+└── vectors.db            ← Vector index (sqlite-vec)
     ├── data/             ← Vector data files
     └── index/            ← ANN index for fast search
 ```
@@ -481,7 +481,7 @@ Total indexed: 90,257 documents (171MB)
 - **Posts/pages/products** — Count of content items found
 - **Documents** — Total indexable items (posts + chunks + plugins + etc.)
 - **Vectors** — Number of embeddings generated (1-3 per document)
-- **Database size** — Total LanceDB index size
+- **Database size** — Total vector index size
 - **Time** — Scanning time (includes reading, chunking, embedding, indexing)
 
 ### Partial Success
@@ -773,6 +773,6 @@ Now that you've scanned your first site:
 
 For developers and power users:
 
-- **[Vector Database](../architecture/smart-search.md)** - LanceDB internals
+- **[Vector Database](../architecture/smart-search.md)** - vector store internals
 - **[Data Flow](../architecture/data-flow.md)** - Scanning pipeline
 - **[Performance]** - Benchmarks and optimization

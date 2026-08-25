@@ -17,19 +17,19 @@ The `semanticSearch.searchBias` parameter (0–10) controls the blend between ke
 - **`searchBias = 0`** → FTS-only, no embedding
 - **`searchBias > 0`** → semantic vector generated and used
 
-The actual blending between vector score and FTS score is handled internally by LanceDB and cannot be controlled per-query.
+The actual blending between vector score and FTS score is handled internally by the local vector store (sqlite-vec + FTS) and cannot be controlled per-query.
 
 ### `fuzzyDistance` is on/off, not per-word
 
-`tolerance: { name: "fuzzy", fuzzyDistance: 2 }` is accepted but `fuzzyDistance` is ignored. LanceDB FTS doesn't expose per-word character distance. Typo tolerance works through semantic embeddings instead — which often produces better results anyway.
+`tolerance: { name: "fuzzy", fuzzyDistance: 2 }` is accepted but `fuzzyDistance` is ignored. The local FTS index doesn't expose per-word character distance. Typo tolerance works through semantic embeddings instead — which often produces better results anyway.
 
 ### Geographic search is silently ignored
 
-`geoConstraints` in `find` queries has no effect locally. LanceDB is a vector database, not a geo-search engine. Queries still return results, just without geographic filtering.
+`geoConstraints` in `find` queries has no effect locally. The local vector store is a vector database, not a geo-search engine. Queries still return results, just without geographic filtering.
 
 ### `queryRescorer` is silently ignored
 
-The re-ranking parameter is accepted but not applied. Results are ranked by LanceDB's hybrid scoring.
+The re-ranking parameter is accepted but not applied. Results are ranked by the local hybrid scoring (vector + FTS).
 
 ### Field weighting is ignored
 

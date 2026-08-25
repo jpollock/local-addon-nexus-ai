@@ -777,7 +777,7 @@ Now that you can search your content:
 
 - **[WP Engine Management](../mcp-tools/wpe-sites.md)** - Remote site management
 - **[Bulk Operations](../mcp-tools/fleet.md)** - Fleet operations
-- **[Fleet Overview](../mcp-tools/fleet.md)** - Dashboard and analytics
+- **[Fleet tools](../mcp-tools/fleet.md)** - Dashboard and analytics
 
 ---
 

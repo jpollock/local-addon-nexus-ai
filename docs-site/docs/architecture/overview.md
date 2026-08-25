@@ -30,7 +30,7 @@ graph TB
     end
 
     subgraph "Data Layer"
-        E[LanceDB]
+        E[sqlite-vec]
         F[SQLite]
         G[Config Files]
     end
@@ -69,7 +69,7 @@ Standalone Node.js application that can run as:
 
 **Key Components:**
 - MCP protocol handler (stdio transport)
-- Tool registry (160+ tools)
+- Tool registry (~190 tools)
 - WP-CLI executor
 - WPE CAPI client
 - SSH connection manager
@@ -93,7 +93,7 @@ Electron addon for Local app (renderer + main process).
 
 Common functionality used by both interfaces:
 
-- **Vector database** - LanceDB operations
+- **Vector database** - sqlite-vec (`SqliteVecStore`) operations
 - **Site indexing** - Content extraction and embedding
 - **WP-CLI integration** - Command execution
 - **WPE integration** - CAPI and SSH
@@ -144,7 +144,7 @@ sequenceDiagram
     participant Indexer
     participant Extractor
     participant Embedder
-    participant LanceDB
+    participant sqlitevec as sqlite-vec
 
     User->>UI/CLI: Trigger scan
     UI/CLI->>Indexer: startScan(siteId)
@@ -162,8 +162,8 @@ sequenceDiagram
     Note over Embedder: all-MiniLM-L6-v2<br/>(384 dimensions)
 
     Embedder->>Indexer: Vectors
-    Indexer->>LanceDB: Store vectors
-    LanceDB->>UI/CLI: Scan complete
+    Indexer->>sqlitevec: Store vectors
+    sqlitevec->>UI/CLI: Scan complete
     UI/CLI->>User: Show results
 ```
 
@@ -213,10 +213,10 @@ sequenceDiagram
 
 ## Storage Architecture
 
-### LanceDB (Vector Database)
+### sqlite-vec (Vector Database)
 
 ```
-~/Library/Application Support/nexus-ai/lancedb/
+~/Library/Application Support/Local/nexus-ai/vectors.db
 ├── sites.lance/              # Site metadata table
 ├── content.lance/            # Indexed content vectors
 ├── _versions/                # Version history
@@ -371,7 +371,7 @@ mutation ScanSite($siteId: ID!) {
 | Component | Technology | Version | Purpose |
 |-----------|-----------|---------|---------|
 | **Runtime** | Node.js | 18+ | JavaScript runtime |
-| **Vector DB** | LanceDB | 0.11.x | Vector storage & search |
+| **Vector DB** | sqlite-vec (better-sqlite3) | — | Vector storage & search |
 | **Embeddings** | ONNX Runtime | 1.x | Local embedding generation |
 | **Model** | all-MiniLM-L6-v2 | - | Sentence transformer |
 | **Protocol** | MCP SDK | 0.5.x | Model Context Protocol |
@@ -392,7 +392,7 @@ mutation ScanSite($siteId: ID!) {
 | Operation | Performance | Notes |
 |-----------|------------|-------|
 | **Site scan** | 2-5s (10k posts) | Parallel extraction |
-| **Vector search** | <100ms | LanceDB cosine distance |
+| **Vector search** | <100ms | sqlite-vec cosine distance |
 | **WP-CLI (local)** | 50-200ms | Direct execution |
 | **WP-CLI (remote)** | 200ms-2s | SSH ControlMaster pooling |
 | **WPE CAPI call** | 100-500ms | REST API |

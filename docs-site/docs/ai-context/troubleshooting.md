@@ -287,7 +287,7 @@ Common issues and solutions when using Nexus AI.
 ### UI sluggish with many sites
 
 **Symptoms:**
-- Fleet Overview slow to render
+- Sites tab slow to render
 - Lag when scrolling sites
 
 **Solutions:**
@@ -409,13 +409,13 @@ Common issues and solutions when using Nexus AI.
 - Sites show as "not indexed" after restarting Local
 - Search returns no results
 
-**Cause:** This shouldn't happen (LanceDB persists to disk)
+**Cause:** This shouldn't happen (the vector index persists to disk)
 
 **Solutions:**
 
 1. **Check data directory:**
    ```bash
-   ls -la ~/Library/Application\ Support/Local/nexus-ai/lancedb/
+   ls -la ~/Library/Application\ Support/Local/nexus-ai/vectors.db
    ```
    Should have table files
 

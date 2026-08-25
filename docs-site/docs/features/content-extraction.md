@@ -692,7 +692,7 @@ add_action('deleted_plugin', 'nexus_ai_handle_plugin_deleted', 10, 2);
 3. HTTP POST to Local's event endpoint (`http://127.0.0.1:13000/wp-events`)
 4. Event processor validates and enqueues
 5. Background processing updates database
-6. Fleet Overview updates immediately
+6. The Sites tab updates immediately
 
 **Acknowledge-Before-Process Pattern:**
 

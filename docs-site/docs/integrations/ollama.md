@@ -23,7 +23,7 @@ graph LR
     B -->|Text| C[Ollama]
     C -->|nomic-embed-text| D[Embedding Model]
     D -->|384d vector| B
-    B --> E[LanceDB]
+    B --> E[sqlite-vec]
 
     style A fill:#e3f2fd
     style B fill:#fff3e0

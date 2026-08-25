@@ -74,7 +74,7 @@ Click the **WPE Mgmt** tab in the left sidebar.
 
 ```
 ┌─────────────────┐
-│ Fleet Overview  │
+│ Sites tab       │
 │   Site Finder   │
 │   AI Chat       │
 │ ▶ WPE Mgmt      │ ← Click here
@@ -85,9 +85,9 @@ Click the **WPE Mgmt** tab in the left sidebar.
 
 Right-click any Local site → **WPE Management**.
 
-### 3. Fleet Overview
+### 3. The Sites tab
 
-Click **"View WPE Sites"** from Fleet Overview dashboard.
+WPE installs appear in the Sites tab (Properties view) alongside local sites.
 
 ## Authentication
 
@@ -1002,7 +1002,7 @@ Always:
 
 ## Next Steps
 
-- **[Fleet Overview](../mcp-tools/fleet.md)** - Monitor all sites
+- **[Fleet tools](../mcp-tools/fleet.md)** - Monitor all sites
 - **[Bulk Operations](../mcp-tools/fleet.md)** - Multi-site management
 - **[WP-CLI Integration](../features/wp-cli-integration.md)** - Remote command execution
 - **[Safety System](../features/safety-system.md)** - Understanding operation safety

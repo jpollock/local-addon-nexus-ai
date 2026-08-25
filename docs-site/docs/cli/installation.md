@@ -11,7 +11,7 @@ Install the Nexus AI CLI for command-line access and MCP server functionality.
 ## Prerequisites
 
 - **[Local](https://localwp.com)** must be installed
-- **Node.js 18 or higher**
+- **Node.js 22.x**
 
 !!! success "Auto-Start Feature"
     The CLI automatically starts Local if it's not running. No manual setup required!
@@ -105,7 +105,7 @@ Nexus AI v{version} — System Health
   ✅  Local running       Running
   ✅  Nexus AI addon      Active (v{version})
   ✅  GraphQL server      Connected (port 4000)
-  ✅  MCP server          Running · 161 tools
+  ✅  MCP server          Running · ~190 tools
   ⚠️   AI agent config    No agents configured
   ⚠️   AI provider        Not configured
   ...
@@ -268,7 +268,7 @@ See [Manual Install](../ui-addon/installation.md#method-2-manual-install-from-gi
 **Solution:**
 
 ```bash
-# Install Node 18+ via nvm
+# Install Node 22 via nvm
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
 nvm install 18
 nvm use 18

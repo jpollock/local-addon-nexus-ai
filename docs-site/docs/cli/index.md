@@ -28,7 +28,7 @@ nexus wpe pull mysite-prod
 ```
 
 ### 2. MCP Server
-Exposes 160+ tools to AI assistants via the Model Context Protocol.
+Exposes ~190 tools to AI assistants via the Model Context Protocol.
 
 ```bash
 # Auto-configure your AI client (Local by WP Engine must be running)
@@ -147,7 +147,7 @@ nexus <command> [subcommand] [options]
 
 ## MCP Tools
 
-When running as an MCP server, Nexus AI exposes 160+ tools to AI assistants.
+When running as an MCP server, Nexus AI exposes ~190 tools to AI assistants.
 
 ### Tool Categories
 
@@ -487,5 +487,5 @@ nexus wpe auth
 - [Installation Guide](installation.md) - Install and configure the CLI
 - [MCP Setup](mcp-setup.md) - Connect to AI assistants
 - [Command Reference](../reference/cli-command-reference.md) - Complete command list
-- [Tool Reference](../mcp-tools/index.md) - All 160+ MCP tools
+- [Tool Reference](../mcp-tools/index.md) - The MCP tool catalog
 - [Examples](examples.md) - Real-world usage examples

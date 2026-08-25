@@ -13,7 +13,7 @@ Get up and running with Nexus AI CLI in 5 minutes.
 Before you begin, make sure you have:
 
 - **Local by WP Engine** installed ([download](https://localwp.com))
-- **Node.js 18+** installed ([download](https://nodejs.org))
+- **Node.js 22.x** installed ([download](https://nodejs.org))
 - At least one WordPress site in Local (optional for first run)
 
 !!! tip "Zero Configuration"
@@ -55,13 +55,13 @@ nexus doctor
 This checks every layer of the stack and tells you exactly what to do next:
 
 ```
-Nexus AI v0.2.1 — System Health
+Nexus AI — System Health
 ──────────────────────────────────────────────────
   ✅  Local app           Installed
   ✅  Local running       Running
-  ✅  Nexus AI addon      Active (v0.2.1)
+  ✅  Nexus AI addon      Active
   ✅  GraphQL server      Connected (port 4000)
-  ✅  MCP server          Running · 161 tools
+  ✅  MCP server          Running · ~190 tools
   ⚠️   AI agent config    No agents configured
   ⚠️   AI provider        Not configured
   ...
@@ -596,7 +596,7 @@ nexus config set ai.model nomic-embed-text
 
 - **[CLI Examples](../cli/examples.md)** - Real-world usage patterns
 - **[CLI Commands](../reference/cli-command-reference.md)** - Complete command reference
-- **[MCP Tools](../mcp-tools/index.md)** - All 160+ tools available to AI assistants
+- **[MCP Tools](../mcp-tools/index.md)** - The tool catalog available to AI assistants
 - **[WP Engine Management](../mcp-tools/wpe-sites.md)** - Remote site management
 
 ### Connect AI Assistants

@@ -11,7 +11,7 @@ Nexus AI does two distinct things. You don't need both to get started — pick t
 
 **Who it's for:** Anyone using Claude Code, Cursor, Claude Desktop, Windsurf, or another MCP-compatible AI assistant.
 
-**What you get:** 160+ tools that let your AI agent search, manage, and audit your entire WordPress fleet — local sites and WP Engine — with natural language.
+**What you get:** ~190 tools that let your AI agent search, manage, and audit your entire WordPress fleet — local sites and WP Engine — with natural language.
 
 **What you need:** Nothing. No API key. Just Local running with the addon installed.
 

@@ -91,7 +91,7 @@ nexus sync wpe
 
     Manage and audit all your sites at scale.
 
-    [→ Fleet Overview](../mcp-tools/fleet.md)
+    [→ Fleet tools](../mcp-tools/fleet.md)
 
 - **Troubleshooting**
 

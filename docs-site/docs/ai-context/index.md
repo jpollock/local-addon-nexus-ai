@@ -26,7 +26,7 @@ This section provides structured context for AI assistants (Claude, ChatGPT, etc
 
 Nexus AI is a Local addon + CLI that:
 
-1. **Indexes WordPress sites** into a vector database (LanceDB)
+1. **Indexes WordPress sites** into a vector database (sqlite-vec)
 2. **Exposes MCP tools** for AI assistants to manage sites
 3. **Provides semantic search** across all site content
 4. **Supports local + WP Engine sites** in unified interface
@@ -100,7 +100,7 @@ Check **[Troubleshooting](troubleshooting.md)** for:
 
 **Tech Stack:**
 - TypeScript + Electron (main + renderer)
-- LanceDB (vector database, cosine distance)
+- sqlite-vec (vector database, cosine distance)
 - ONNX Runtime (local embeddings, all-MiniLM-L6-v2)
 - better-sqlite3 (graph database)
 - React 16.8 (class-based, no hooks)
@@ -126,7 +126,7 @@ Check **[Troubleshooting](troubleshooting.md)** for:
 ~/Library/Application Support/Local/
 ├── addons/local-addon-nexus-ai/       # Addon code
 ├── nexus-ai/                          # Data directory
-│   ├── lancedb/                       # Vector database
+│   ├── vectors.db                     # Vector database (sqlite-vec)
 │   ├── graph.db                       # SQLite graph
 │   └── models/                        # ONNX models
 ├── nexus-ai-mcp-connection-info.json  # MCP connection

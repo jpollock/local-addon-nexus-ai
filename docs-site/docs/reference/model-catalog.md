@@ -96,6 +96,6 @@ When **Local AI Gateway** is enabled in Preferences, Nexus AI acts as a credenti
 
 - WordPress sites talk to the gateway, not directly to the cloud provider
 - API keys are stored once in Local, never in each site's `wp_options`
-- Usage and cost are tracked per-site in the Operations tab dashboard
+- Usage and cost are tracked per-site in the Nexus AI view
 
 The gateway supports Anthropic, OpenAI, and Google providers.

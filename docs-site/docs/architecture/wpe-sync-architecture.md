@@ -137,7 +137,7 @@ Write to graph.db:
     └── graphService.upsertUser(...) × N
 ```
 
-**No content indexing here.** `syncInstall()` is metadata-only. Content extraction (posts/pages → LanceDB) runs only via `indexAllWpeContent()`, which is triggered by the Operations tab button or the content index scheduler.
+**No content indexing here.** `syncInstall()` is metadata-only. Content extraction (posts/pages → sqlite-vec) runs only via `indexAllWpeContent()`, which is triggered from the Sites tab (Properties view) or the content index scheduler.
 
 ### SSH ControlMaster
 
@@ -149,14 +149,14 @@ With 4 concurrent connections, the first batch of 4 sites all establish connecti
 
 ## Content Indexing — Separate Path
 
-Content indexing (posts/pages/products → LanceDB embeddings) is **deliberately separate** from metadata sync.
+Content indexing (posts/pages/products → sqlite-vec embeddings) is **deliberately separate** from metadata sync.
 
 ```
 Metadata sync (syncAllWPESites)    Content indexing (indexAllWpeContent)
 ─────────────────────────────────  ──────────────────────────────────────
 Triggered on: startup, manual      Triggered on: button click, schedule
 SSH commands: core, plugins, users SSH commands: wp post list, wp post get
-Stores: graph.db                   Stores: LanceDB vector tables
+Stores: graph.db                   Stores: sqlite-vec tables (vectors.db)
 Duration: 8-15s per site           Duration: 30s - 10min per site
 Concurrency: 4                     Concurrency: 2
 ```
@@ -192,7 +192,7 @@ Progress is pushed to the renderer via two mechanisms:
 1. **`onSyncProgress` callback** → `emitNexusState({ wpeSyncProgress: {...} })` → `nexusStore.update()` → component state update (immediate, real-time)
 2. **`WPE_SYNC_STATUS` IPC poll** — `NexusOverview` polls every 2 seconds as a fallback when the component is already in sync state
 
-Both mechanisms converge on the Operations tab banner:
+Both mechanisms converge on the sync banner in the Sites tab:
 ```
 WPE metadata sync                    59 / 63 sites
 Syncing: ciantesterstg

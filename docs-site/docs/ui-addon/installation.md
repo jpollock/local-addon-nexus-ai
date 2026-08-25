@@ -206,7 +206,7 @@ local-addon-nexus-ai/
 ├── models/                # ONNX embedding model (~30 MB)
 ├── node_modules/          # Production dependencies
 │   ├── better-sqlite3/   # Native module (Electron-compiled)
-│   ├── @lancedb/lancedb/ # Vector database
+│   ├── better-sqlite3/   # SQLite + sqlite-vec (vector search)
 │   └── ...
 ├── package.json          # Addon metadata
 └── THIRD_PARTY_LICENSES.md
@@ -225,7 +225,7 @@ Nexus AI stores data separately from the addon:
 | Linux | `~/.config/Local/nexus-ai/` |
 
 **Data files:**
-- `lancedb/` - Vector database (site content indexes)
+- `vectors.db` - Vector database (site content indexes, sqlite-vec)
 - `graph.db` - SQLite database (site relationships, events)
 - `audit.db` - Audit logs (for security tracking)
 
@@ -375,11 +375,11 @@ npm run rebuild
 
 <div class="grid cards" markdown>
 
-- **Fleet Overview**
+- **Sites tab (Properties view)**
 
     Explore the fleet dashboard and site management features.
 
-    [→ Fleet Overview](../mcp-tools/fleet.md)
+    [→ Fleet tools](../mcp-tools/fleet.md)
 
 - **Search**
 

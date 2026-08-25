@@ -790,7 +790,7 @@ See [WP Engine Access Control](../reference/wpe-access-control.md) for the compl
 │ Size: 42 MB                             │
 │ ☑ Enable WAL mode (better performance)  │
 │                                         │
-│ LanceDB Vector Index:                   │
+│ Vector Index (sqlite-vec):              │
 │ Location: ~/Library/.../vector-index.db │
 │ Size: 245 MB                            │
 │ Dimensions: 384                         │

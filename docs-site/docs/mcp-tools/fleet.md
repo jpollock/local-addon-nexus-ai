@@ -149,7 +149,7 @@ GROUP BY slug, version ORDER BY installs DESC LIMIT 20
 
 Aggregate stats across all sites: WordPress version distribution, PHP version distribution, most common plugins, and integration presence (WooCommerce, ACF). Reads from the local index registry and graph.db.
 
-**Note:** The "Content" section shows LanceDB vector index chunk counts — these are NOT WordPress post counts. A single post produces 3–6 chunks. For actual post counts, use `fleet_sql`.
+**Note:** The "Content" section shows vector-index chunk counts (sqlite-vec) — these are NOT WordPress post counts. A single post produces 3–6 chunks. For actual post counts, use `fleet_sql`.
 
 ---
 

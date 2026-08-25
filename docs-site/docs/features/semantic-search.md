@@ -1,7 +1,7 @@
 ---
 title: Semantic Search
 description: Understanding vector-based semantic search in Nexus AI
-keywords: [semantic-search, vector-search, embeddings, ai, lancedb, similarity]
+keywords: [semantic-search, vector-search, embeddings, ai, sqlite-vec, similarity]
 ---
 
 # Semantic Search
@@ -62,7 +62,7 @@ graph LR
     A[Text Input] --> B[Tokenization]
     B --> C[Embedding Model]
     C --> D[384-dim Vector]
-    D --> E[LanceDB Index]
+    D --> E[sqlite-vec Index]
     E --> F[Similarity Search]
     F --> G[Ranked Results]
 ```
@@ -110,18 +110,10 @@ Distance: 1.45 ← Not similar ✗
 
 ### Step 3: Fast Search
 
-LanceDB uses **Approximate Nearest Neighbors (ANN)** for fast vector search.
-
-**Without ANN (brute force):**
-- Compare query to every vector in database
-- 1 million vectors = 1 million comparisons
-- Slow: ~10 seconds
-
-**With ANN (LanceDB):**
-- Build hierarchical index
-- Only search relevant clusters
-- 1 million vectors = ~1,000 comparisons
-- Fast: ~50-100ms
+sqlite-vec searches each site's `vec0` virtual table by cosine distance.
+Corpora are per-site (hundreds to thousands of vectors, not millions), so
+exact search is fast — measured 13× faster at p50 than the previous engine,
+with identical results, in the migration benchmark.
 
 ```mermaid
 graph TB
@@ -210,44 +202,31 @@ NAME                 ID              SIZE    MODIFIED
 nomic-embed-text     latest          274MB   2 hours ago
 ```
 
-## Vector Database: LanceDB
+## Vector Database: sqlite-vec
 
-Nexus AI uses **LanceDB** for storing and searching vectors.
+Nexus AI uses **sqlite-vec** (via `better-sqlite3`) for storing and searching
+vectors — `SqliteVecStore`, one `vec0` virtual table per site corpus.
 
-### Why LanceDB?
+### Why sqlite-vec?
 
-**Advantages:**
+- ✅ **Embedded** — no separate server, one SQLite file (`vectors.db`)
+- ✅ **Fast** — 13× faster at p50 than the LanceDB engine it replaced, with
+  100% result overlap in the migration benchmark
+- ✅ **One runtime** — the addon already ships better-sqlite3 for its other
+  stores; the vector index shares the same native module and ABI story
+- ✅ **Open source**
 
-- ✅ **Embedded** — No separate server required
-- ✅ **Fast** — Native Rust implementation
-- ✅ **Scalable** — Handles millions of vectors
-- ✅ **Columnar** — Efficient storage format
-- ✅ **ACID** — Transactional guarantees
-- ✅ **Open source** — Apache 2.0 license
-
-**Comparison to alternatives:**
-
-| Database | Type | Performance | Ease of Use |
-|----------|------|-------------|-------------|
-| **LanceDB** | Embedded | ⚡⚡⚡ | ⭐⭐⭐⭐⭐ |
-| ChromaDB | Embedded | ⚡⚡ | ⭐⭐⭐⭐ |
-| Pinecone | Cloud | ⚡⚡⚡⚡ | ⭐⭐⭐ |
-| Weaviate | Server | ⚡⚡⚡⚡ | ⭐⭐ |
-| Milvus | Server | ⚡⚡⚡⚡⚡ | ⭐⭐ |
+(Nexus used LanceDB before mid-2026; the migration is complete and the old
+`nexus-ai/vectors/` directory is dead.)
 
 ### Storage Format
 
-LanceDB uses a columnar format optimized for vectors:
+Vectors live in one SQLite database:
 
 ```
-~/.nexus/vectors.lance/
-├── data/
-│   ├── 0.lance          ← Vector data (binary)
-│   ├── 1.lance
-│   └── 2.lance
-├── index/
-│   └── ivf_pq.idx       ← ANN index
-└── metadata.json        ← Schema and stats
+~/Library/Application Support/Local/nexus-ai/vectors.db
+  └── one vec0 virtual table per site corpus
+      (384-dim float vectors + metadata, cosine distance)
 ```
 
 **File sizes:**
@@ -318,16 +297,9 @@ similarity = dot_product / (magnitude_query * magnitude_result)
 
 For large datasets, exact nearest neighbor search is too slow. ANN trades a small amount of accuracy for massive speed gains.
 
-**LanceDB uses IVF-PQ:**
-
-1. **IVF (Inverted File Index)**
-   - Cluster vectors into groups
-   - Only search relevant clusters
-   - Reduces search space by 10-100x
-
-2. **PQ (Product Quantization)**
-   - Compress vectors using clustering
-   - Reduces memory usage by 8-16x
+**Nexus does not need ANN:** corpora are per-site and small enough that
+sqlite-vec's exact cosine search is already fast (see the benchmark above), so
+no accuracy is traded away.
    - Slight accuracy loss (~1-2%)
 
 ```mermaid
@@ -366,13 +338,13 @@ sequenceDiagram
     participant User
     participant CLI
     participant Ollama
-    participant LanceDB
+    participant vec as sqlite-vec
 
     User->>CLI: nexus search "optimize images"
     CLI->>Ollama: Generate embedding
     Ollama-->>CLI: [0.12, -0.45, ...]
-    CLI->>LanceDB: Vector similarity search
-    LanceDB-->>CLI: Top 10 results
+    CLI->>vec: Vector similarity search
+    vec-->>CLI: Top 10 results
     CLI->>CLI: Filter by threshold (0.7)
     CLI->>CLI: Format results
     CLI-->>User: Ranked results
@@ -824,6 +796,6 @@ const overlap = 0.1; // 10%
 ## Next Steps
 
 - [Content Extraction](content-extraction.md) - What gets indexed
-- [Vector Database](../architecture/smart-search.md) - LanceDB internals
+- [Vector Database](../architecture/smart-search.md) - vector store internals
 - [First Scan](../getting-started/first-scan.md) - Indexing process
 - [First AI Query](../getting-started/first-ai-query.md) - Search examples

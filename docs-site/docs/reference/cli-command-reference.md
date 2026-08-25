@@ -54,13 +54,13 @@ Every `⚠️` or `❌` result includes the exact command to fix it. Run this fi
 **Example output:**
 
 ```
-Nexus AI v0.2.1 — System Health
+Nexus AI — System Health
 ──────────────────────────────────────────────────
   ✅  Local app           Installed
   ✅  Local running       Running
-  ✅  Nexus AI addon      Active (v0.2.1)
+  ✅  Nexus AI addon      Active
   ✅  GraphQL server      Connected (port 4000)
-  ✅  MCP server          Running · 161 tools
+  ✅  MCP server          Running · ~190 tools
   ✅  AI agent config     Claude Desktop
   ✅  AI provider         Anthropic (Claude)
   ✅  Local Gateway       Enabled
@@ -1949,5 +1949,5 @@ echo "Health check complete"
 
 - [CLI Examples](../cli/examples.md) - Real-world usage patterns
 - [MCP Setup](../cli/mcp-setup.md) - Connect to AI assistants
-- [Tool Reference](../mcp-tools/index.md) - All 160+ MCP tools
+- [Tool Reference](../mcp-tools/index.md) - The MCP tool catalog
 - Error Codes - Troubleshooting guide

@@ -1,7 +1,7 @@
 ---
 title: Smart Search Architecture
 description: How Nexus AI implements the WP Engine Smart Search local backend
-keywords: [smart-search, architecture, atlas-search, graphql, lancedb, onnx]
+keywords: [smart-search, architecture, atlas-search, graphql, sqlite-vec, onnx]
 ---
 
 # Smart Search Architecture
@@ -35,7 +35,7 @@ graph TB
 
         subgraph Storage ["Storage Layer"]
             ONNX["EmbeddingService\nONNX all-MiniLM-L6-v2\n384 dimensions"]
-            Lance["VectorStore\nLanceDB"]
+            Lance["VectorStore\nsqlite-vec"]
             Sqlite["SQLite graph.db\nSynonyms · Tracker · Config"]
         end
     end
@@ -64,7 +64,7 @@ sequenceDiagram
     participant HTTP as HttpEventInterface
     participant Handler as SmartSearchHandler
     participant ONNX as EmbeddingService
-    participant Lance as VectorStore (LanceDB)
+    participant Lance as VectorStore (sqlite-vec)
     participant SQLite as SQLite
 
     User->>WP: Search "road trip planning"
@@ -105,7 +105,7 @@ sequenceDiagram
     participant HTTP as HttpEventInterface
     participant Handler as SmartSearchHandler
     participant ONNX as EmbeddingService
-    participant Lance as VectorStore (LanceDB)
+    participant Lance as VectorStore (sqlite-vec)
     participant SQLite as SQLite
 
     Dev->>WPAdmin: WP Engine AI Toolkit → Sync
@@ -271,4 +271,4 @@ graph LR
 - [Getting Started](../features/smart-search/getting-started.md) — step-by-step setup
 - [Local vs Cloud](../features/smart-search/limitations.md) — detailed behavior differences
 - [Architecture Overview](overview.md) — where Smart Search fits in the full Nexus picture
-- [Vector Database](smart-search.md) — LanceDB internals
+- this page is the vector-store deep dive
