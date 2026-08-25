@@ -23,8 +23,20 @@ A **grant** is per-capability and recorded as an act. A **bound** is fleet-wide 
 recorded as no act. Flattened into one grid they would need a cell that is both an act
 and a state — which is why the merge stalled. Stacked, they compose:
 
-    bound (fleet-wide limit)
-      └── grants (per-capability decisions, each stating the bound's effect on itself)
+    bound (fleet-wide limit, its accounts stated beneath it)
+      └── grants (per-agent decisions, each stating the bound's effect on itself)
+
+## Both open questions are ruled — build against these
+
+**A grant belongs to an agent, so this pane READS and does not edit.** The address is
+(agent, capability); a refusal comes from one agent's run and its door must land where the
+decision can be changed. So: no switch on any row, a row states the *set* of agents that
+hold the grant, and every row's door leads to the agent that owns it.
+
+**The account scope is part of the bound**, not a third thing binding two layers. Places
+are the bound's columns, accounts are too many to be, so they are stated beneath it. A
+grant reaches an account only if the bound does — the scope reaches grants *through* the
+bound. State it once; do not repeat it per grant.
 
 ## Build order
 
@@ -32,14 +44,12 @@ and a state — which is why the merge stalled. Stacked, they compose:
    scope at its foot), grants below (one row per capability). Delete the second pane.
 2. **One vocabulary per layer.** granted/denied on grants; allowed/blocked on the bound.
    Never mixed, never both for one thing.
-3. **The clipped line**, derived from bound × capability — never a per-row string. This is
-   the highest-value item: it makes the grant-gates-nothing state visible where the grant
-   is made.
-4. **A bound clips only what was granted.** A denied row shows no clipped line; its
-   denial is the reason, and a second reason would imply two.
-5. **State the account scope's reach on the scope itself** — it binds both layers.
-6. **Render the two gaps as stated absences**, not guesses: whose grants these are (the
-   per-agent address), and confirmation that the scope binds grants too.
+3. **The clipped line**, derived from bound × capability — never a per-row string. Highest
+   value item: it makes the grant-gates-nothing state visible where the grant is shown.
+4. **A bound clips only what was granted.** A capability no agent holds shows no clipped
+   line; that is the reason, and a second reason would imply two.
+5. **Grants read-only, stating the set of holders**, with the door to the owning agent.
+6. **The account scope stated once**, at the foot of the bound.
 
 ## Vocabulary to confirm
 
@@ -52,7 +62,8 @@ The document column stays **"The document it is pinned to"**, not "Runbook" — 
 pinned to a version, and an edit disarms it. That phrasing carries the consequence; the id
 on the row already says runbook.
 
-## Design-system constraint
+## Design-system note
 
-The grant control is the bundle's `Switch` at `size=md` (36×20, knob at left 2 / left 18,
-colours from `--control-bg-control-*`). Fully usable — do not hand-draw it.
+Nothing on this sheet is an authored control. The bundle's `Switch` is fully usable at
+`size=md` — it is absent because the pane does not edit, not because the component was
+unavailable. Do not hand-draw one if an editable variant is ever built.

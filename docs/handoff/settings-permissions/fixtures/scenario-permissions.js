@@ -19,7 +19,14 @@
  */
 (function () {
   window.NEXUS_PERMS = {
-    lead: 'Nothing here is granted because a document exists. A capability arrives denied, and becomes granted only by an act recorded on this list.',
+    lead: 'Nothing here is granted because a document exists. A capability arrives denied, and becomes granted only by an act recorded against one agent.',
+    readOnly: 'This is every agent\u2019s grants in one place, to read. A grant belongs to an agent, so it is made and revoked inside that agent.',
+
+    agents: [
+      { id: 'act_security_sentinel', label: 'Security sentinel' },
+      { id: 'act_fleet_keeper', label: 'Fleet keeper' },
+      { id: 'act_incident_first_responder', label: 'Incident first responder' },
+    ],
 
     // Layer 1 — the bound. Where agents may write at all, across every capability.
     bound: {
@@ -34,7 +41,7 @@
       ],
       scope: {
         head: 'Accounts this bound covers',
-        note: 'A capability granted below is granted only within these accounts.',
+        note: 'The bound\u2019s other dimension: places are its columns, accounts are too many to be, so they are stated here. A grant reaches an account only if this bound does.',
         included: ['btwpe', 'devrel', 'Unicorn', 'AutoscaleAlpha', 'esmv7us1l20jdr', 'WPESupportTest', 'getflywheel', 'Golden Ecomm', 'jpollock911', 'Andonov', 'w7579'],
         excluded: ['dbrains', 'evalkedracka', 'nitropacksite'],
       },
@@ -44,6 +51,7 @@
     grants: [
       {
         cap: 'cap.bulk_plugin_update',
+        grantedTo: ['act_fleet_keeper', 'act_incident_first_responder'],
         label: 'Update plugins across sites',
         kind: 'strict procedure',
         doc: 'rb.bulk-plugin-update · 1.2.0',
@@ -56,6 +64,7 @@
       },
       {
         cap: 'cap.incident_containment',
+        grantedTo: ['act_security_sentinel', 'act_incident_first_responder'],
         label: 'Contain an incident',
         kind: 'strict procedure',
         doc: 'rb.incident-containment · 1.2.0',
@@ -68,6 +77,7 @@
       },
       {
         cap: 'cap.promotion_preflight',
+        grantedTo: ['act_fleet_keeper'],
         label: 'Check a promotion before it runs',
         kind: 'strict procedure',
         doc: 'rb.promotion-preflight · 1.2.0',
@@ -80,6 +90,7 @@
       },
       {
         cap: 'cap.incident_remediation',
+        grantedTo: [],
         label: 'Remediate an incident',
         kind: 'strict procedure',
         doc: 'rb.incident-remediation · 1.2.0',
@@ -92,6 +103,7 @@
       },
       {
         cap: 'cap.promote_environment',
+        grantedTo: [],
         label: 'Promote one environment to another',
         kind: 'strict procedure',
         doc: 'rb.promotion-execute · 1.3.0',
@@ -104,6 +116,7 @@
       },
       {
         cap: 'cap.wpe_pull',
+        grantedTo: [],
         label: 'Pull a site from WP Engine',
         kind: 'guided procedure',
         doc: 'rb.wpe-pull · 1.0.0',
@@ -116,6 +129,7 @@
       },
       {
         cap: 'cap.diagnose_site',
+        grantedTo: [],
         label: 'Diagnose a site',
         kind: 'guided procedure',
         doc: 'rb.diagnose-site · 1.0.0',
@@ -128,19 +142,25 @@
       },
     ],
 
-    // The two gaps the merge exposes, stated rather than guessed.
-    gaps: [
+    // Both open questions, now ruled.
+    rulings: [
       {
-        head: 'Whose grants are these?',
-        body: 'Agents carry their own permissions in their own context, so a grant\u2019s address is (agent, capability) \u2014 and nothing on this pane names an agent. Either this list says whose grants it holds, or it is the fleet-wide read-only view and the editable control lives inside each agent.',
-        door: 'Open Agents',
-        why: 'Drawn as a stated absence rather than a guess, because guessing wrong here would put a second editable home under every grant.',
+        head: 'A grant belongs to an agent, so this pane reads and does not edit',
+        body: 'The address is (agent, capability). A refusal comes from one agent\u2019s run, and its door has to land where the decision can be changed \u2014 which is inside that agent. A second editable list of the same grants would be two homes for one decision, and that is the defect this whole merge removes.',
+        consequences: [
+          'No switch on any row. An editable control on a read-only surface is a lie about what pressing it would do.',
+          'A row states the SET of agents that hold the grant, never one state for all of them \u2014 the set-versus-average rule, applied to agents instead of places.',
+          'Every row\u2019s door leads to the agent that owns the decision. Where several hold it, the door leads to Agents scoped to that capability.',
+        ],
       },
       {
-        head: 'Does the account scope cover grants too?',
-        body: 'The scope was a control on the bound pane only, so it was silent about grants. Merged, it cannot be: three accounts are excluded, and a granted capability either reaches them or does not. Drawn as covering both, and stated on the scope itself.',
-        door: '',
-        why: 'If that reading is wrong, the scope needs to say which layer it binds \u2014 an unstated scope is the one thing a permissions surface cannot have.',
+        head: 'The account scope is part of the bound, not a third thing binding two layers',
+        body: 'It is the bound\u2019s other dimension \u2014 places are its columns, accounts are too many to be, so they are stated beneath it. A grant reaches an account only if the bound does, which means the scope reaches grants THROUGH the bound rather than being applied to them separately. One mechanism, not two rules to remember.',
+        consequences: [
+          'Stated once, at the foot of the bound. Not repeated per grant, because it is uniform across every operation.',
+          'The clipped line stays place-based, and stays accurate: an excluded account is excluded whole, so it never changes which places a grant reaches within the accounts it does cover.',
+          'An earlier draft said the scope \u201cbinds both layers\u201d. Nearly right, and it described one mechanism as two applications \u2014 which would have left an implementer looking for a second place to apply it.',
+        ],
       },
     ],
   };
