@@ -32,12 +32,13 @@
       "key": null,
       "props": {
         "style": {
-          "maxWidth": 720,
+          "width": "100%",
+          "maxWidth": "100%",
           "margin": "0 auto",
           "padding": "12px 14px",
           "display": "flex",
           "flexDirection": "column",
-          "gap": 10
+          "gap": 11
         }
       },
       "children": [
@@ -47,10 +48,11 @@
           "props": {
             "data-panel-opening": "invitation",
             "style": {
-              "padding": "8px 14px",
-              "color": "var(--nxai-card-sub)",
-              "textAlign": "center",
-              "fontSize": 13
+              "display": "flex",
+              "flexDirection": "column",
+              "alignItems": "flex-start",
+              "gap": 9,
+              "textAlign": "left"
             }
           },
           "children": [
@@ -59,10 +61,12 @@
               "key": "headline",
               "props": {
                 "style": {
-                  "color": "var(--nxai-card-text)",
-                  "fontSize": 19,
+                  "fontSize": 22,
+                  "lineHeight": "28px",
                   "fontWeight": 600,
-                  "marginBottom": 8
+                  "letterSpacing": "-0.6px",
+                  "color": "var(--nxai-card-text)",
+                  "margin": 0
                 }
               },
               "children": "What do you need?"
@@ -72,25 +76,12 @@
               "key": "promise",
               "props": {
                 "style": {
-                  "fontSize": 12.5,
-                  "lineHeight": 1.5,
-                  "maxWidth": 520,
-                  "margin": "0 auto"
+                  "fontSize": 13.5,
+                  "lineHeight": 1.55,
+                  "color": "var(--nxai-card-sub)"
                 }
               },
-              "children": "Answers come from what Nexus has read, each one dated and linked to the record it came from. Where it cannot verify something, it says so rather than guess."
-            },
-            {
-              "type": "div",
-              "key": "footnote",
-              "props": {
-                "style": {
-                  "fontSize": 11,
-                  "marginTop": 10,
-                  "opacity": 0.85
-                }
-              },
-              "children": "What gets done is filed against the runbook that did it, in Record."
+              "children": "Answers come from what Nexus has read, each one dated and linked to the record it came from."
             }
           ]
         },
@@ -120,7 +111,7 @@
                   "disabled": false,
                   "onChange": "[fn]",
                   "onKeyDown": "[fn]",
-                  "placeholder": "Ask about a site, or describe what you want done",
+                  "placeholder": "Ask about a site",
                   "ref": {
                     "current": null
                   },
@@ -167,6 +158,20 @@
               }
             ]
           }
+        },
+        null,
+        {
+          "type": "div",
+          "key": "footnote",
+          "props": {
+            "style": {
+              "fontSize": 11.5,
+              "lineHeight": 1.5,
+              "color": "var(--nxai-card-sub)",
+              "textAlign": "left"
+            }
+          },
+          "children": "What gets done is filed against the runbook that did it, in Record."
         },
         {
           "type": "SiteContextStrip",

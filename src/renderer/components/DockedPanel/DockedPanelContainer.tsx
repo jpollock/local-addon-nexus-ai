@@ -774,6 +774,12 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
 
     // Chat is the panel's only content now that Insights is gone.
     const panelContent = React.createElement(PanelChat, {
+      // Which board this mount is. 'full' is the stage (a 560px centred
+      // column, stage strings); everything else is the 380px companion, which
+      // left-aligns and takes the short copy — a stage placeholder in a 380px
+      // field wraps and clips its last word.
+      density: panelState === 'full' ? 'stage' as const : 'companion' as const,
+      streamingStatusLine: this.state.streamingStatus,
       ref: this.chatRef,
       electron: this.props.electron,
       sessionId: activeSessionId,

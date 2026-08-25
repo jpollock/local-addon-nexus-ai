@@ -97,7 +97,12 @@ describe('no empty bubble while tools are running', () => {
       id: 'm1', role: 'assistant', content: '', streaming: true, toolCalls: [],
     }) as any);
 
-    expect(JSON.stringify(tree)).toContain('nexus-typing');
+    // fixes-082526: the typing dots are replaced by the sheet's thinking LINE.
+    // The dots did render (agent-console.css defines --ag-text-muted on :root
+    // and index.tsx loads it) — they are simply three 6px circles, which in a
+    // tall empty panel say that something exists without saying that anything
+    // is happening. Board C specifies words: "Thinking, stand by…".
+    expect(JSON.stringify(tree)).toContain('Thinking, stand by');
   });
 });
 

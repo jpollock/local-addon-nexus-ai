@@ -21,7 +21,7 @@ import type { OpeningState } from './openingAsksModel';
 import type { CitationTurn } from './citationModel';
 import type { ChatSession, ChatMessage } from '../../../common/types';
 import type { ProcedureApprovalContext } from '../../../common/chat-types';
-import { NEW_CHAT_HEADLINE, NEW_CHAT_PROMISE, NEW_CHAT_FOOTNOTE, NEW_CHAT_PLACEHOLDER, NEW_CHAT_DISCLOSURE } from './newChatCopy.generated';
+import { NEW_CHAT_HEADLINE, NEW_CHAT_PROMISE, NEW_CHAT_PROMISE_SHORT, NEW_CHAT_FOOTNOTE, NEW_CHAT_PLACEHOLDER, NEW_CHAT_PLACEHOLDER_SHORT, NEW_CHAT_SUGGESTIONS, NEW_CHAT_DISCLOSURE } from './newChatCopy.generated';
 import type { AIProvider } from '../../../common/types';
 
 const safeRenderer = new Renderer();
@@ -96,6 +96,16 @@ export interface SiteContextProps {
 interface Props {
   electron: any;
   sessionId: string | null;
+  /**
+   * Which density this mount is. 'stage' is the full-screen board (a 560px
+   * centred column); 'companion' is the 380px panel, which left-aligns
+   * because a 380px column has no width to centre in — centring at that size
+   * reads as an error. Defaults to companion: the docked panel is the common
+   * mount, and guessing 'stage' would put stage strings in a 380px field.
+   */
+  density?: 'stage' | 'companion';
+  /** A live status line from the stream, when one is known. */
+  streamingStatusLine?: string | null;
   selectedSiteIds: string[];
   siteContext: SiteContextProps;
   /**
@@ -192,6 +202,22 @@ const styles = {
     flexDirection: 'column' as const,
     justifyContent: 'center' as const,
   },
+  /**
+   * The empty session's COLUMN. Without it the block is a narrow strip
+   * floating in whatever width the window happens to be — the centring works
+   * vertically and does nothing horizontally, which is why a 2470px window
+   * showed more void than content. 560px is what makes the composer read as
+   * the centre of something.
+   */
+  logInnerEmpty: (stage: boolean) => ({
+    width: stage ? 560 : '100%',
+    maxWidth: '100%',
+    margin: '0 auto',
+    padding: stage ? '12px 0' : '12px 14px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 11,
+  }),
   logInner: {
     maxWidth: 720,
     margin: '0 auto',
@@ -200,14 +226,24 @@ const styles = {
     flexDirection: 'column' as const,
     gap: 10,
   },
+  /**
+   * A message you SENT should be quiet — it is the one thing on screen you
+   * already know, because you just typed it. This was a full-bleed
+   * full-strength brand fill, which made it the loudest object on the panel
+   * and broke the design system's own rule that the teal belongs to the
+   * logomark and the agent avatar, "never as a page background". The sheet's
+   * treatment: an 8% tint with a hairline, right-aligned, capped at 80%.
+   */
   userBubble: {
     alignSelf: 'flex-end',
-    background: UI_COLORS.WPE_BRAND,
-    color: UI_COLORS.NEXUS_MARK,
-    borderRadius: '12px 12px 2px 12px',
-    padding: '8px 12px',
-    fontSize: 13,
-    maxWidth: 480,
+    maxWidth: '80%',
+    background: 'rgba(14,202,212,0.08)',
+    boxShadow: 'inset 0 0 0 1px rgba(14,202,212,0.2)',
+    color: 'var(--nxai-card-text)',
+    borderRadius: '14px 14px 4px 14px',
+    padding: '10px 14px',
+    fontSize: 13.5,
+    lineHeight: 1.55,
     wordBreak: 'break-word' as const,
   },
   assistantBubble: {
@@ -700,6 +736,11 @@ export class PanelChat extends React.Component<Props, State> {
    * that quietly degraded to one whenever the read failed would be the same
    * defect with a fallback path.
    */
+  /** True on the full-screen board. See the `density` prop. */
+  private isStage(): boolean {
+    return this.props.density === 'stage';
+  }
+
   private renderOpeningState(): React.ReactElement {
     const opening = this.props.opening;
     const style = { padding: '24px 0', color: 'var(--nxai-card-sub)', textAlign: 'center' as const, fontSize: 13 };
@@ -714,23 +755,44 @@ export class PanelChat extends React.Component<Props, State> {
       // would put a fabricated "open incident, 14h" on a quiet fleet — the
       // withhold-rather-than-guess rule, applied to an invitation. Derived
       // asks render in the queue branch below, where they are real.
+      const stage = this.isStage();
       return React.createElement(
         'div',
-        { style: { ...style, padding: '8px 14px' }, 'data-panel-opening': 'invitation' },
+        {
+          style: {
+            display: 'flex',
+            flexDirection: 'column' as const,
+            alignItems: stage ? 'center' : 'flex-start',
+            gap: 9,
+            textAlign: stage ? ('center' as const) : ('left' as const),
+          },
+          'data-panel-opening': 'invitation',
+        },
+        // The headline is DISPLAY type. At body size the invitation reads as a
+        // status line, and the 30px-against-13.5px contrast is the entire
+        // hierarchy of this screen — flatten it and the subject becomes a
+        // paragraph.
         React.createElement(
           'div',
-          { key: 'headline', style: { color: 'var(--nxai-card-text)', fontSize: 19, fontWeight: 600, marginBottom: 8 } },
+          {
+            key: 'headline',
+            style: {
+              fontSize: stage ? 30 : 22,
+              lineHeight: stage ? '36px' : '28px',
+              fontWeight: 600,
+              letterSpacing: '-0.6px',
+              color: 'var(--nxai-card-text)',
+              margin: 0,
+            },
+          },
           NEW_CHAT_HEADLINE,
         ),
         React.createElement(
           'div',
-          { key: 'promise', style: { fontSize: 12.5, lineHeight: 1.5, maxWidth: 520, margin: '0 auto' } },
-          NEW_CHAT_PROMISE,
-        ),
-        React.createElement(
-          'div',
-          { key: 'footnote', style: { fontSize: 11, marginTop: 10, opacity: 0.85 } },
-          NEW_CHAT_FOOTNOTE,
+          { key: 'promise', style: { fontSize: 13.5, lineHeight: 1.55, color: 'var(--nxai-card-sub)' } },
+          // The companion drops the promise's SECOND clause rather than
+          // shrinking it — a refusal states its own reason when it happens.
+          stage ? NEW_CHAT_PROMISE : NEW_CHAT_PROMISE_SHORT,
         ),
       );
     }
@@ -746,32 +808,9 @@ export class PanelChat extends React.Component<Props, State> {
           )]
         : []),
       React.createElement('div', { key: 'invitation', style: { marginTop: 4, fontSize: 12 } }, opening.invitation),
-      ...opening.asks.map((ask) =>
-        React.createElement(
-          'button',
-          {
-            key: ask.classId,
-            'data-opening-ask': ask.classId,
-            'data-opening-ask-row': ask.situationId,
-            onClick: this.takeOpeningAsk(ask.text),
-            style: {
-              display: 'block',
-              width: '100%',
-              textAlign: 'left' as const,
-              marginTop: 8,
-              padding: '7px 10px',
-              background: 'var(--nxai-section-bg)',
-              border: '1px solid var(--nxai-card-border)',
-              borderRadius: 6,
-              color: 'var(--nxai-card-text)',
-              font: 'inherit',
-              fontSize: 12,
-              cursor: 'pointer',
-            },
-          },
-          ask.text,
-        ),
-      ),
+      // The asks used to render here as full-width bars. They are now pills
+      // BELOW the composer (renderComposerBlock) — same asks, same handler,
+      // the treatment the sheet specifies.
     );
   }
 
@@ -960,6 +999,21 @@ export class PanelChat extends React.Component<Props, State> {
   }
 
   renderMessage(msg: UIMessage) {
+    // THE THINKING STATE. A streaming assistant turn with no content yet used
+    // to render as nothing at all, so the panel showed a question and then
+    // went silent — worse than the empty state, which at least carried an
+    // invitation. There is no way to tell whether anything is happening.
+    if (msg.role === 'assistant' && msg.streaming && !msg.content && (msg.toolCalls ?? []).length === 0) {
+      return React.createElement(
+        'div',
+        {
+          key: msg.id,
+          'data-chat-thinking': 'true',
+          style: { display: 'flex', alignItems: 'center', gap: 8, paddingTop: 2, fontSize: 12, color: 'var(--nxai-card-sub)' },
+        },
+        this.props.streamingStatusLine ?? 'Thinking, stand by…',
+      );
+    }
     if (msg.role === 'system') {
       return React.createElement('div', { key: msg.id, style: styles.systemLine }, msg.content);
     }
@@ -1360,7 +1414,11 @@ export class PanelChat extends React.Component<Props, State> {
                 value: input,
                 onChange: this.handleInput,
                 onKeyDown: this.handleKeyDown,
-                placeholder: NEW_CHAT_PLACEHOLDER,
+                // Written to the MOUNT'S WIDTH. The placeholder wraps rather
+                // than truncating, so the stage string in a 380px field clips
+                // its last word against the bottom edge — the fixture carries
+                // a short form for exactly this case.
+                placeholder: this.isStage() ? NEW_CHAT_PLACEHOLDER : NEW_CHAT_PLACEHOLDER_SHORT,
                 disabled: streaming,
                 rows: 1,
                 'aria-label': 'Chat input',
@@ -1384,8 +1442,85 @@ export class PanelChat extends React.Component<Props, State> {
     // question is about — and the line naming who receives the data — sat some
     // 340px below the field they describe. For a P0-5 disclosure that is worse
     // than where it started: adjacency IS the disclosure.
+    const stage = this.isStage();
+    // Suggestions sit BELOW the field and are sized to their content. As
+    // full-width bars above it they read as disabled inputs, and two of them
+    // filling the width implied there were only two things one could ask.
+    // Empty session only: with a transcript the invitation is spent.
+    const emptySession = this.state.messages.length === 0;
+    // THE DERIVED ASKS, never the fixture's. NEW_CHAT_SUGGESTIONS are
+    // SPECIMENS of a derivation ("an open incident, 14h"); shipping them
+    // would put a fabricated incident on a quiet fleet. `opening.asks` is the
+    // real thing, and it is what needed the pill treatment — it was rendering
+    // as full-width grey bars ABOVE the field, which read as disabled inputs.
+    const derivedAsks = this.props.opening?.asks ?? [];
+    const pills = emptySession && derivedAsks.length > 0
+      ? React.createElement(
+          'div',
+          {
+            key: 'suggestions',
+            style: {
+              display: 'flex',
+              flexWrap: 'wrap' as const,
+              gap: stage ? 8 : 7,
+              justifyContent: stage ? ('center' as const) : ('flex-start' as const),
+              flexDirection: stage ? ('row' as const) : ('column' as const),
+              alignItems: stage ? ('center' as const) : ('flex-start' as const),
+            },
+          },
+          ...derivedAsks.map((sug) =>
+            React.createElement(
+              'button',
+              {
+                key: sug.classId,
+                'data-opening-ask': sug.classId,
+                'data-opening-ask-row': sug.situationId,
+                onClick: this.takeOpeningAsk(sug.text),
+                style: {
+                  // Content-sized, never full-width: a pill, not a field.
+                  width: 'auto',
+                  alignSelf: stage ? undefined : ('flex-start' as const),
+                  height: 32,
+                  padding: '0 12px',
+                  borderRadius: 9999,
+                  border: '1px solid var(--nxai-card-border)',
+                  background: 'transparent',
+                  color: 'var(--nxai-card-text)',
+                  font: 'inherit',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap' as const,
+                  maxWidth: '100%',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                },
+              },
+              sug.text,
+            ),
+          ),
+        )
+      : null;
+
+    const footnote = emptySession
+      ? React.createElement(
+          'div',
+          {
+            key: 'footnote',
+            style: {
+              fontSize: stage ? 12 : 11.5,
+              lineHeight: 1.5,
+              color: 'var(--nxai-card-sub)',
+              textAlign: stage ? ('center' as const) : ('left' as const),
+            },
+          },
+          NEW_CHAT_FOOTNOTE,
+        )
+      : null;
+
     return [
       React.createElement(React.Fragment, { key: 'composer' }, composer),
+      pills,
+      footnote,
       React.createElement(SiteContextStrip, { key: 'scope', ...this.props.siteContext }),
       React.createElement(
         'div',
@@ -1428,7 +1563,7 @@ export class PanelChat extends React.Component<Props, State> {
         },
         React.createElement(
           'div',
-          { style: styles.logInner },
+          { style: messages.length === 0 ? styles.logInnerEmpty(this.isStage()) : styles.logInner },
           messages.length === 0 ? this.renderOpeningState() : null,
           // The composer sits HERE while the session is empty — directly under
           // the invitation — and moves to the bottom on the first turn, when

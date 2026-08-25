@@ -102,7 +102,10 @@ describe('the invitation carries the ratified copy, and no invented situations',
       require('../../../src/renderer/components/DockedPanel/newChatCopy.generated');
     const t = texts(makeChat([]).render());
     expect(t).toContain(NEW_CHAT_HEADLINE);
-    expect(t).toContain(NEW_CHAT_PROMISE);
+    // makeChat passes no density, so this is the COMPANION mount, which takes
+    // the promise's first clause only — the second is what a 380px column can
+    // afford to drop, because a refusal states its own reason when it happens.
+    expect(t).toContain(NEW_CHAT_PROMISE.split('. Where it cannot')[0] + '.');
     expect(t).toContain(NEW_CHAT_FOOTNOTE);
     expect(t).not.toContain('Ask anything about your WordPress sites.');
   });
