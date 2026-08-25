@@ -101,7 +101,9 @@ The satellite is a **miniature of the runtime planes**, not a thin client: gates
 ## 3A. The system as built
 
 §2 and §3 describe the target. This section describes what is on the disk on
-`poc/nexintelligence-ux` today, so the distance between the two is legible
+`poc/nexintelligence-data` today (updated 2026-08-25; originally measured on
+`poc/nexintelligence-ux`, 2026-08-22 — fleet numbers below are from that
+measurement and have not been re-measured), so the distance between the two is legible
 without reading both and subtracting. **There is no hub and no Postgres: the
 satellite is the whole system**, and no intelligence-layer store leaves the
 machine. (Telemetry does — `src/cli/utils/telemetry.ts:27` — which is why the
@@ -182,7 +184,7 @@ resolved (§3A.2). `src/main/types/site-data.ts:24` types it as
 | index registry | 277 of 636 entries are ids of Local sites that no longer exist, all carrying a `structure` **[fleet]** — nothing prunes | measured |
 | `graph.db` | `wpe_site_id` is a *Site* UUID with sibling installs beneath it: 71 UUIDs carry more than one active install, 168 of 365 **[fleet]**. Resolving on it without an environment is ambiguous for 46% of the fleet | measured |
 | `ledger.db` | `semantic.content.changed` is structurally local-only — 2,549 of 2,550 on `source='local'` rows, **zero for `wpe` and zero for `external`** **[fleet]**, against a `state.plugin.observed` control that splits 9,251/432/31 over the same join | measured |
-| `ledger.db` | no success-side agent-run producer: `episodic.agent_run.failed` exists (`agentFailureProducer.ts:78`), its counterpart does not, while `graph.db.agent_runs` holds 116 rows **[fleet]** | measured |
+| `ledger.db` | ~~no success-side agent-run producer~~ **resolved 2026-08-25**: WP-57's task frame (`agentTaskFrame.ts`) brackets every agent run with `task.run.assigned`/`task.run.completed`. The `episodic.*` asymmetry remains by design — `episodic.agent_run.failed` (`agentFailureProducer.ts:78`) has no success twin because the frame already records success | code, was measured |
 | `sites.json` | the type is wrong in four ways: `remoteSiteEnv` typed as an object, `remoteSiteId` and `userId` absent from the interface, `installId` declared and present in 0 of 20 **[fleet]** | `types/site-data.ts:17-27` |
 
 ### 3A.2 Identity: two entity types, six namespaces, three link kinds

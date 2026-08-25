@@ -1,6 +1,8 @@
 # Intelligence Layer — Roadmap
 
-*Branch: `poc/nexintelligence` · updated 2026-08-19 · Companion docs:
+*Branch: `poc/nexintelligence-data` (chain: `main` ← `poc/nexintelligence` ←
+`poc/nexintelligence-ux` ← `poc/nexintelligence-data`, strictly linear) ·
+updated 2026-08-25 · Companion docs:
 [`docs/intelligence/architecture.md`](docs/intelligence/architecture.md) (ADRs 1–24, adopted),
 [`docs/intelligence/reconciliation-site-environment-model.md`](docs/intelligence/reconciliation-site-environment-model.md),
 [`docs/intelligence/implementation-audit-three-layer.md`](docs/intelligence/implementation-audit-three-layer.md),
@@ -231,6 +233,54 @@ registry micro bundle (verdict mechanization + empty-match MET). Micros:
 WP-40 plan-line consumption, citation-peek supply, grant-fold. Owner:
 sixth-must-not sitting + fold-in-place smoke. Designer: cycle four (the
 Govern matrix against the deny-flip law).
+
+## Waves 6+ — the packet cadence at scale (2026-08-19 → 2026-08-25)
+
+*This section is a summary written at the 2026-08-25 review; WORK_PACKETS.md
+is the record and wins any disagreement.*
+
+- [x] **WP-41 → WP-56** — session registry (WP-30), arrival/re-entry surfaces
+      (WP-46), the shell frame (WP-47), tier hierarchy and law work, the
+      resolver groundwork. Each with lock-announce → gate → merge in the
+      record.
+- [x] **WP-58** — collision-safe site resolution (`resolveLocalSite`, required
+      graph handle; the live collision-set test). Merged ahead of WP-57 by
+      owner ruling.
+- [x] **WP-57 + WP-59** — the agent task spine (`task.run.assigned`/
+      `task.run.completed` bracket every run, `agentTaskFrame.ts`) and
+      assembly on the agent path (bundles, manifests, ADR-7 fail-closed
+      refusal binding at tier). **Merged 2026-08-25** — the merge WP-58's
+      ruling sequenced, executed four days late; the 122-commit drift cost one
+      resolver rename and one doc-pin expiry, both reconciled same day.
+- [x] **WP-60/61/62** — tool-surface claims registered as an instrument (99
+      claims, 191 sites), remedy-string honesty, bulk extraction.
+- [x] **WP-63/64/65** — figure corrections (the published architecture
+      artifact owes a republish from `wp64-figure-corrections.md`), the
+      documented event-topic set pinned to source
+      (`documented-topics.test.ts`).
+- [x] **WP-67/68** — bulk outcome honesty and install-name resolution; the
+      WPE false-reason sentence and the greener-than-the-run badge remain
+      filed as the next packet's first items.
+- [x] **The fleet collapse** — Properties IS the sites list; Installs and
+      Fleet tabs retired; needs-you column; search-becomes-filters (designer
+      rounds through 9, one touchpoint still open).
+- [x] **The D7–D25 defect campaign** on the remote indexing pipeline (FTS
+      quoting, SSH connection leak, double-indexing, ACF meta, CPT counts).
+- [~] **The platform benchmark** — v1 built and corrected, v2 designed
+      (comparison-first, rubric grading, ground truth as a program), P1/P2
+      implementation midstream on this branch.
+- [x] **The 2026-08-25 architecture review** — implementation verified against
+      ADRs 1–24 (9 confirmed, 2 partial), test-authenticity audit (verdict:
+      real), fresh eval tally 50/0/18/10, `rowTimeToIso` fabrication fixed
+      (backfill skips, tap says why).
+
+**Next locks (as of 2026-08-25):** UX build 2 (needs-you rows + audit view —
+owns most of the 18 BLOCKED eval criteria; substrate shipped at WP-25/WP-30) ·
+WP-58b (thread the collision arm to the 51 "not found" callers + the GraphQL
+decline) · the comparator surface · pipeline observability phases 2–4 (the
+e2e harness gates the incremental-indexing flip) · bench P3/P4 · the shell
+phase A sitting. Standing owner items: the sixth must-not's sitting; the
+version/release decision for the merge to `main`.
 
 ## The design workstream (consolidated 2026-08-18)
 
