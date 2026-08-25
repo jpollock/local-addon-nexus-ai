@@ -128,6 +128,28 @@ export interface AgentTaskFrame {
   /** Whether anything was actually written for this run. */
   didEmit(): boolean;
   /**
+   * Run `fn` once, immediately after `task.run.assigned` lands — and never at
+   * all if this run stays quiet.
+   *
+   * WP-59's manifest is why this exists, and the reason is arithmetic rather
+   * than taste. Context is assembled on **every** run, but a
+   * `task.context.assembled` written per run would put back exactly the 1,440
+   * events a day the laziness above was bought to avoid, from the same
+   * diagnostic agent. So assembly stays in memory (it reads; it writes
+   * nothing) and its RECORD rides the frame's own realness test: a run that
+   * mattered gets a manifest, a quiet one gets nothing.
+   *
+   * Registering after the flush already happened runs `fn` immediately —
+   * `noteGatedAct` can beat the assembler to it, and a callback silently
+   * dropped for being late would lose the manifest on precisely the runs that
+   * acted fastest.
+   *
+   * A throwing callback costs the callback and nothing else: it must not
+   * un-flush the bracket, must not reach the run, and must not stop a later
+   * callback from running.
+   */
+  onFlush(fn: () => void): void;
+  /**
    * Close the run.
    *
    * Emits `task.run.completed` only when this run is REAL — it already
@@ -159,6 +181,27 @@ export function openAgentTask(opts: {
     let firstGatedActAt: number | undefined;
     let flushAttempted = false;
     let flushed = false;
+    /** Deferred work, drained once the bracket is real. See `onFlush`. */
+    let deferred: Array<() => void> | undefined = [];
+
+    /**
+     * Drain the deferred callbacks, once, after the assignment is on the
+     * ledger. Emptied first so a callback that registers another cannot
+     * recurse, and each is guarded on its own so one fault does not cost the
+     * rest.
+     */
+    const drain = (): void => {
+      const pending = deferred;
+      deferred = undefined; // from here, `onFlush` runs inline
+      if (!pending) return;
+      for (const fn of pending) {
+        try {
+          fn();
+        } catch {
+          /* a deferred fault costs that callback, never the bracket */
+        }
+      }
+    };
 
     /**
      * Write `task.run.assigned`, once, the first time this run turns out to be
@@ -198,6 +241,11 @@ export function openAgentTask(opts: {
       } catch {
         flushed = false; // and the correlation falls away with it
       }
+      // Only once the assignment is REAL. A manifest correlated to an
+      // assignment that was refused names nothing — the same rule
+      // `correlationId()` enforces, one topic over. The deferred work stays
+      // queued and simply never runs.
+      if (flushed) drain();
       return flushed;
     };
 
@@ -210,6 +258,19 @@ export function openAgentTask(opts: {
       },
       didEmit(): boolean {
         return flushed;
+      },
+      onFlush(fn: () => void): void {
+        if (deferred) {
+          deferred.push(fn);
+          return;
+        }
+        // Already drained — the bracket is on the ledger, so this is not
+        // deferred work any more, it is just work.
+        try {
+          fn();
+        } catch {
+          /* as above: the callback's fault, and only the callback's */
+        }
       },
       noteGatedAct(at: number): void {
         if (firstGatedActAt === undefined) firstGatedActAt = at;

@@ -307,3 +307,119 @@ describe('WP-57 · the actor id round-trips through normalizeProducerId', () => 
     expect(normalizeProducerId('act_agent_security-sentinel')).not.toBe('security-sentinel');
   });
 });
+
+/**
+ * WP-59 · `onFlush` — work that must wait until the run is REAL.
+ *
+ * The manifest is the caller this exists for, and the reason is arithmetic
+ * rather than taste. WP-57 measured `auth-probe` at 720 runs a day and made
+ * the frame lazy on the strength of it; a manifest emitted unconditionally per
+ * run would put those 720 writes straight back, from the one agent the
+ * laziness was bought for. So assembly happens in memory on every run and its
+ * RECORD rides the frame's own realness test.
+ *
+ * Three properties, and each is a way this could go wrong:
+ *
+ *   - It runs AFTER `task.run.assigned`, never before. The bracket precedes
+ *     what it explains — WP-51's ordering rule, and the manifest is the
+ *     clearest case of it: a manifest whose correlation names an unwritten
+ *     assignment names nothing.
+ *   - It runs ONCE, no matter how many things make the run real. A run with
+ *     ten gated acts assembled its context once and must record it once.
+ *   - It never runs when the run stayed quiet, and it never throws into the
+ *     flush that invoked it.
+ */
+describe('WP-59 · onFlush', () => {
+  it('does not run for a quiet successful run — the case laziness exists for', () => {
+    fakeCore();
+    const ran: number[] = [];
+
+    const frame = openAgentTask({ agentName: 'auth-probe', trigger: 'cron', startedAt: 1_000 })!;
+    frame.onFlush(() => ran.push(1));
+    frame.close({ status: 'success', finishedAt: 2_000, findings: 0 });
+
+    expect(ran).toEqual([]);
+  });
+
+  it('runs AFTER task.run.assigned lands, so the bracket precedes what it explains', () => {
+    const emitted = fakeCore();
+    const orderAtCallback: number[] = [];
+
+    const frame = openAgentTask({ agentName: 'security-sentinel', trigger: 'cron', startedAt: 1_000 })!;
+    // Captures how many events existed WHEN the callback ran — a callback
+    // invoked before the flush would see zero.
+    frame.onFlush(() => orderAtCallback.push(emitted.length));
+    frame.noteGatedAct(1_500);
+
+    expect(orderAtCallback).toEqual([1]);
+    expect(emitted[0].topic).toBe(RUN_ASSIGNED_TOPIC);
+  });
+
+  it('runs exactly once across many realness triggers', () => {
+    fakeCore();
+    let calls = 0;
+
+    const frame = openAgentTask({ agentName: 'a', trigger: 'cron', startedAt: 1_000 })!;
+    frame.onFlush(() => { calls += 1; });
+    frame.noteGatedAct(1_100);
+    frame.noteGatedAct(1_200);
+    frame.correlationId();
+    frame.close({ status: 'success', finishedAt: 2_000, findings: 3 });
+
+    expect(calls).toBe(1);
+  });
+
+  it('runs when the OUTCOME is what made the run real', () => {
+    fakeCore();
+    let calls = 0;
+
+    const frame = openAgentTask({ agentName: 'a', trigger: 'cron', startedAt: 1_000 })!;
+    frame.onFlush(() => { calls += 1; });
+    // No gated act; the run failed, and a failure is worth recording.
+    frame.close({ status: 'error', finishedAt: 2_000, error: 'boom' });
+
+    expect(calls).toBe(1);
+  });
+
+  it('does not run when the assignment itself could not be written', () => {
+    // No assignment on the ledger means no correlation to hang a manifest on.
+    // Writing it anyway is WP-57's "an id whose assignment was refused names
+    // nothing", one topic over.
+    setIntelligenceCore({
+      emitter: { emit: () => { throw new Error('ledger down'); } },
+    } as never);
+    let calls = 0;
+
+    const frame = openAgentTask({ agentName: 'a', trigger: 'cron', startedAt: 1_000 })!;
+    frame.onFlush(() => { calls += 1; });
+    frame.noteGatedAct(1_100);
+
+    expect(calls).toBe(0);
+  });
+
+  it('a throwing callback costs the callback, never the flush', () => {
+    const emitted = fakeCore();
+
+    const frame = openAgentTask({ agentName: 'a', trigger: 'cron', startedAt: 1_000 })!;
+    frame.onFlush(() => { throw new Error('manifest exploded'); });
+    expect(() => frame.noteGatedAct(1_100)).not.toThrow();
+    // And the run still closes, with both bracket events intact.
+    frame.close({ status: 'success', finishedAt: 2_000 });
+    expect(emitted.map((e) => e.topic)).toEqual([RUN_ASSIGNED_TOPIC, RUN_COMPLETED_TOPIC]);
+  });
+
+  it('registering after the flush already happened runs the callback immediately', () => {
+    // `noteGatedAct` can fire before the assembler finishes — the tool provider
+    // and the assembler are not ordered by anything. A callback registered late
+    // must still run, or the manifest silently vanishes on exactly the runs
+    // that acted fastest.
+    fakeCore();
+    let calls = 0;
+
+    const frame = openAgentTask({ agentName: 'a', trigger: 'cron', startedAt: 1_000 })!;
+    frame.noteGatedAct(1_100);
+    frame.onFlush(() => { calls += 1; });
+
+    expect(calls).toBe(1);
+  });
+});

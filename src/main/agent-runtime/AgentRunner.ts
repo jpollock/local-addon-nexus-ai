@@ -11,6 +11,7 @@ import { buildAgentContext } from './buildAgentContext';
 import { newRunId } from '../logging/runId';
 import { EventLog } from '../logging/eventLog';
 import { openAgentTask } from '../intelligence-host/agentTaskFrame';
+import { assembleForAgentRun } from '../intelligence-host/agentAssembly';
 
 const logger = createLogger('AgentRunner');
 const DEFAULT_TIMEOUT_MS = 300_000;
@@ -98,6 +99,33 @@ export class AgentRunner {
     // run() outright — an unclosed run.start bracket is exactly the "why did this agent not
     // finish?" case this whole mechanism exists to answer.
     try {
+      // WP-59 · assemble this run's context, as the agent itself.
+      //
+      // `assemble()` had exactly one caller before this — the docked-panel
+      // chat — so every agent ran with nothing the layer knew. Gated on the
+      // frame because the frame is where the actor id, the task id and ADR-7's
+      // autonomy class come from; without a core there is neither, and
+      // assembling with a fabricated actor would be worse than not assembling.
+      //
+      // The site is the triggering event's, which is the only target the
+      // RUNNER knows: an agent's own `scope.siteIds` is read per tool call by
+      // the agent, not here. A cron run therefore assembles about no
+      // particular site, and that is the honest answer rather than a gap.
+      //
+      // Awaited, and that is a real cost admitted rather than hidden: the run
+      // does not start until assembly returns. It is reads only, it never
+      // throws (a fault yields `undefined`), and it is the same work the chat
+      // surface already does on every single turn.
+      const contextBundle = frame
+        ? await assembleForAgentRun({
+            agent,
+            frame,
+            trigger,
+            siteId: event?.siteId,
+            services: this.services,
+          })
+        : undefined;
+
       const built = buildAgentContext({
         agent,
         event,
@@ -114,6 +142,9 @@ export class AgentRunner {
         // WP-57 · so the tool provider can thread the task and note gated acts,
         // and so `ctx.task` exists for the agent itself.
         ...(frame ? { frame } : {}),
+        // WP-59 · offered to the agent, consumed by none of them yet — this
+        // packet is additive by design; see `AgentContext.contextBundle`.
+        ...(contextBundle ? { contextBundle } : {}),
       });
       ctx = built.ctx;
       accFindings = built.accFindings;

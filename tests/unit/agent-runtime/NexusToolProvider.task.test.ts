@@ -37,6 +37,10 @@ function frameStub() {
       id: 'task_01M0K5X3R17VEHR26JGA2RV931',
       actor: { id: 'act_security_sentinel', kind: 'agent' as const },
       noteGatedAct: (at: number) => { noted.push(at); },
+      // WP-59 · the real frame's flush-and-name call, which the bind uses.
+      // Kept on the stub even though nothing here is bound: a stub missing a
+      // method its caller reaches for hides the reach.
+      correlationId: () => 'task_01M0K5X3R17VEHR26JGA2RV931',
     },
   };
 }

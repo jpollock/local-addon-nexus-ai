@@ -5,6 +5,7 @@ import { rotateIfNeeded, pruneOldFiles } from '../logging/rotate';
 import { EventLog, LogEvent, LogLevelName } from '../logging/eventLog';
 import { getAgentAutonomy, getAgentSettings } from '../ipc-handlers';
 import { NexusToolProvider } from './NexusToolProvider';
+import { refusalBind } from '../intelligence-host/agentAssembly';
 import { AgentAIClient } from './AgentAIClient';
 import { SpendTracker, DailyBudgetGuard } from '../budget/spendTracker';
 import { STORAGE_KEYS } from '../../common/constants';
@@ -15,6 +16,7 @@ import { getProvider } from '../chat/providers/index';
 import { AgentCredentialsContext } from '../credentials/AgentCredentialsContext';
 import { NotConnectedError } from '../credentials/types';
 import type { AgentDefinition, NexusEvent, AgentContext, AgentLogger, Finding, AgentAction, AgentDatabase, AgentDbHandle } from '../agent-sdk/types';
+import type { ContextBundle } from '../../intelligence';
 import type { ToolRegistry } from '../mcp/tool-registry';
 import type { NexusServices } from '../mcp/types';
 import type { AgentStateStore } from './AgentStateStore';
@@ -46,7 +48,13 @@ export interface AgentContextDeps {
     id: string;
     actor: { id: string; kind: 'agent' };
     noteGatedAct(at: number): void;
+    correlationId(): string | undefined;
   };
+  /**
+   * WP-59 · the run's assembled context, from `AgentRunner`. Absent whenever
+   * the frame is, plus whenever assembly itself degraded.
+   */
+  contextBundle?: ContextBundle;
 }
 
 /**
@@ -67,7 +75,7 @@ export function buildAgentContext(deps: AgentContextDeps): {
   accSites: Record<string, { status: string; findings: Finding[] }>;
   toolProvider: NexusToolProvider;
 } {
-  const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager, fullRun, logFileName, eventLog, runId, frame } = deps;
+  const { agent, event, toolRegistry, services, stateStore, resolvedProvider, logDir, dbManager, fullRun, logFileName, eventLog, runId, frame, contextBundle } = deps;
   const agentName = agent.name;
   const agentSettings = getAgentSettings(agentName);
 
@@ -95,6 +103,10 @@ export function buildAgentContext(deps: AgentContextDeps): {
     agent.tools,
     aiEvents,
     frame,
+    // WP-59 · the bind, derived here so the tool provider needs no opinion
+    // about bundles. `undefined` for a normal assembly AND for one that
+    // faulted — a fault degrades, only a refusal binds.
+    refusalBind(contextBundle),
   );
 
   // Build AI client per-run so it gets this agent's scoped tool set.
@@ -277,6 +289,8 @@ export function buildAgentContext(deps: AgentContextDeps): {
     // WP-57 · absent when unframed, and the key is omitted rather than set to
     // undefined: an agent asking `if ('task' in ctx)` gets a true answer.
     ...(frame ? { task: { id: frame.id, actor: frame.actor } } : {}),
+    // WP-59 · same rule, same reason: omitted rather than set to undefined.
+    ...(contextBundle ? { contextBundle } : {}),
   };
 
   return { ctx, agentLog, accFindings, accActions, accSites, toolProvider };

@@ -28556,3 +28556,183 @@ This is WP-20c's merge finding turned from an explanation into a measurement:
 *read the skipped column first; a passed-column delta of ten across a worktree
 boundary is this, not a regression.* Any WP-59 delta is measured against
 **8,766 passed / 12 skipped**, not against `wp-57`'s numbers.
+
+---
+
+## WP-59 · COMPLETE (2026-08-25) — the agent assembles as itself, and a refusal binds
+
+```
+Test Suites: 638 passed, 638 total
+Tests:       12 skipped, 8807 passed, 8819 total
+EXIT=0
+```
+
+Against the baseline **8,766 passed / 12 skipped**: **+41 passed, +3 suites,
+zero failures, skipped column unchanged.** The +3 suites are
+`agentAssembly.test.ts` (slice 1, already committed),
+`AgentRunner.contextBundle.test.ts` and `NexusToolProvider.refusal.test.ts`.
+
+### What shipped, against the five scope items
+
+| # | scope | shipped |
+|---|---|---|
+| 1 | `agentAssembly.ts` | yes — one `assemble()`, two callers, no fork |
+| 2 | `AgentRunner` assembles before `agent.run()` | yes, gated on the frame |
+| 3 | `ctx.context` | shipped as **`ctx.contextBundle`** — see the deviation below |
+| 4 | `task.context.assembled` per run | yes, **deferred onto the frame's realness test** |
+| 5 | fail-closed per R3 §6.1 | yes, both halves — a fault degrades, a refusal binds |
+
+### THE NUMBER THIS PACKET EXISTED TO CHANGE
+
+Announce: **36 `task.context.assembled` manifests, all 36 the chat
+assembler's, zero from an agent.** An agent run now writes its own, attributed
+to `act_<agent>` / `kind: 'agent'` with `source.system = 'assembler:agent'`, so
+"what did the agent know when it acted" has a stored answer for the actors that
+act unattended. `AgentRunner.contextBundle.test.ts` drives a real runner, a real
+frame, the real `assemble()` and a real ledger to prove it — that suite mocks
+**nothing on the path**, because the gap it closes was never a broken call, it
+was an absent one, and a mocked assembler cannot tell those apart.
+
+### THE MANIFEST IS DEFERRED, AND THAT IS ARITHMETIC
+
+`AgentTaskFrame.onFlush(fn)` is new. Assembly runs on **every** run — it only
+reads, so it costs nothing to do — but a manifest written per run would put
+back exactly the 1,440 events/day WP-57's lazy frame was bought to remove, from
+the same two-minute diagnostic agent. So the record rides the frame's own
+realness test: `task.run.assigned` → `task.context.assembled` → the act, and
+for a quiet run, nothing at all. Registering after the flush already happened
+runs inline rather than dropping — `noteGatedAct` can beat the assembler, and
+a callback silently dropped for being late would lose the manifest on precisely
+the runs that acted fastest.
+
+`observed_at` is `manifest.assembled_at`, never the flush moment, which can be
+the whole length of the run later.
+
+### THE REFUSAL IS ENFORCED, NOT REQUESTED
+
+R3's sharpest line, built as two separate things on purpose:
+
+- **A fault degrades.** Throwing assembler, absent core, unreadable store →
+  `contextBundle` is `undefined` and the run is byte-identical to pre-packet.
+- **A refusal binds.** No policy set for an autonomous actor (ADR-7), or a
+  granted procedure that will not load or hash-mismatches → every Tier ≥ 2 call
+  is refused at `NexusToolProvider.invokeInner`, every Tier 1 read still runs.
+
+The bundle *says* "take no action that changes any site, run read-only
+diagnostics only" — but that is prose in a turn block, and **prose is advice a
+prompt-injected model can ignore.** A bind that only asks is fail-open with a
+paragraph. Four decisions inside it, each pinned by a test:
+
+- **Tier is the boundary**, the same one `noteGatedAct` and the durable audit
+  write already use. Tier 1 is a read; "read-only diagnostics only" is an
+  instruction to keep reading, so a bound run keeps every read and loses every
+  act.
+- **After the Tier-3 gate, deliberately.** Tier 3 is refused for an agent
+  permanently and for an unrelated reason. Leading with the bind would tell a
+  user that restoring the policy set makes `wpe_delete_install` work.
+- **The refusal makes the run REAL**, via `frame.correlationId()` — the frame's
+  own flush-and-name call. A run stopped from acting is not a quiet run, and
+  the laziness would otherwise leave the whole episode unrecorded. The task id
+  goes into the error text, so the agent's report, the event log's `run=` lines
+  and the ledger correlation name the same episode.
+- **`noteGatedAct` was deliberately NOT reused for it.** A refusal is not an
+  act; noting one would date R2's arm-to-first-write measurement to something
+  that never happened.
+
+**Measured before the bind was written, because the volume worry was real:** the
+test core assembles with a live policy set (`pol.ops-default+rb.bulk-plugin-update+…`,
+version `psv_1a180517646a`, 10 constraints, `asserted: full`, `failClosed = false`).
+A refusal is genuinely exceptional, so making a bound run real does not
+reintroduce the 1,440/day problem. The e2e refusal pin therefore has to force
+`core.law = undefined` to reach the path at all.
+
+### DEVIATION FROM THE ANNOUNCE — `ctx.contextBundle`, not `ctx.context`
+
+Scope item 3 and the LOCKED table both say `AgentContext.context`. It shipped as
+`contextBundle`. Reason: `ctx.context.context` is what the shorter name reads as
+at the call sites, and `ContextBundle` is what the type is actually called
+everywhere else in the layer. Recorded here rather than left as a silent
+divergence — the SDK surface is the one thing in this packet an agent author
+sees.
+
+### LOCK EXTENSION — three files not in the announce's table
+
+| file | why |
+|---|---|
+| `src/main/agent-runtime/NexusToolProvider.ts` | the bind's enforcement point |
+| `src/main/intelligence-host/agentTaskFrame.ts` | `onFlush`, the deferral the manifest rides |
+| `tests/unit/agent-runtime/*` | the pins |
+
+Checked before touching them: `git branch --list 'wp-*'` (66 branches),
+`git diff --stat wp-57...$b -- <file>` per branch, **no branch diverges on any of
+the three.** Per the announce's own protocol amendment, the branch list is the
+registry — not this document.
+
+### THE THREE ANNOUNCE RULING REQUESTS, answered in code as non-rulings
+
+1. **Intent** — the agent's own reviewed `description`, falling back to
+   `"<trigger> run of <agent>"`. Never blank: a blank intent in the manifest is
+   a stored record that says nothing about why the run happened.
+2. **Targets** — empty is first-class, not an error. Measured against the
+   assembler rather than assumed: it carries `targets: []` internally and its
+   episodic retrieval returns `[]` for a zero-target request rather than
+   throwing. `auth-probe` (`siteScoped: false`) simply has no episodic priors,
+   which is correct — there is nothing to have priors about.
+3. **Does the prose reach the model?** **No, and that is why this shipped now.**
+   Bundle and manifest only, **zero change to any agent's model call**. Feeding
+   the ambient block into every agent's prompt is a real behaviour change with
+   real token cost and deserves evidence. WP-20b's pattern; WP-20f then flipped
+   it by ruling once there was something to rule on.
+
+Consequence of (3), stated plainly: `semantic` and `wrapUntrusted` are
+deliberately absent from the assembler's dependency bag. The assembler skips
+retrieval entirely without `wrapUntrusted` — its own comment calls shipping
+attacker-authorable text into a trusted channel "the one failure this assembler
+must not have" — and until the prose reaches a model there is nothing for
+retrieval to ride on. Wiring it early would add the risk without the value.
+
+### MUTATION-VERIFIED, seven mutations, all caught
+
+Every script asserted its anchor matched before running; both files restored and
+confirmed clean afterwards.
+
+| # | mutation | caught by |
+|---|---|---|
+| M1c | bundle never reaches `ctx` (`...(false ? …)`) | both contextBundle tests |
+| M2 | manifest emitted eagerly instead of deferred | both — including the ordering assertion, since an eager manifest lands *before* `task.run.assigned` |
+| M3 | actor spoofed to `act_chat_assembler` / `system` | manifest attribution |
+| M4 | `observed_at` stamped at write time | `observed_at === payload.assembled_at` |
+| MB1 | bind floor raised to tier ≥ 3 | 4 tests, unit and e2e |
+| MB2 | `frame.id` read instead of `correlationId()` | 2 — the sharp one: same-looking id, but the run never flushes and the episode stays unrecorded |
+| MB3 | bind hoisted above the Tier-3 gate | the Tier-3 message test |
+
+**Two earlier mutations produced no signal and were replaced, not counted.** M1
+(`const contextBundle = frame ?` → `false ?`) and M1b (`→ !frame ?`) both yielded
+`Tests: 0 total` — compile errors, not survivors. Same discipline as the M15
+FALSE SURVIVED lesson: *an invalid mutation is not evidence of anything.*
+
+### A LATENT GAP THE PACKET FOUND IN ITS OWN NEIGHBOUR
+
+`AgentRunner.taskframe.test.ts`'s `jest.mock` frame stub had no `onFlush`, so
+`req.frame.onFlush(...)` threw inside `assembleForAgentRun`, was swallowed by
+that function's outer catch, and **the whole assembly path silently no-opped
+while the suite stayed green.** Non-fatality is a virtue on this seam and it is
+also a mask. Fixed by making the stub faithful, in both that file and
+`NexusToolProvider.task.test.ts` (which now stubs `correlationId` too). The rule:
+*a stub missing a method its caller now reaches for hides the reach — which is
+the opposite of what a mock is for.*
+
+### NOT DONE, and named rather than implied
+
+- **No agent consumes the bundle.** By design (see ruling 3), but it means the
+  packet's user-visible effect today is the manifest and the bind, not better
+  agent behaviour.
+- **The bind has no UI.** A bound run reports through the agent's own error
+  path and the ledger. Whether Now/Inbox should surface "this agent ran
+  read-only because policy was missing" is a disposition question, not this
+  packet's.
+- **v0 holds no capability grant** (`capability: null`), so the procedure plane
+  stays dark for agent runs and `refusalBind`'s procedure branch is reachable
+  only once phase 3 lands. It is built and unit-tested now because building it
+  later, next to a live grant, is how the two refusal causes get collapsed into
+  one message.

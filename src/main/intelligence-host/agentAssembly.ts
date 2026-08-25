@@ -47,11 +47,65 @@
  * fail-open-on-exception, so they are kept apart from the first line of code.
  */
 import { assemble } from '../../intelligence';
+import type { BundleManifest, ContextBundle, EntityRef } from '../../intelligence';
 import type { AgentDefinition } from '../agent-sdk/types';
+import { resolveSite } from '../mcp/site-resolver';
+import type { NexusServices } from '../mcp/types';
 import { getIntelligenceCore } from './coreRegistry';
+import { environmentEntityId, siteEntityId } from './provisionalEntity';
 
 /** `surface` — so a manifest says which actor class produced it. */
 export const AGENT_SURFACE = 'agent.runtime';
+
+/**
+ * The manifest topic — the SAME one chat writes, deliberately.
+ *
+ * A separate topic per surface would be the `total`-shaped collision ruled at
+ * WP-48/50/52 read backwards: one question ("what context did this actor
+ * have") split across two words, so every reader has to know both. `actor` and
+ * `surface` already distinguish them, and they are the fields a reader would
+ * filter on anyway.
+ */
+export const CONTEXT_ASSEMBLED_TOPIC = 'task.context.assembled';
+export const CONTEXT_ASSEMBLED_SCHEMA = 'context.assembled/1';
+
+/** `source.system` — one value, so liveness is one row in the health table. */
+export const AGENT_ASSEMBLER_SYSTEM = 'assembler:agent';
+
+/**
+ * The entities this run assembled context ABOUT.
+ *
+ * The run's site at the runner level is exactly the triggering event's — an
+ * agent's own `scope.siteIds` is read by the agent, per tool call, not by the
+ * runner, so it is not a fact the run frame knows. A cron run therefore has no
+ * target, and that is the common case rather than a degraded one.
+ *
+ * **Nothing is invented when the id does not resolve.** The event's site id is
+ * Local's, so a WPE install id or a stale id lands here and finds nothing;
+ * minting an entity for a site we cannot name would put a fabricated target in
+ * the one record whose job is saying what was really in scope. Empty is the
+ * honest answer and the assembler treats it as first-class.
+ */
+export function agentRunTargets(
+  services: Pick<NexusServices, 'siteData'> | undefined,
+  siteId: string | undefined
+): EntityRef[] {
+  if (!siteId || !services?.siteData) return [];
+  try {
+    const site = resolveSite(siteId, services.siteData);
+    if (!site) return [];
+    const core = getIntelligenceCore();
+    // Both, as chat does: the running copy and the logical site are different
+    // entities, and a fact about one is not automatically a fact about the
+    // other.
+    return [
+      { role: 'environment', id: environmentEntityId(core?.entities, site.id), label: site.name },
+      { role: 'site', id: siteEntityId(core?.entities, site.id), label: site.name },
+    ];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * What this run is FOR, in the manifest's own field.
@@ -64,19 +118,104 @@ export function agentRunIntent(agent: AgentDefinition, trigger: string): string 
   return described || `${trigger} run of ${agent.name}`;
 }
 
+/**
+ * What binds this run, when the assembler refused it.
+ *
+ * **The other half of R3, and the one the module header said was not built
+ * yet.** A fault degrades — the bundle is `undefined` and the run is exactly
+ * what it was before this packet. A REFUSAL binds: `assemble()` returns a
+ * `failClosed` bundle when an autonomous actor has no policy set (ADR-7), or
+ * when its granted procedure will not load or does not hash to the document it
+ * was granted against. The bundle's own words are "take no action that changes
+ * any site, run read-only diagnostics only".
+ *
+ * Those words are prose in a turn block, and **an agent's prose is advice a
+ * prompt-injected model can ignore.** So they are enforced, in
+ * `NexusToolProvider`, against tier — not asked for. This function is only the
+ * derivation of the SHORT cause; it exists here rather than in the tool
+ * provider so the provider needs no opinion about bundles, and returns
+ * `undefined` for the overwhelmingly common case of a bundle that assembled
+ * normally or an assembly that never happened.
+ *
+ * Absence is deliberately NOT a refusal: no bundle means no core, no frame, or
+ * a fault, and binding on those would make an intelligence-layer outage stop
+ * every agent in the fleet from working — fail-open-on-exception's mirror
+ * image, and just as wrong.
+ */
+export function refusalBind(bundle: ContextBundle | undefined): { reason: string } | undefined {
+  if (!bundle?.failClosed) return undefined;
+  const procedure = bundle.procedure;
+  if (procedure && procedure.status === 'refused') {
+    return {
+      reason:
+        `the procedure for ${procedure.capability} was not delivered ` +
+        `(${procedure.code})`,
+    };
+  }
+  return { reason: 'no operating policy set could be loaded for this autonomous run' };
+}
+
 export interface AgentAssemblyRequest {
   agent: AgentDefinition;
-  /** The run's frame — the actor and the task id both come from here. */
+  /**
+   * The run's frame — the actor, the task id, and the deferral the manifest
+   * rides on all come from here.
+   */
   frame: {
     id: string;
     actor: { id: string; kind: 'agent' };
     autonomy: 'interactive' | 'autonomous';
+    onFlush(fn: () => void): void;
   };
   trigger: string;
-  /** Resolved entities. Empty when the agent is not site-scoped. */
-  targets: unknown[];
+  /** The triggering event's site, when the run had one. */
+  siteId?: string;
+  /** For resolving that site. Absent on a run with no site to resolve. */
+  services?: Pick<NexusServices, 'siteData'>;
   /** Test seam. Production uses the core's own `assemble`. */
   assembleFn?: typeof assemble;
+}
+
+/**
+ * Record what this run was given, once the run turns out to be real.
+ *
+ * Mirrors `chatAssembly`'s `emitManifest` and differs in exactly two fields,
+ * both load-bearing: the actor is the **agent** (never `act_chat_assembler`,
+ * never `kind: 'system'` — attributing an agent's manifest to chat would leave
+ * "what did the agent know" unanswered while looking answered), and
+ * `source.system` names this producer so liveness is separable.
+ *
+ * The whole body is guarded. A lost manifest must not cost the run, and this
+ * is invoked from inside the frame's flush, where a throw would also cost the
+ * bracket.
+ */
+function emitAgentManifest(
+  core: NonNullable<ReturnType<typeof getIntelligenceCore>>,
+  manifest: BundleManifest,
+  targets: EntityRef[],
+  actor: { id: string; kind: 'agent' }
+): void {
+  try {
+    const entity: Record<string, string> = {};
+    for (const t of targets) entity[t.role] = t.id;
+    core.emitter.emit({
+      // The ASSEMBLY's own moment, carried out of the manifest. Never "now":
+      // this runs at flush time, which can be the whole length of the run
+      // later, and a bracket stamped at write time is the data laundering the
+      // layer's `observed_at` invariant forbids.
+      observed_at: manifest.assembled_at,
+      topic: CONTEXT_ASSEMBLED_TOPIC,
+      schema: CONTEXT_ASSEMBLED_SCHEMA,
+      entity,
+      actor,
+      source: { class: 'work', system: AGENT_ASSEMBLER_SYSTEM, trust: 'emitted' },
+      correlation: manifest.task,
+      payload: manifest as unknown as Record<string, unknown>,
+    } as never);
+    core.scheduleFolds?.();
+  } catch {
+    /* a lost manifest must not cost the run, nor the bracket it rides on */
+  }
 }
 
 /**
@@ -88,14 +227,15 @@ export interface AgentAssemblyRequest {
  */
 export async function assembleForAgentRun(
   req: AgentAssemblyRequest
-): Promise<unknown | undefined> {
+): Promise<ContextBundle | undefined> {
   try {
     const core = getIntelligenceCore();
     if (!core) return undefined;
 
     const run = req.assembleFn ?? assemble;
+    const targets = agentRunTargets(req.services, req.siteId);
 
-    return await run(
+    const bundle = await run(
       {
         // The actor is the RUN's, not a surface constant. `autonomy` is
         // ADR-7's input and it was derived from the trigger by the frame —
@@ -110,7 +250,7 @@ export async function assembleForAgentRun(
         // and the procedure plane stays dark until it does.
         capability: null,
         task: { id: req.frame.id, intent: agentRunIntent(req.agent, req.trigger) },
-        targets: req.targets,
+        targets,
         surface: AGENT_SURFACE,
       } as never,
       {
@@ -126,6 +266,19 @@ export async function assembleForAgentRun(
         // ride on. Wiring it before then would add the risk without the value.
       } as never
     );
+
+    // DEFERRED, and the reason is arithmetic. Assembly itself is reads only —
+    // it costs nothing to do on every run. Its RECORD is a ledger write, and
+    // one per run is the 1,440 events a day WP-57's lazy frame was bought to
+    // avoid, from the same two-minute diagnostic agent. So the manifest rides
+    // the frame's own realness test: it lands for runs that mattered, after
+    // the assignment it correlates to, and not at all for a quiet run.
+    const manifest: BundleManifest | undefined = bundle?.manifest;
+    if (manifest) {
+      req.frame.onFlush(() => emitAgentManifest(core, manifest, targets, req.frame.actor));
+    }
+
+    return bundle;
   } catch {
     // A fault costs the bundle, never the run.
     return undefined;

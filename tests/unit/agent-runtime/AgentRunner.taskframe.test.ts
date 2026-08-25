@@ -32,6 +32,11 @@ jest.mock('../../../src/main/intelligence-host/agentTaskFrame', () => ({
       actor: { id: `act_agent_${o.agentName}`, kind: 'agent' },
       autonomy: o.trigger === 'manual' ? 'interactive' : 'autonomous',
       noteGatedAct: jest.fn(),
+      // WP-59 · the real frame defers the manifest onto this. Kept faithful
+      // even though this suite asserts nothing about manifests: a stub missing
+      // a method the caller now uses degrades assembly silently, which is the
+      // opposite of what a mock is for.
+      onFlush: (fn: () => void) => fn(),
       correlationId: () => 'task_TEST',
       didEmit: () => (frameDidEmit !== undefined ? frameDidEmit : closed.length > 0),
       close: (c: any) => closed.push(c),
