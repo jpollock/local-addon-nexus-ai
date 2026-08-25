@@ -41,6 +41,25 @@ if [ -d "$STALE" ] && ls "$STALE"/*capybara* >/dev/null 2>&1; then
   exit 1
 fi
 
+# ── Drift gate ────────────────────────────────────────────────────────────────
+# keys.json is the answer key every rubric quotes. If the substrate no longer
+# matches it, grading is meaningless — correct answers score wrong (the "8 vs
+# 10" incident) or wrong ones score right. Re-measure before every run and
+# refuse on mismatch. BENCH_SKIP_DRIFT=1 skips it for offline harness
+# iteration — never for a run whose numbers anyone will quote.
+GT_SNAPSHOT="$(mktemp -t nexus-bench-gt)"
+if [ "${BENCH_SKIP_DRIFT:-0}" = "1" ]; then
+  echo "Drift gate: SKIPPED (BENCH_SKIP_DRIFT=1) — do not publish numbers from this run."
+  echo '{"skipped": true}' > "$GT_SNAPSHOT"
+else
+  echo "Drift gate: re-measuring substrate against keys.json…"
+  if ! node "$BENCH_DIR/ground-truth.js" --check > "$GT_SNAPSHOT"; then
+    echo "Drift gate FAILED — see mismatches above. Not running." >&2
+    exit 1
+  fi
+  echo "Drift gate: substrate matches keys.json."
+fi
+
 # promptfoo itself runs from /tmp so its sqlite does not conflict with the addon's
 # Electron-compiled better-sqlite3. The claude subprocesses do NOT inherit this
 # cwd — each provider sets its own.
