@@ -1,0 +1,66 @@
+{
+  "measuredAt": "2026-08-25T15:59:20.868Z",
+  "sites": {
+    "cedarvalehealt": {
+      "providers_total": 60,
+      "providers_accepting": 45,
+      "treatments_total": 45,
+      "treatments_overdue": 8,
+      "treatments_unreviewed": 2,
+      "treatments_stale_total": 10,
+      "locations_total": 25,
+      "locations_with_hours": 25,
+      "fingerprint": {
+        "published_posts": 848,
+        "last_modified_gmt": "2026-08-10 20:42:59"
+      }
+    },
+    "summitdermatol": {
+      "locations_total": 2,
+      "locations_with_hours": 0,
+      "fingerprint": {
+        "published_posts": 117,
+        "last_modified_gmt": "2026-08-11 19:04:12"
+      }
+    },
+    "ridgeline": {
+      "providers_total": 27,
+      "providers_accepting": 23,
+      "fingerprint": {
+        "published_posts": 113,
+        "last_modified_gmt": "2026-08-24 19:43:19"
+      }
+    },
+    "willowcreekderm": {
+      "wp_version": "6.9.7"
+    }
+  },
+  "npi_overlap": {
+    "count": 23,
+    "names": [
+      "Anne Schoen, DO",
+      "Cielo Wehner, MD",
+      "Clementina Stark-Medhurst, DO",
+      "Clementine Lang, MD",
+      "Edgardo Nader, MD",
+      "Elian Mills, PA-C",
+      "Elias Lowe, DO",
+      "Emilie Gutkowski, DO",
+      "Kayden Wisoky, DO",
+      "Lavern Kris, DO",
+      "Milford Lang, NP",
+      "Mortimer Thompson, MD",
+      "Nickolas Dach, PA-C",
+      "Oral Jacobson, MD",
+      "Ransom Abshire, DO",
+      "Seamus Gorczany, DO",
+      "Selina Boyer, MD",
+      "Stephen Altenwerth, NP",
+      "Susan Hand, DO",
+      "Trey Greenholt, MD",
+      "Verdie Pouros, MD",
+      "Vicente Nolan, MD",
+      "Wilburn Champlin, PA-C"
+    ]
+  }
+}
