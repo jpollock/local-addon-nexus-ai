@@ -21,6 +21,7 @@ import type { OpeningState } from './openingAsksModel';
 import type { CitationTurn } from './citationModel';
 import type { ChatSession, ChatMessage } from '../../../common/types';
 import type { ProcedureApprovalContext } from '../../../common/chat-types';
+import { NEW_CHAT_HEADLINE, NEW_CHAT_PROMISE, NEW_CHAT_FOOTNOTE, NEW_CHAT_PLACEHOLDER, NEW_CHAT_DISCLOSURE } from './newChatCopy.generated';
 
 const safeRenderer = new Renderer();
 // Suppress raw HTML passthrough — LLM output should never need raw HTML
@@ -683,11 +684,33 @@ export class PanelChat extends React.Component<Props, State> {
     const style = { padding: '24px 0', color: 'var(--nxai-card-sub)', textAlign: 'center' as const, fontSize: 13 };
 
     if (!opening) {
+      // The invitation, from the ratified sheet (newChatCopy.generated.ts).
+      //
+      // NO SUGGESTIONS HERE, deliberately. The sheet's pin is that suggestions
+      // are QUESTIONS DERIVED from what is true right now; the fixture's three
+      // are specimens of that derivation, not copy to ship. With no opening
+      // queue there is nothing true to derive from, and rendering them anyway
+      // would put a fabricated "open incident, 14h" on a quiet fleet — the
+      // withhold-rather-than-guess rule, applied to an invitation. Derived
+      // asks render in the queue branch below, where they are real.
       return React.createElement(
         'div',
-        { style, 'data-panel-opening': 'invitation' },
-        React.createElement('div', { key: 'mark', style: { color: UI_COLORS.WPE_BRAND, fontSize: 18, marginBottom: 8 } }, 'Nexus'),
-        React.createElement('div', { key: 'line' }, 'Ask anything about your WordPress sites.'),
+        { style: { ...style, padding: '8px 14px' }, 'data-panel-opening': 'invitation' },
+        React.createElement(
+          'div',
+          { key: 'headline', style: { color: 'var(--nxai-card-text)', fontSize: 19, fontWeight: 600, marginBottom: 8 } },
+          NEW_CHAT_HEADLINE,
+        ),
+        React.createElement(
+          'div',
+          { key: 'promise', style: { fontSize: 12.5, lineHeight: 1.5, maxWidth: 520, margin: '0 auto' } },
+          NEW_CHAT_PROMISE,
+        ),
+        React.createElement(
+          'div',
+          { key: 'footnote', style: { fontSize: 11, marginTop: 10, opacity: 0.85 } },
+          NEW_CHAT_FOOTNOTE,
+        ),
       );
     }
 
@@ -1314,7 +1337,7 @@ export class PanelChat extends React.Component<Props, State> {
                 value: input,
                 onChange: this.handleInput,
                 onKeyDown: this.handleKeyDown,
-                placeholder: 'Ask anything about your sites…',
+                placeholder: NEW_CHAT_PLACEHOLDER,
                 disabled: streaming,
                 rows: 1,
                 'aria-label': 'Chat input',
@@ -1387,12 +1410,18 @@ export class PanelChat extends React.Component<Props, State> {
         'div',
         { style: { padding: '3px 14px 6px', color: 'var(--nxai-card-sub)', fontSize: 10, display: 'flex', gap: 6, flexShrink: 0 } },
         // P0-5 disclosure: name the data flow, not just the model. Tooltip carries the detail.
+        // P0-5, amended 2026-08-25 with the disclosure kept intact. The
+        // PROVIDER and the PAYLOAD stay visible — they name who receives what,
+        // which is the disclosure's substance. The model VERSION moves into
+        // the tooltip: it is the part a person cannot act on and it changes
+        // without them. The sheet's earlier absence said "no model identifier
+        // in the footer", which read as "no disclosure"; this split is the
+        // correction, and the confirmation rule rides the tooltip with it.
         React.createElement(
           'span',
-          { title: `Chat sends your site content and data to this AI provider (${modelName}). Change the provider in Settings.` },
-          `${providerName} · ${modelName} · sends site data`,
+          { title: `${providerId}/${modelName} · ${NEW_CHAT_DISCLOSURE.tooltip.split('· ').slice(1).join('· ')}` },
+          `${providerName} · sends site data`,
         ),
-        React.createElement('span', null, '· Confirm required for destructive actions'),
       ),
     );
   }

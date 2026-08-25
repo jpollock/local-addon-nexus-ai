@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-08-25T22:21:04.291Z",
+  "measuredAt": "2026-08-25T22:27:20.249Z",
   "sites": {
     "cedarvalehealt": {
       "providers_total": 60,
@@ -40,7 +40,7 @@
         "mustuse": 1,
         "dropin": 1,
         "regular_only_total": 6,
-        "plugins": [
+        "roster": [
           {
             "slug": "advanced-custom-fields-pro",
             "version": "6.8.8",
@@ -83,6 +83,8 @@
           }
         ]
       },
+      "search_everything_version": "8.1.9",
+      "limit_login_version": "3.3.5",
       "wporg": {
         "search-everything": {
           "version": "8.1.9",
@@ -126,7 +128,7 @@
         "mustuse": 8,
         "dropin": 2,
         "regular_only_total": 11,
-        "plugins": [
+        "roster": [
           {
             "slug": "advanced-custom-fields-pro",
             "version": "6.8.8",
@@ -234,6 +236,8 @@
           }
         ]
       },
+      "acf_version": "6.8.8",
+      "woocommerce_version": "11.0.1",
       "fingerprint": {
         "published_posts": 383,
         "last_modified_gmt": "2026-07-28 16:28:50"

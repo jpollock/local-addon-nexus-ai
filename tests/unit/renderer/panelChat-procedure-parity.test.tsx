@@ -188,7 +188,11 @@ describe('parity — the panel a user without a procedure sees', () => {
   });
 
   it('is not a vacuous comparison — the captured tree is the real panel', () => {
-    expect(JSON.stringify(baseTree)).toContain('Ask anything about your WordPress sites');
+    // The anchor moved with the copy: the invitation is now the sheet's
+    // ratified headline (newChatCopy.generated.ts) rather than a hand-typed
+    // line. Still a real string from the real panel, which is all this guard
+    // is for.
+    expect(JSON.stringify(baseTree)).toContain('What do you need?');
     expect(JSON.stringify(baseTree)).toContain('SiteContextStrip');
   });
 });

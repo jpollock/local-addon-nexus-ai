@@ -84,3 +84,50 @@ describe('the first turn moves the composer to the bottom', () => {
     expect(nodes(withTranscript()).filter((n) => n.props?.['aria-label'] === 'Chat input')).toHaveLength(1);
   });
 });
+
+describe('the invitation carries the ratified copy, and no invented situations', () => {
+  const texts = (tree: any) => {
+    const out: string[] = [];
+    const walk = (n: any) => {
+      if (n == null) return;
+      if (typeof n === 'string') { out.push(n); return; }
+      if (Array.isArray(n)) { n.forEach(walk); return; }
+      if (typeof n === 'object') walk(n.props?.children);
+    };
+    walk(tree); return out;
+  };
+
+  it('shows the sheet-ratified invitation, not a hand-typed line', () => {
+    const { NEW_CHAT_HEADLINE, NEW_CHAT_PROMISE, NEW_CHAT_FOOTNOTE } =
+      require('../../../src/renderer/components/DockedPanel/newChatCopy.generated');
+    const t = texts(makeChat([]).render());
+    expect(t).toContain(NEW_CHAT_HEADLINE);
+    expect(t).toContain(NEW_CHAT_PROMISE);
+    expect(t).toContain(NEW_CHAT_FOOTNOTE);
+    expect(t).not.toContain('Ask anything about your WordPress sites.');
+  });
+
+  it('invents NO suggestions when there is nothing derived to suggest', () => {
+    // The fixture's three are specimens of a derivation, not copy. On a quiet
+    // fleet there is no open incident, and saying there is would be fabrication.
+    const joined = texts(makeChat([]).render()).join(' ');
+    expect(joined).not.toMatch(/open incident/i);
+    expect(joined).not.toMatch(/cells behind/i);
+  });
+
+  it('the disclosure keeps provider and payload visible, and moves the version to the tooltip', () => {
+    const tree = makeChat([]).render();
+    const joined = texts(tree).join(' ');
+    expect(joined).toMatch(/sends site data/);          // P0-5's substance survives
+    expect(joined).not.toMatch(/claude-sonnet-5/);      // the version is not visible
+    const nodesWithTitle: any[] = [];
+    const walk = (n: any) => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) return n.forEach(walk);
+      if (n.props?.title) nodesWithTitle.push(n.props.title);
+      walk(n.props?.children);
+    };
+    walk(tree);
+    expect(nodesWithTitle.join(' ')).toMatch(/sonnet|claude|\//); // ...but is still disclosed
+  });
+});

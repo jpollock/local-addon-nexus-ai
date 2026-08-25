@@ -48,7 +48,7 @@
             "props": {
               "data-panel-opening": "invitation",
               "style": {
-                "padding": "24px 0",
+                "padding": "8px 14px",
                 "color": "var(--nxai-card-sub)",
                 "textAlign": "center",
                 "fontSize": 13
@@ -57,21 +57,41 @@
             "children": [
               {
                 "type": "div",
-                "key": "mark",
+                "key": "headline",
                 "props": {
                   "style": {
-                    "color": "#0ECAD4",
-                    "fontSize": 18,
+                    "color": "var(--nxai-card-text)",
+                    "fontSize": 19,
+                    "fontWeight": 600,
                     "marginBottom": 8
                   }
                 },
-                "children": "Nexus"
+                "children": "What do you need?"
               },
               {
                 "type": "div",
-                "key": "line",
-                "props": {},
-                "children": "Ask anything about your WordPress sites."
+                "key": "promise",
+                "props": {
+                  "style": {
+                    "fontSize": 12.5,
+                    "lineHeight": 1.5,
+                    "maxWidth": 520,
+                    "margin": "0 auto"
+                  }
+                },
+                "children": "Answers come from what Nexus has read, each one dated and linked to the record it came from. Where it cannot verify something, it says so rather than guess."
+              },
+              {
+                "type": "div",
+                "key": "footnote",
+                "props": {
+                  "style": {
+                    "fontSize": 11,
+                    "marginTop": 10,
+                    "opacity": 0.85
+                  }
+                },
+                "children": "What gets done is filed against the runbook that did it, in Record."
               }
             ]
           },
@@ -97,7 +117,7 @@
                   "disabled": false,
                   "onChange": "[fn]",
                   "onKeyDown": "[fn]",
-                  "placeholder": "Ask anything about your sites…",
+                  "placeholder": "Ask about a site, or describe what you want done",
                   "ref": {
                     "current": null
                   },
@@ -175,22 +195,14 @@
           "flexShrink": 0
         }
       },
-      "children": [
-        {
-          "type": "span",
-          "key": null,
-          "props": {
-            "title": "Chat sends your site content and data to this AI provider (claude-sonnet-5). Change the provider in Settings."
-          },
-          "children": "Claude · claude-sonnet-5 · sends site data"
+      "children": {
+        "type": "span",
+        "key": null,
+        "props": {
+          "title": "anthropic/claude-sonnet-5 · site names, versions and plugin lists are sent with your question. Destructive actions still need your confirmation."
         },
-        {
-          "type": "span",
-          "key": null,
-          "props": {},
-          "children": "· Confirm required for destructive actions"
-        }
-      ]
+        "children": "Claude · sends site data"
+      }
     }
   ]
 }
