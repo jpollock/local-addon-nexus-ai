@@ -1,11 +1,14 @@
 /**
- * fixes-082526 — the Power model-mismatch failure is actionable.
+ * fixes-082526 — the Power "incompatible with the selected model" 400 is
+ * actionable, and truthful about what it means.
  *
- * Live case: settings carried aiModel 'anthropic/claude-sonnet-5' while
- * Power's list serves 4-5. Every send failed with a raw HTTP body — request
- * id, JSON quoting and all — in the transcript, and nothing a person could
- * act on. The house rule for refusals applies to provider errors too: name
- * the thing and name where to change it.
+ * Live case, diagnosis corrected same-day: anthropic/claude-sonnet-5 is
+ * Power's FEATURED model and still returned this 400 for our tool-bearing
+ * chat request, while claude-sonnet-4-5 accepted the identical shape. So the
+ * 400 is about the REQUEST SHAPE against that model's route (this adapter
+ * always sends tools), not about the id being unknown — and the message must
+ * not claim "Power doesn't serve X" when it demonstrably does. Name what is
+ * known, name where to act, assert nothing beyond the evidence.
  */
 import { PowerProvider } from '../../../src/main/chat/providers/power';
 
@@ -30,6 +33,8 @@ it('names the model and where to fix it, not the HTTP body', async () => {
   expect(ev.message).toContain('anthropic/claude-sonnet-5');
   expect(ev.message).toMatch(/Settings → Chat/);
   expect(ev.message).not.toMatch(/request_id|HTTP 400/);
+  // And it must not overclaim: Power DOES serve this model.
+  expect(ev.message).not.toMatch(/doesn't serve|does not serve/);
 });
 
 it('other Power errors still pass through with their detail', async () => {

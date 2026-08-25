@@ -174,19 +174,24 @@ export class PowerProvider implements AIProvider {
         return;
       }
       // The one failure a person can actually fix themselves gets an
-      // actionable sentence, not an HTTP dump. Power returns 400
-      // "request is incompatible with the selected model" when the saved
-      // model id is one it does not serve — a stale pick survives in
-      // settings after Power's list moves (live case: a saved
-      // anthropic/claude-sonnet-5 against a list that serves 4-5). The raw
-      // body names a request_id and nothing the user can act on.
+      // actionable sentence, not an HTTP dump. Power returns 400 "request is
+      // incompatible with the selected model" when the REQUEST SHAPE is one
+      // that model's route rejects — NOT necessarily because the model id is
+      // unknown. Live case, corrected the same day it was misdiagnosed:
+      // anthropic/claude-sonnet-5 is Power's FEATURED model and still
+      // returned this 400 for our tool-bearing chat request, while
+      // claude-sonnet-4-5 accepted the identical shape. This adapter always
+      // sends `tools`, so a route that does not take tool calls yet fails
+      // exactly this way. The raw body names a request_id and nothing a
+      // person can act on.
       const msg = (err as Error).message;
       if (/incompatible with the selected model/i.test(msg)) {
         yield {
           type: 'error',
           message:
-            `Power doesn't serve the model "${config.model}". ` +
-            `Pick a current one in Settings → Chat — the menu lists what Power serves right now.`,
+            `Power rejected this request as incompatible with "${config.model}" — ` +
+            `usually the model's route not accepting a feature the chat needs (tool calls). ` +
+            `Pick a different model in Settings → Chat.`,
         };
         return;
       }
