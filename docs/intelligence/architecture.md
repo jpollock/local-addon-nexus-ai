@@ -340,8 +340,11 @@ state.instrument.summarized  // conductor rollups & anomaly events from GA4/GSC-
 semantic.content.indexed   semantic.content.changed
 procedure.runbook.published  procedure.runbook.deprecated
 policy.constraint.published  policy.constraint.retired
-episodic.*                 // reserved: episodic IS the ledger; this namespace
-                           // exists only for imported histories
+episodic.sync.pulled  episodic.sync.pushed  episodic.incident.recorded
+episodic.agent_run.failed  // episodic IS the ledger, so this namespace was
+                           // originally reserved for imported histories only —
+                           // four producers now write it (corrected 2026-08-25,
+                           // executing the action filed at the WP-65 adjudication)
 task.run.assigned    task.context.assembled  task.action.executed
 task.run.completed   task.outcome.recorded   task.rationale.recorded
                            // (respelled 2026-08-16 at WP-11 escalation: the
@@ -477,7 +480,7 @@ interface ContextBundle {
 4. **State plan.** Do *not* copy state into the bundle. Attach tool grants for live pull, plus the relevant twin SLOs so the agent (and gateway) know which cached facts are servable and which demand a live check. State enters context at execution time, stamped.
 5. **Retrieve.** Scoped semantic + episodic queries derived from task intent and targets — including the mandatory **"prior incidents touching these entities/components"** episodic query when the capability class is risky (E-01's consult-before-risk, made structural). Each item carries source, trust, and freshness.
 6. **Budget & rank.** Trim retrieval to budget by relevance × trust × freshness. Ambient policy and procedure are never trimmed — by construction, not by ranking (they are small; §types).
-7. **Manifest & emit.** Write the manifest, emit `task.context_assembled`, return the bundle.
+7. **Manifest & emit.** Write the manifest, emit `task.context.assembled`, return the bundle.
 
 ### 6.3 The cache/live boundary (mechanized)
 

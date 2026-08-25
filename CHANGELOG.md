@@ -5,6 +5,54 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased] — merged to main 2026-08-25
+
+The intelligence-spine chain (`poc/nexintelligence` → `-ux` → `-data`, 644
+commits) fast-forwarded onto main. Verified at merge: 675 test suites /
+9,317 tests green; eval registry 50 PASS / 0 FAIL.
+
+### Added
+- **Intelligence layer** — every fleet observation becomes a provenance-stamped
+  event in an append-only local ledger (`ledger.db`); twins are materialized
+  views folded from it. Answers carry observation age and trust, disclose
+  staleness, and offer a live re-check.
+- **Context assembly & citations** — every Docked Panel chat turn writes an
+  auditable context manifest; model replies cite the ledger events and tool
+  calls that supplied them.
+- **Procedures & capability grants** — 7 reviewed runbooks (`law/runbooks/`),
+  strict/guided execution with checkpoint attestation, and deny-by-default
+  capability grants (production-scoped capabilities require an explicit grant).
+- **Agent task spine** — every agent run is bracketed by `task.run.assigned` /
+  `task.run.completed` ledger events with run/task ids threaded through the
+  audit log; agent runs assemble context and bind fail-closed refusals at tier.
+- **Properties view** — the Sites tab is now the single fleet list (local +
+  WP Engine + external SSH), with needs-you rows, filters-from-search, and
+  bulk actions. The Inbox, Installs, and Fleet tabs are retired.
+- **External SSH hosts** — `nexus host add` registers arbitrary SSH-reachable
+  WordPress sites (`ssh:<alias>/<site>@<env>`), with opt-in metadata refresh
+  and content indexing.
+- **Platform benchmark harness** (`tests/platform-bench/`) — comparative MCP
+  evaluation with ground-truth keys and drift-refusing runs.
+
+### Changed
+- **Vector store migrated LanceDB → sqlite-vec** (`vectors.db`); 13× faster at
+  p50 with identical results.
+- **security-sentinel schedule honesty** — daily 03:00 cron (the 15-minute
+  interval and `wpe:sync.completed` trigger were removed as the cause of
+  overlapping fleet sweeps); settings UI no longer offers dead controls.
+- Remote indexing pipeline defect campaign (D7–D25): FTS keyword search fix,
+  SSH connection-leak fix, double-indexing fix, ACF meta extraction, CPT-aware
+  post counts, honest per-category bulk outcomes.
+- `js-yaml` moved to runtime dependencies (law/runbook loading).
+
+### Notes
+- New database `ledger.db` is created on startup (non-fatal if it fails); a
+  one-shot graph backfill runs on first launch after upgrade.
+- `post_count_by_type` values change on next refresh (now counts all public
+  post types, not only `post`).
+
+---
+
 ## [0.5.2] — 2026-07-27
 
 ### Fixed

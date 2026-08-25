@@ -24,8 +24,8 @@ could not simply be pointed at and left alone.
 
 | document | what it covers | still true? |
 |---|---|---|
-| `docs/architecture/data-levels.html` (2026-07-28) | The L1 Scanned / L2 Configured / L3 Searchable ladder, per level, for Local **and** WPE: source, what, when, controlled-by, stored-in, seen-in-UI, and a "should be" column. The best per-level WHEN/HOW material in the repo. | **Mostly. Three rows are stale:** it says WPE L3 is "manual only — no scheduler" (a WPE content-index timer now exists, `index.ts:600`), it predates external SSH hosts entirely (no L1/L2/L3 row for them), and its fleet figures ("284 installs") are a July snapshot. |
-| `docs/architecture/data-gaps-design.html` (2026-07-28) | A 14-gap inventory (G1–G14) with design proposals, phases and effort. Explains *why* WPE defaults are off, and why `wp_version` for WPE comes from SSH rather than CAPI (G10). | **It is a proposal, not a description.** Every row carries a status; G1–G5 are fixed, G6–G14 were open at the time of writing and have not all been re-checked. Read it for rationale, never as a statement of what the system does. |
+| `docs/architecture/data-levels.html` (2026-07-28) | The L1 Scanned / L2 Configured / L3 Searchable ladder, per level, for Local **and** WPE: source, what, when, controlled-by, stored-in, seen-in-UI, and a "should be" column. The best per-level WHEN/HOW material in the repo. | **Corrected in place 2026-08-25:** the artifact now carries a dated status banner; the WPE-L3 "no scheduler" row was fixed on the artifact (the opt-in timer exists, `index.ts:600`); external SSH hosts still have no rows there (the banner points here for their ladder), and the "284 installs" figures are flagged as a July snapshot. |
+| `docs/architecture/data-gaps-design.html` (2026-07-28) | A 14-gap inventory (G1–G14) with design proposals, phases and effort. Explains *why* WPE defaults are off, and why `wp_version` for WPE comes from SSH rather than CAPI (G10). | **It is a proposal, not a description.** Every row carries a status; G1–G5 are fixed, G6–G14 were open at the time of writing and have not all been re-checked. Read it for rationale, never as a statement of what the system does. *(As of 2026-08-25 this disclaimer is also stamped ON the artifact itself, where the next reader meets it.)* |
 | `docs/intelligence/architecture.md` §3A | The stores as built, with every figure verified — cited throughout §1 below rather than re-derived. | Yes (2026-08-18, figures 2026-08-22). |
 | `docs/intelligence/architecture.md` §4 | The event envelope, the topic taxonomy, retention and compaction — design level. | Yes as *design*. §5 below reconciles it against what the code emits. |
 
@@ -271,7 +271,7 @@ remote rows and why `semantic.content.changed` is structurally local-only (§6).
 | `nexus host refresh <alias>` | External L1+L2 in four batched SSH round trips, regardless of the setting |
 | `nexus host index <alias>` | External L3, regardless of the setting |
 | MCP `nexus_site_refresh`, `reindex_site`, `bulk_reindex`, `verify_site_live`, `wpe_site_deep_refresh` | The same collection paths, reachable by an agent |
-| Operations tab → Refresh metadata / ⚡ Index | The renderer's equivalents |
+| Sites tab (Properties view) → Refresh metadata / ⚡ Index | The renderer's equivalents |
 
 `verify_site_live` is the only one that is *also* a producer of live
 observations back into the ledger (`state.plugin.observed` /
@@ -315,7 +315,7 @@ is left running.
 | caller | autoStartStop |
 |---|---|
 | `OpportunisticScheduler` — scheduled local index | **on** — always has been |
-| Operations / Sites tab bulk bar | **on** (WP-68; previously sent `options: {}`) |
+| Sites tab (Properties view) bulk bar | **on** (WP-68; previously sent `options: {}`) |
 | single-site index from a site's own page | **on** |
 | MCP `bulk_reindex` / `reindex_site` | **on** |
 

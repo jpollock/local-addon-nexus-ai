@@ -27,12 +27,15 @@ tools:
   - local_create_site
   - local_clone_site
   - local_start_site
-  - local_restart_site
+  - local_stop_site
   - local_wpe_pull
+  - local_wpe_push
+  - local_wpe_link
   - local_operation_status
   - wp_eval
+  - get_log_aggregates
+  - fetch_log_window
   - scan_site_files
-  - local_wpe_push
 
 contributes:
   tools:

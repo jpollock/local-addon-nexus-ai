@@ -1,9 +1,9 @@
 /**
  * Nexus Overview Dashboard
  *
- * Addon dashboard with six tabs: Overview, Inbox, Sites, Activity, Agents, Settings.
- * Operations was retired in spec 6a (Task 11); its five maintenance actions moved
- * to Settings → Advanced.
+ * Addon dashboard with five tabs: Now, Sites, Record, Agents, Settings (see
+ * TABS below — the fleet collapse made Properties the sites list; Overview,
+ * Inbox, Installs, Fleet, Activity and Operations are retired).
  * Class-based — Local uses older React, no hooks allowed.
  */
 import * as React from 'react';

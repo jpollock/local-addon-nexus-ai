@@ -6,9 +6,11 @@
 
 ## How It Works
 
-Sentinel runs on a 15-minute cron and on three events: WPE sync completed,
-plugin activated, and user created. Each sweep checks every install in scope
-through two tiers.
+Sentinel runs on a daily cron (03:00) and on two events: plugin activated and
+user created. (The original 15-minute interval and the `wpe:sync.completed`
+trigger were removed deliberately — they caused overlapping fleet sweeps; the
+rationale lives beside the trigger array in `agent.js`.) Each sweep checks
+every install in scope through two tiers.
 
 **Tier 1** runs entirely without an LLM and completes in seconds. It executes
 a battery of absolute checks (ABS-01 through ABS-07): known backdoor plugin

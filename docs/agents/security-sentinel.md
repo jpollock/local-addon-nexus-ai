@@ -57,8 +57,14 @@ From `nexus.agent.yaml`:
 
 | Trigger | Details |
 |---------|---------|
-| `wpe:sync.completed` event | Fires after every WP Engine sync |
-| Cron | Every 15 minutes (`*/15 * * * *`) |
+| Cron | Daily at 03:00 (`0 3 * * *`) |
+| `wp:plugin.activated` event | A plugin was activated on a local site |
+| `wp:user.created` event | A user was created on a local site |
+
+> The original `wpe:sync.completed` trigger and 15-minute cron were **removed
+> deliberately** — they caused overlapping fleet sweeps (the 6.5 GB sandbox
+> incident). The authoritative trigger list is `module.exports.triggers` in
+> `agent.js`, with the rationale beside it.
 
 ### Escalation Criterion (Tier 1 → Tier 2)
 
@@ -396,7 +402,13 @@ After all five specialists complete, `specialists/synthesizer.js` combines their
 
 ## 6. Remediation Checklist
 
-`buildRemediationChecklist()` builds a signal-conditional step list. Steps are included only when their trigger signal fired. Each step is executed via `wp_eval`, its result verified, and written to the report as ✅/❌.
+`buildRemediationChecklist()` builds a signal-conditional step list. Steps are included only when their trigger signal fired, and are intended to be executed via `wp_eval` with per-step verification written to the report as ✅/❌.
+
+> **Known finding (WP-25 live smoke, registered):** a real run produced a
+> report whose remediation checklist was **fabricated by the template** — the
+> ✅ marks did not correspond to executed steps, and the model reviewing the
+> ledger caught it unprompted. Until the report-template finding is fixed,
+> treat checklist ticks as template output, not as evidence of execution.
 
 ### SIGNAL_REMEDIATION_STEP Map
 
@@ -790,7 +802,7 @@ agents/security-sentinel/
 │                                   local_start_site, local_restart_site,
 │                                   local_wpe_pull, local_operation_status,
 │                                   wp_eval, local_wpe_push
-│                                 Triggers: wpe:sync.completed, cron */15 * * * *
+│                                 Triggers: cron 0 3 * * *, wp:plugin.activated, wp:user.created
 │                                 Permissions: tier 3, scope: fleet
 │
 ├── agent.js                      Main agent: CommonJS, ~2,600 lines

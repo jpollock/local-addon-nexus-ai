@@ -32,9 +32,9 @@ Nexus AI brings AI-assisted management to local WordPress development, spanning 
 
 ### AI Stack
 
-- **MCP Server** — ~160 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
+- **MCP Server** — ~190 tools for AI assistants (Claude Desktop, Cursor, Zed, Continue)
 - **CLI** — Terminal commands for local and WPE site management (hosting + WordPress)
-- **Open Source AI** — Ships with LanceDB (vector database), ONNX embeddings, and Ollama integration
+- **Open Source AI** — Ships with sqlite-vec (vector search), ONNX embeddings, and Ollama integration
 - **Local AI Gateway** — Centralized credential proxy, usage tracking, and cost monitoring for your entire fleet
 
 ### Secure Enterprise Connections
@@ -65,8 +65,11 @@ Leverages Local's secure channels to WP Engine:
 ## Features
 
 - **CLI** — Terminal commands for all operations. Works with any AI that can write shell commands. No MCP setup required. Scriptable, automatable, transparent.
-- **MCP Server** — ~160 tools for AI assistants (Claude Desktop, Cursor, etc.)
-- **AI Chat (Discover tab)** — Built-in chat interface in Local UI. Ask questions about your fleet, get answers backed by real site data. Works with Anthropic, OpenAI, Google Gemini, Ollama, or the Local AI Gateway.
+- **MCP Server** — ~190 tools for AI assistants (Claude Desktop, Cursor, etc.)
+- **AI Chat (Docked Panel)** — Built-in chat surface in Local UI. Ask questions about your fleet, get answers backed by real site data — with data age, provenance, and citations back to the records that supplied them. Works with Anthropic, OpenAI, Google Gemini, Ollama, or the Local AI Gateway.
+- **Intelligence layer** — every fleet observation lands in an append-only local ledger with provenance and freshness; answers disclose staleness and offer live re-checks. Nothing leaves your machine.
+- **Agents** — four shipped autonomous agents (security-sentinel, log-processor, web-analytics, seo-insights) with schedules, per-agent workspaces, and audited tool calls.
+- **Procedures & grants** — reviewed runbooks govern risky operations; production-scoped capabilities are deny-by-default until explicitly granted.
 - **WP Engine Remote Management** — Sync and manage WPE sites alongside local sites (see below)
 - **Database Health** — Scans WordPress databases for bloat (revisions, orphaned postmeta with plugin attribution, expired transients, autoload bloat, ghost plugin tables, auto-drafts, trash). Shows a 0–100 health score with advisor-voice recommendations and prevention tips. Safe cleanup via `nexus wp db clean` (dry-run default). Available via site card UI, CLI, and MCP tools. Local-only.
 - **Security** — localhost-only servers, input validation, layered credential redaction, a fail-closed permission gate for production writes, and signature-verified auto-updates. Tier 2/3 mutating operations are audited (Tier 1 reads are not). See [SECURITY.md](SECURITY.md).
@@ -102,21 +105,21 @@ Nexus AI can sync your **WP Engine sites** into the same fleet view as your loca
 **Quick Start:**
 
 1. Connect Local to your WP Engine account (Local → Connect → WP Engine)
-2. Open Nexus AI Dashboard → **Operations** tab
-3. Click **"Sync Now"** under "WP Engine Sites"
-4. View synced sites in Dashboard and Site Finder
+2. Open Nexus AI → **Sites** tab (the Properties view)
+3. Click **Refresh** to sync WP Engine sites
+4. Local, WP Engine, and external SSH sites all appear in the same list
 
 **Performance:**
 
 - ~6 seconds per site (SSH ControlMaster + 10x concurrency)
-- Live progress indicator in Fleet Overview header
+- Live progress indicator in the Sites tab header
 - Re-sync anytime to refresh data
 
 **See:** [WPE Remote Management User Guide](docs/WPE_REMOTE_MANAGEMENT_USER_GUIDE.md) for full documentation
 
 ## How It Works
 
-Nexus AI indexes your WordPress sites into a local vector database for semantic search. Uses ONNX for embeddings (runs locally, no cloud dependencies) and LanceDB for fast vector search.
+Nexus AI indexes your WordPress sites into a local vector database for semantic search. Uses ONNX for embeddings (runs locally, no cloud dependencies) and sqlite-vec for fast vector search.
 
 **What gets indexed:**
 - Posts, pages, products (WooCommerce), custom post types
@@ -207,29 +210,28 @@ See full CLI reference: [CLI Commands](docs-site/docs/cli/commands.md)
 
 ### MCP
 
-Nexus AI exposes **~160 MCP tools** for AI assistants to manage WordPress sites. Use with Claude Desktop, Cursor, or any MCP-compatible client.
+Nexus AI exposes **~190 MCP tool registrations** for AI assistants to manage WordPress sites (measured 2026-08-25 from the registry; use `search_tools` for live discovery). Use with Claude Desktop, Cursor, or any MCP-compatible client.
 
-**Tool Categories:**
+**Tool Categories** (registration counts drift — the registry is authoritative):
 
-- **Content** (2 tools) — Semantic search within and across sites
-- **Site Context** (6 tools) — Site structure, index status, reindexing
-- **Ollama** (4 tools) — Local LLM queries with automatic site context
-- **Fleet** (6 tools) — Cross-site analysis, drift detection, comparisons
-- **Site Management** (17 tools) — Create, start, stop, clone, delete local sites
-- **WP-CLI** (31 tools) — Plugin/theme/user management, local + remote via SSH
-- **WP Connector** (12 tools) — AI credential sync, Abilities API
-- **WPE** (13 tools) — WP Engine account/site/install management
-- **Composite** (3 tools) — Parallel site and plugin audits
-- **Fleet Intelligence** (9 tools) — Advanced fleet analytics
-- **Test Tools** (1 tool) — Diagnostics
+- **WPE** (~75 tools) — WP Engine account/site/install/domain/SSL/backup/user management
+- **WP-CLI** (~19 tools) — Plugin/theme/user management on local, WPE, and external SSH targets
+- **Site Management** (~17 tools) — Create, start, stop, clone, delete local sites
+- **WP Connector** (~14 tools) — AI credential sync, Abilities API
+- **Fleet + Fleet Intelligence** (~23 tools) — Cross-site analysis, drift detection, health, comparisons
+- **Site Context** (~9 tools) — Site structure, index status, reindexing
+- **Content** (~4 tools) — Semantic search within and across sites
+- **Database Health** (3 tools) — Scan, recommendations, safe cleanup
+- **Intelligent Workflows** (~7 tools) — KB collections and connections
+- **Composite** (3), **Sentinel scan** (1), **Ollama** (2), **Test** (1) — plus agent-contributed tools (security-sentinel scan, log-processor, web-analytics)
 
 **Setup:** Install Nexus AI addon in Local, then configure MCP client to connect to `~/Library/Application Support/Local/nexus-ai-mcp-connection-info.json`
 
 ## Requirements
 
 - [Local](https://localwp.com/) 9.0.0 or later
-- Node.js 18+
-- ~200 MB disk space (ONNX model + LanceDB binaries)
+- Node.js 22.x
+- ~200 MB disk space (ONNX model + native binaries)
 - [Ollama](https://ollama.com/) (optional, for local AI chat)
 
 ## Installation
@@ -312,10 +314,10 @@ npm install                    # Install dependencies
 npm run download-model         # Download ONNX model (~30 MB)
 npm run build                  # Compile TypeScript + create entry points
 npm run watch                  # Watch mode for development
-npm test                       # Run unit tests (~2,200 tests)
-npm run test:eval              # Run eval tests (52, LLM evals need Ollama)
-npm run test:integration       # Run integration tests (187 tests)
-npm run test:e2e               # Run E2E tests (347 tests, requires Local running)
+npm test                       # Run unit + colocated suites (9,300+ tests)
+npm run test:eval              # Run eval tests (LLM evals need Ollama)
+npm run test:integration       # Run integration tests
+npm run test:e2e               # Run E2E tests (requires Local running)
 npm run test:all               # Run all test suites
 npm run package:mac-arm        # Package for macOS Apple Silicon
 npm run rebuild                # Rebuild native modules for Electron (after npm install)
@@ -356,7 +358,7 @@ src/
 │   ├── embeddings/      # ONNX inference + tokenizer
 │   │   ├── EmbeddingService.ts
 │   │   └── tokenizer.ts
-│   ├── vector-store/    # LanceDB wrapper
+│   ├── vector-store/    # SqliteVecStore (sqlite-vec)
 │   │   └── VectorStore.ts
 │   ├── graph/           # SQLite graph database
 │   │   └── GraphService.ts
@@ -369,7 +371,7 @@ src/
 │   │   └── BulkOperationManager.ts
 │   ├── audit/           # Audit logger
 │   │   └── AuditLogger.ts
-│   └── mcp/             # MCP server + tool modules (~160 tools)
+│   └── mcp/             # MCP server + tool modules (~190 tools)
 │       ├── McpServer.ts
 │       ├── tool-registry.ts
 │       ├── site-resolver.ts
@@ -387,10 +389,10 @@ src/
 │           └── test-tools/          # 1 tool
 └── renderer/
     └── components/
-        ├── NexusOverview.tsx          # Main dashboard (Dashboard/Ask/Tell/Operations/Activity/Settings)
+        ├── NexusOverview.tsx          # Main dashboard (Now/Sites/Record/Agents/Settings)
         ├── SettingsTab.tsx            # Sync schedule, auto-index, WPE access controls
         ├── SystemTab.tsx              # Site Status — per-site data level (Scanned/Configured/Searchable)
-        ├── ChatTab.tsx                # Ask/Tell AI assistant
+        ├── ChatTab.tsx                # chat surface (see DockedPanel/ for the primary chat)
         ├── NexusPreferences.tsx       # AI provider, gateway, WPE credentials
         ├── SidebarSearchPanel.tsx     # Site Finder search panel
         ├── FleetCompletenessWidget.tsx # Data Completeness progress bars
@@ -400,7 +402,7 @@ src/
         └── ...
 ```
 
-## MCP Tools (~160)
+## MCP Tools (~190)
 
 | Module | Tools | Description |
 |--------|-------|-------------|
@@ -424,10 +426,10 @@ Five-tier test pyramid. See [tests/TESTING-STRATEGY.md](tests/TESTING-STRATEGY.m
 
 | Tier | Command | What it tests |
 |------|---------|---------------|
-| Unit | `npm test` | Code logic with mocked deps (~2,200 tests) |
-| Eval | `npm run test:eval` | Content quality + LLM tool routing (52 tests) |
-| Integration | `npm run test:integration` | Real ONNX, LanceDB, MCP (187 tests) |
-| E2E | `npm run test:e2e` | Full addon in running Local (347 tests) |
+| Unit | `npm test` | Code logic incl. colocated intelligence suites (9,300+ tests) |
+| Eval | `npm run test:eval` | Content quality + LLM tool routing |
+| Integration | `npm run test:integration` | Real ONNX, sqlite-vec, MCP |
+| E2E | `npm run test:e2e` | Full addon in running Local (requires Local) |
 | Browser | `npm run test:e2e:browser` | WordPress UI via Playwright (2 tests) |
 
 LLM evals call Ollama directly to verify the model routes to the correct tools and doesn't hallucinate. They skip automatically when Ollama is not available.

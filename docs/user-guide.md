@@ -32,40 +32,55 @@ Symlink or copy into Local's addon path, then restart Local.
 - ~200 MB disk space (ONNX model + better-sqlite3/sqlite-vec binaries)
 - Ollama (optional, for local AI chat)
 
-## Dashboard
+## The Nexus AI view
 
-The Nexus AI dashboard appears as an addon view inside Local. It has five tabs (Dashboard is the default):
+The Nexus AI view appears inside Local with five tabs — **Now**, **Sites**,
+**Record**, **Agents**, **Settings** — plus the **Docked Panel** chat, which is
+available alongside every tab.
 
-### Dashboard
+*(Earlier versions had Dashboard / Ask-Tell / Operations / Activity / Inbox /
+Installs / Fleet surfaces; those are retired. Their functions live in the tabs
+below.)*
 
-Fleet-wide statistics and quick actions:
+### Now
 
-- **Ask Nexus AI** — Quick-send card at the top. Type a question and press Enter or →; it opens the Ask/Tell tab and submits the prompt automatically.
-- **Fleet Intelligence** — Site counts (local + WPE), WordPress version distribution, PHP distribution.
-- **Data Completeness** — Progress bars for Scanned / Configured / Searchable sites. ⚡ Index sites opens Operations; ⏱ Schedule opens Settings.
-- **AI Integration** — MCP server status, AI gateway usage.
+Where you land. Shows what needs you — pending approvals, findings, and, when
+you return mid-task, a re-entry card for the session you left (same session,
+same cursor, same pending approvals).
 
-### Ask/Tell
+### Sites
 
-An AI assistant that manages WordPress sites using natural language. Calls the same MCP tools that external clients use.
+The fleet list — one table for local sites, WP Engine installs, and external
+SSH hosts together (the Properties view). Type in the search box and it becomes
+removable filter clauses; tick rows to act on exactly that selection (refresh
+metadata, ⚡ index content) via the bulk bar. A **Needs you** column surfaces
+sites with findings.
 
-> **Tip:** For a richer experience with full tool support and conversation history, use the MCP server or CLI with Claude, Cursor, or another AI tool. Ask/Tell is a quick way to try the capabilities.
+Indexing a site: tick it in the Sites tab and use the bulk bar's ⚡ Index, or
+ask for it in the Docked Panel.
 
-### Operations
+**Setup AI for a site:** Use the per-site Nexus section in Local's site info
+panel (not from this view).
 
-Bulk actions and site status:
+### Record
 
-- **Keep data current** — Refresh metadata (WP-CLI: active plugins, WP version, PHP, themes), Index content, Sync WPE metadata.
-- **Site Status** — Per-site data level (Scanned / Configured / Searchable) with expand-to-detail. Click ⚡ Index to index a running site.
-- **Advanced** — Factory reset, content index reset, database health, SSH diagnostics.
+The event record: stats cards and a timeline of what the platform observed and
+did — the readable face of the append-only ledger.
 
-Indexing a site: click **⚡ Index sites** from the Dashboard, or expand the Operations → Site Status row and click **⚡ Index** on a running site.
+### Agents
 
-**Setup AI for a site:** Use the per-site Nexus section in Local's site info panel (not from the dashboard).
+The agent workspace: the four shipped agents (security-sentinel, log-processor,
+web-analytics, seo-insights), each with a console, run history, and settings.
+An agent's schedule comes from its manifest; a cadence you pick explicitly in
+its settings overrides it.
 
-### Activity
+### The Docked Panel (chat)
 
-Event timeline, event stats, storage health, and top issues panel.
+An AI assistant that manages WordPress sites using natural language, calling
+the same MCP tools external clients use. Answers carry the age of the data they
+rest on, disclose staleness, offer live re-checks, and cite the records that
+supplied them. Risky operations are governed by reviewed procedures and require
+your approval at checkpoints.
 
 ### Settings
 
@@ -110,7 +125,7 @@ The server binds to `127.0.0.1` only — it is not accessible from other machine
 
 ## Tool Catalog
 
-Nexus AI provides 53 MCP tools organized into 9 modules.
+Nexus AI provides ~190 MCP tool registrations. The tables below are the most-used highlights, not the full set — use the `search_tools` MCP tool for live discovery.
 
 ### Content (2 tools)
 
@@ -233,7 +248,7 @@ Nexus AI indexes WordPress content for semantic search:
 4. **Embed** — Generates 384-dimensional vectors using all-MiniLM-L6-v2 (runs locally via ONNX)
 5. **Index** — Stores vectors in sqlite-vec (`vec0` tables) with cosine distance search
 
-Indexing happens on-demand via Operations → ⚡ Index sites, or per-site via the Site Status panel, or programmatically via the `reindex_site` MCP tool. Content is automatically re-indexed when a site starts if auto-indexing is enabled (Settings → Content index interval).
+Indexing happens on-demand via the Sites tab bulk bar (⚡ Index), or programmatically via the `reindex_site` MCP tool. Content is automatically re-indexed when a site starts if auto-indexing is enabled (Settings → Content index interval).
 
 Supported content types: posts, pages, custom post types, WooCommerce products (price, SKU, stock, attributes), ACF custom fields (text, repeater, group, flexible content), and media metadata.
 
@@ -278,7 +293,7 @@ Nexus AI can configure WordPress sites for AI features with one click. The "Setu
 5. Syncs configured API keys to WordPress
 6. Enables ACF abilities (for sites using Advanced Custom Fields)
 
-**Fleet-wide setup:** Click "Setup AI for All Running Sites" in Operations → Keep data current to configure all running sites at once. Progress is tracked in the Bulk Operations panel.
+**Fleet-wide setup:** available from Settings → Advanced; progress is tracked in the bulk-operations panel.
 
 **Requirements:**
 - Site must be running

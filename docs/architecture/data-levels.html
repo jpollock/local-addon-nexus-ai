@@ -97,6 +97,12 @@
 
 <h1>Nexus AI — Data Level Architecture</h1>
 <p class="subtitle">L1 Scanned · L2 Configured · L3 Searchable — for both Local and WPE Remote sites</p>
+<div class="note"><strong>Status (2026-08-25):</strong> point-in-time snapshot, originally 2026-07-28.
+Known drift, corrected below where marked: the WPE L3 scheduler now exists (opt-in, off by default);
+<strong>external SSH hosts have no rows here at all</strong> (they ship — see
+<code>docs/digital-twin-data.md</code> §2 for their L1/L2/L3); fleet figures ("284 installs")
+are a July snapshot — measured 2026-08-22: 365 active installs. UI routes named "Operations tab"
+refer to a retired surface; the equivalents live in the Sites tab (Properties view).</div>
 
 <table>
   <thead>
@@ -415,13 +421,13 @@
         </ul>
       </td>
       <td class="row-l3-wpe">
-        <strong>Manual only</strong><br>
-        Operations → ⚡ Index sites for WPE<br>
+        <strong>Manual</strong> (Sites tab → ⚡ Index) <strong>or scheduled</strong><br>
         <em>(also fires L2 metadata sync as piggyback)</em>
       </td>
       <td class="row-l3-wpe">
-        Manual only — no scheduler<br>
-        <span class="tag tag-red">No scheduled option yet</span>
+        Scheduler exists: <code>wpeContentIndexAutoEnabled</code><br>
+        (<code>startWpeContentIndexScheduler</code>, off by default)<br>
+        <span class="tag">Opt-in, default off — corrected 2026-08-25</span>
       </td>
       <td class="row-l3-wpe">
         <code>IndexRegistry</code> → <code>nexus-ai_index_registry.json</code><br>
