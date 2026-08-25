@@ -70,4 +70,31 @@ const PF_VERSION = '0.122.0';
 const BENCH_MODEL = process.env.BENCH_MODEL ?? 'claude-opus-5';
 const GRADER_MODEL = 'claude-haiku-4-5-20251001';
 
-module.exports = { MCP_ONLY_FLAGS, BENCH_ROOT, benchCwd, PF_VERSION, BENCH_MODEL, GRADER_MODEL };
+/**
+ * Parse `claude -p --output-format json` stdout into a promptfoo provider
+ * response. Field names verified live 2026-08-25: result, total_cost_usd,
+ * num_turns, duration_ms, is_error, session_id.
+ * Never lose a run to a parse bug: unparseable stdout is returned as raw text.
+ */
+function parseClaudeJson(raw, columnName) {
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { output: String(raw).trim(), metadata: { parseFailed: true } };
+  }
+  const base = {
+    cost: parsed.total_cost_usd,
+    metadata: {
+      durationMs: parsed.duration_ms,
+      numTurns: parsed.num_turns,
+      sessionId: parsed.session_id,
+    },
+  };
+  if (parsed.is_error) {
+    return { ...base, error: `${columnName} claude error: ${String(parsed.result ?? '').slice(0, 500)}`, output: '' };
+  }
+  return { ...base, output: String(parsed.result ?? '').trim() };
+}
+
+module.exports = { MCP_ONLY_FLAGS, BENCH_ROOT, benchCwd, PF_VERSION, BENCH_MODEL, GRADER_MODEL, parseClaudeJson };

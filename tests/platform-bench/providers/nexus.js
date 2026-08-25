@@ -8,7 +8,7 @@
 
 const { execSync } = require('child_process');
 const path = require('path');
-const { benchCwd, MCP_ONLY_FLAGS, BENCH_MODEL } = require('./isolation');
+const { benchCwd, MCP_ONLY_FLAGS, BENCH_MODEL, parseClaudeJson } = require('./isolation');
 const TIMEOUT_MS = 300_000;
 const MCP_CONFIG = path.join(__dirname, '..', 'nexus-mcp.json');
 
@@ -24,12 +24,12 @@ module.exports = class NexusProvider {
       '--strict-mcp-config',
       ...MCP_ONLY_FLAGS,
       '--dangerously-skip-permissions',
+      '--output-format', 'json',
       '-p', `'${escaped}'`,
     ].join(' ');
 
-    const startMs = Date.now();
     try {
-      const output = execSync(cmd, {
+      const raw = execSync(cmd, {
         encoding: 'utf8',
         timeout: TIMEOUT_MS,
         cwd: benchCwd('nexus'),
@@ -37,10 +37,7 @@ module.exports = class NexusProvider {
         stdio: ['pipe', 'pipe', 'pipe'],
         input: '',
       });
-      return {
-        output: output.trim(),
-        metadata: { durationMs: Date.now() - startMs },
-      };
+      return parseClaudeJson(raw, 'Nexus');
     } catch (err) {
       const msg = (err.stdout || err.stderr || err.message || '').toString().slice(0, 500);
       return {
