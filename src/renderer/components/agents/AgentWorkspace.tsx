@@ -16,6 +16,7 @@ import {
   AnalyticsState, EMPTY_ANALYTICS, loadAnalyticsState, deriveAnalyticsRows, boundSiteNames,
 } from './analyticsSitesModel';
 import { effectiveCadenceExpression, describeCron } from './effectiveCadence';
+import type { Section as SettingsSection } from '../settings/SettingsShell';
 
 type WorkspaceTab = 'settings' | 'sites' | 'approvals' | 'activity' | 'tools' | 'docs';
 
@@ -41,6 +42,13 @@ interface WorkspaceProps {
   onBack: () => void;
   electron: any;
   onReviewEvent: (eventId: string) => void;
+  /**
+   * Open the dashboard's Settings tab on a named section — the only way out of this workspace
+   * to a setting it does not own (the shared AWS credential). Optional because the workspace
+   * renders correctly without it; the buttons that need it hide themselves when it is absent,
+   * rather than becoming the no-op `goToRoute('/main/nexus')` they used to be.
+   */
+  onOpenSettingsSection?: (section: SettingsSection) => void;
 }
 
 interface WorkspaceState {
@@ -781,6 +789,11 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
           ? this.cadencePhrase()
           : 'on ad-hoc runs',
         googleScopes: (this.state.status?.credentials ?? []).find(c => c.provider === 'google')?.scopes ?? [],
+        // The Google account is connected and disconnected on THIS workspace's Settings tab —
+        // `AgentWorkspaceSettings.renderConnectionsCard` is the only such UI in the app. So the
+        // destination is one tab away, not in the dashboard's Settings, which holds no Google
+        // credential at all. The mirror image of the `onOpenSitesTab` wire above.
+        onOpenConnectedAccounts: () => this.setState({ activeTab: 'settings' }),
         onReload: this.reloadLogSources,
       }),
       activeTab === 'sites' && agentId === 'log-processor' && React.createElement(LogSitesTab, {
@@ -799,6 +812,12 @@ export class AgentWorkspace extends React.Component<WorkspaceProps, WorkspaceSta
           // No local re-render needed: componentDidMount subscribed this component to the store.
           agentStore.updateSettings(agentId, { scope: { siteIds }, scopeUpdatedAt: Date.now() } as any);
         },
+        // The AWS credential is shared fleet state, so unlike Google it really does live in the
+        // dashboard's Settings → Connections. Undefined when nothing upstream can open it, which
+        // is the signal for the buttons to say where to go instead of offering a dead click.
+        onOpenAwsSettings: this.props.onOpenSettingsSection
+          ? () => this.props.onOpenSettingsSection!('connections')
+          : undefined,
         onReload: this.reloadLogSources,
       }),
       activeTab === 'tools'     && this.renderToolsTab(),

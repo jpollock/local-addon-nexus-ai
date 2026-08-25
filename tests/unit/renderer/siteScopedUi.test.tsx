@@ -55,6 +55,10 @@ describe('siteScoped hides the picker', () => {
         agentId: 'security-sentinel',
         siteScoped: true,
         scopeLivesInSitesTab: false,
+        // A manifest cron, because the scope block answers "which sites may the SCHEDULE touch"
+        // and is now withheld from an agent that has no schedule to constrain. This case is about
+        // `siteScoped`, so it supplies the schedule rather than accidentally testing its absence.
+        cronExpression: '0 3 * * *',
       });
       el.state = {
         ...el.state,

@@ -185,7 +185,7 @@ describe('The cron trigger really is fleet-wide', () => {
   });
 });
 
-describe('No automatic cron trigger — AgentRegistry reads triggers only from agent.js', () => {
+describe('The cron trigger — AgentRegistry reads triggers only from agent.js', () => {
   // Reproduced live: nexus.agent.yaml's `triggers:` list had the cron removed in an earlier
   // session, and the fleet-wide sweep kept firing every 15 minutes anyway for the rest of that
   // session — confirmed in agent.log at :00/:15/:30/:45 timestamps. AgentRegistry.loadAgent()
@@ -193,12 +193,29 @@ describe('No automatic cron trigger — AgentRegistry reads triggers only from a
   // only ever reads contributes.tools from the YAML. The YAML's triggers list is not consulted
   // for scheduling at all, so editing it is a no-op — this is the assertion that would have
   // caught that the first time.
-  it('module.exports.triggers has no cron entry', () => {
-    expect(agent.triggers.some((t) => t.type === 'cron')).toBe(false);
+  //
+  // These tests used to assert there was NO cron. That made the agent unschedulable by anyone:
+  // AgentScheduler.register() returns at `cronTriggers.length === 0`, and no cadence a user picks
+  // in Settings can override a schedule that was never declared (resolveAgentCron). The
+  // schedule row in the UI was writing `cadence`/`cadenceSetAt` to disk where nothing could read
+  // them. What was actually unsafe was the INTERVAL against the workload, so that is what is
+  // pinned now.
+  it('declares exactly one cron trigger', () => {
+    expect(agent.triggers.filter((t) => t.type === 'cron')).toHaveLength(1);
   });
 
-  it('the only automatic triggers are events', () => {
-    expect(agent.triggers.every((t) => t.type === 'event')).toBe(true);
+  it('fires at most daily — a fixed minute and hour, never */n', () => {
+    // The bound, not the exact value: a sweep measured far longer than 15 minutes, so a manifest
+    // default that repeats within the hour re-creates the pile-up. `*/15 * * * *` and `0 * * * *`
+    // both fail this; `0 3 * * *` passes. A user can still choose faster in Settings, which is
+    // their call and is caught by the overlap guard below — but the shipped default cannot be it.
+    const [minute, hour] = agent.triggers.find((t) => t.type === 'cron').expression.split(/\s+/);
+    expect(minute).toMatch(/^\d+$/);
+    expect(hour).toMatch(/^\d+$/);
+  });
+
+  it('still declares its event triggers alongside it', () => {
+    expect(agent.triggers.some((t) => t.type === 'event')).toBe(true);
   });
 
   it('does NOT trigger on wpe:sync.completed (2026-08-06 incident: this event is not exclusively user-initiated)', () => {
@@ -213,6 +230,45 @@ describe('No automatic cron trigger — AgentRegistry reads triggers only from a
     // hour, until the whole app had to be force-killed. Re-adding this trigger requires a way to
     // distinguish "user synced one site" from "scheduler swept the fleet" first.
     expect(agent.triggers.some((t) => t.pattern === 'wpe:sync.completed')).toBe(false);
+  });
+});
+
+describe('One sweep at a time — the guard that makes a schedule survivable', () => {
+  // This is what stands between the cadence picker's "Every 15 minutes" and the original
+  // incident, and it lives HERE, not in the scheduler: nodeCron calls runner.run() without
+  // checking whether the last run finished, so a sweep that outlives its interval is started
+  // again on top of itself. Each overlapping sweep built its own sandboxes — thirteen reached
+  // 6.5 GB. Untested until the cron came back; the guard is now load-bearing, so it is pinned.
+  const log = () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() });
+
+  it('refuses a second run while one is in flight, and lets the next one through after', async () => {
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    // Holds the first sweep open inside collectFleetData's very first tool call.
+    const tools = { invoke: jest.fn(async () => { await gate; return ''; }) };
+    const firstLog = log();
+    const first = agent.run({ tools, log: firstLog, settings: {}, state: {}, ai: {}, autonomy: 'ask' });
+
+    // `sweepInFlight` is set synchronously before run() ever awaits, so the second caller sees it
+    // without needing to yield — exactly as nodeCron would fire it.
+    const second = await agent.run({ tools, log: log(), settings: {}, state: {}, ai: {}, autonomy: 'ask' });
+    expect(second.verdict).toBe('skipped');
+    expect(second.summary).toMatch(/already in progress/i);
+    // Skipped means skipped: the second sweep touched no tool of its own.
+    expect(tools.invoke).toHaveBeenCalledTimes(1);
+
+    release();
+    await first;
+
+    // And the flag is cleared in `finally`, so the refusal is not permanent — a guard that
+    // latched would silently retire the agent after its first sweep. Read the reason, not the
+    // verdict: this run is also 'skipped', by the separate opt-in scope check (these settings
+    // name no sites), which is precisely why the verdict alone cannot tell the two apart.
+    const third = await agent.run({ tools, log: log(), settings: {}, state: {}, ai: {}, autonomy: 'ask' });
+    expect(third.summary).not.toMatch(/already in progress/i);
+    expect(third.summary).toMatch(/no sites in scope/i);
+    // It reached collectFleetData, which the refused run never did.
+    expect(tools.invoke).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -1,32 +1,20 @@
 /**
- * Navigate Local to the Nexus AI dashboard, where credentials are configured.
+ * Small helpers for agent surfaces that need to send the user somewhere.
  *
- * Local's renderer has no direct router handle for addons; the supported move is its own
- * `sendIPCEvent('goToRoute', …)`, which round-trips through the window's webContents back to the
- * `ipcRenderer.on('goToRoute')` listener in Local's App. `@getflywheel/local` is a host-provided
- * peer (not installed in this repo's node_modules), so it is required lazily — a static import
- * would break the build and every test that renders this tree.
+ * This module once exported `openNexusPreferences()`, which called Local's own
+ * `sendIPCEvent('goToRoute', '/main/nexus')`. It is gone, and nothing may reintroduce it: every
+ * one of its five call sites lived *inside* `/main/nexus`, so it asked the host to navigate to the
+ * page already on screen. Local re-renders the same route, `NexusOverview` stays mounted with its
+ * state untouched, and the button does nothing — silently, with no error to notice. It had drifted
+ * there honestly (it used to open `/settings//nexus-ai`, a page that has since been deleted), which
+ * is exactly why the shape is worth naming: it stayed compiling and looked alive the whole time.
  *
- * This used to open `/settings//nexus-ai`, the addon's page in Local's own preferences.
- * That page was already the wrong destination before it was deleted: the settings home
- * moved into the dashboard, taking the AWS credentials with it, and the button kept
- * sending people to a page that no longer had what they came for. It now opens the
- * dashboard route the sidebar uses.
- *
- * Returns false when the host API is unavailable, so a caller can render the path as text rather
- * than a button that does nothing.
+ * The dashboard is one route. Which tab it shows, and which section Settings opens on, are React
+ * state in `NexusOverview` and `SettingsShell` — not addressable by any URL. So a surface deeper in
+ * the tree cannot navigate itself there; it takes a callback from the owner of that state
+ * (`onOpenSettingsSection`, threaded through `AgentConsoleTab` → `AgentWorkspace`), and when it has
+ * none it withholds the button and names the destination in prose instead.
  */
-export function openNexusPreferences(): boolean {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { sendIPCEvent } = require('@getflywheel/local/renderer');
-    if (typeof sendIPCEvent !== 'function') return false;
-    sendIPCEvent('goToRoute', '/main/nexus');
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /** Where the credential actually lives, for copy that has to name it. */
 export const AWS_CREDENTIAL_LOCATION = 'Nexus AI → Settings → Connections';

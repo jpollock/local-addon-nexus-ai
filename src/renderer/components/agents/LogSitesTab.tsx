@@ -5,7 +5,6 @@ import {
 } from './logSourcesModel';
 import { LogBucketModal } from './LogBucketModal';
 import { deriveScale, renderScaleControls, renderPager, PAGE, PAGE_MORE, ScaleFilter } from './sitesScale';
-import { openNexusPreferences } from './openNexusPreferences';
 
 /**
  * log-processor's Sites tab — the working surface for its log sources.
@@ -31,6 +30,15 @@ interface Props {
   onScopeChange: (siteIds: string[]) => void;
   /** Re-reads the bucket/install cache after a scan or rescan. */
   onReload: () => void;
+  /**
+   * Open Nexus AI → Settings → Connections, where the shared AWS credential lives.
+   *
+   * Unlike Google's, this credential really is dashboard state rather than agent state, so the
+   * destination is a section of the app's own Settings — reachable only by asking the dashboard,
+   * since neither the tab nor the section within it is a route. Optional: without it the buttons
+   * name the location in prose instead of offering a click that goes nowhere.
+   */
+  onOpenAwsSettings?: () => void;
 }
 
 export type SitesFilter = 'logs' | 'on' | 'all';
@@ -384,9 +392,15 @@ export class LogSitesTab extends React.Component<Props, State> {
       // Exactly one live action. When AWS is not connected the bucket button is ABSENT, not
       // disabled beside an enabled twin — a disabled button next to an enabled one loses by
       // visual weight and dead-ends the user (DECISIONS.md, principles).
-      React.createElement('div', { style: { display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 } },
+      //
+      // The same rule now decides whether there is a button at all: the not-connected action can
+      // only be offered if something upstream can open Settings for us. It used to call
+      // `openNexusPreferences()`, which navigated to the route already on screen — a live-looking
+      // button that dead-ended exactly like the disabled twin this design rejected. The footnote
+      // below names the location in prose either way, so nothing is lost when it is absent.
+      (connected || this.props.onOpenAwsSettings) && React.createElement('div', { style: { display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 } },
         React.createElement('button', {
-          onClick: () => { if (connected) this.setState({ modalOpen: true }); else openNexusPreferences(); },
+          onClick: () => { if (connected) this.setState({ modalOpen: true }); else this.props.onOpenAwsSettings!(); },
           style: {
             background: 'var(--ag-picker-teal)', color: 'var(--ag-picker-on-teal)', border: 'none',
             fontWeight: 600, fontSize: 13, padding: '9px 18px', borderRadius: 8, cursor: 'pointer',
@@ -429,6 +443,8 @@ export class LogSitesTab extends React.Component<Props, State> {
           : undefined,
         onClose: () => this.setState({ modalOpen: false }),
         onConnected: this.props.onReload,
+        // Its credential errors end where this tab's own do — one route out, passed through.
+        onOpenAwsSettings: this.props.onOpenAwsSettings,
       }),
     );
   }

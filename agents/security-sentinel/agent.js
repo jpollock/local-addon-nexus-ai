@@ -354,9 +354,9 @@ const KNOWN_MU_PLUGINS = [
 
 // ─── Fleet sweep cost controls ──────────────────────────────────────────────
 //
-// The cron trigger is `*/15 * * * *` and fires with no event, so getScanScope() returns nulls,
-// collectFleetData() applies no site filter, and every sweep covers the whole fleet — 375 sites
-// on this machine. That was previously two nested serial loops with no cap and no guard:
+// The cron trigger fires with no event, so getScanScope() returns nulls, collectFleetData()
+// applies no site filter, and every sweep covers the whole fleet — 375 sites on this machine.
+// That was previously two nested serial loops with no cap and no guard:
 //
 //   1. collectFleetData ran wpe_site_deep_refresh, one SSH round trip at a time, for every
 //      install with a null ssh_last_sync_at. All 343 WPE installs here have one.
@@ -364,9 +364,12 @@ const KNOWN_MU_PLUGINS = [
 //      A measured Tier 2 took ~5 minutes for a single site: 14 s to start the source, 106 s to
 //      clone, 20 s to poll, then 120 s of specialist LLM calls.
 //
-// A sweep therefore takes far longer than the 15 minutes between fires, and AgentScheduler has
-// no overlap guard — nodeCron calls runner.run() unconditionally. Overlapping sweeps each build
-// their own sandboxes, which is how thirteen accumulated to 6.5 GB.
+// A sweep therefore took far longer than the 15 minutes then between fires, and AgentScheduler
+// has no overlap guard — nodeCron calls runner.run() unconditionally. Overlapping sweeps each
+// build their own sandboxes, which is how thirteen accumulated to 6.5 GB. The interval is daily
+// now and `sweepInFlight` refuses an overlap outright, but note where the guard lives: in this
+// file, not in the scheduler. A cadence picked in Settings can still put the fires 15 minutes
+// apart, so these caps remain the only thing bounding a sweep's cost.
 
 // Local's GraphQL server is single-threaded, and the house rule for resolvers that do real work
 // (WP-CLI, SSH, file ops) is a p-queue capped at 3. Same ceiling here: the goal is to stop the
@@ -548,14 +551,27 @@ module.exports = {
   // Findings above the log threshold create review-status activity — the whole point of the
   // 'ask'/'auto' autonomy split (see AUTONOMY_OPTIONS in AgentWorkspaceSettings.tsx).
   producesApprovals: true,
-  // NO CRON. Removing this earlier from nexus.agent.yaml's `triggers:` list did nothing —
-  // AgentRegistry.loadAgent() reads triggers exclusively from THIS array (module.exports),
-  // never from the YAML manifest (loadManifest() there only pulls contributes.tools). The cron
-  // kept firing every 15 minutes for the rest of this session; the opt-in scope check
-  // (resolveScanScope) is the only reason it swept 0 sites instead of the whole fleet. That
-  // check is a safety net, not a substitute for not scheduling this at all — a corrupted or
-  // reset agent-settings.json (the exact class of bug fixed earlier today, cross-branch schema
-  // collision) removes the net with nothing behind it.
+  // CRON: DAILY, never */15. Restored 2026-08-25 — this agent had no cron trigger at all, which
+  // meant the Settings schedule controls could not work no matter what they wrote: this array is
+  // the ONLY source of triggers (AgentRegistry.loadAgent() reads module.exports; loadManifest()
+  // pulls only contributes.tools from the YAML), AgentScheduler.register() returns at
+  // `cronTriggers.length === 0`, and resolveAgentCron refuses to let a stored cadence conjure a
+  // schedule that was never declared. So "Not scheduled" was the literal truth and the picker
+  // beside it wrote to disk for nobody.
+  //
+  // What made the original `*/15 * * * *` a runaway was the interval against the workload, not
+  // scheduling as such: a fleet sweep takes far longer than 15 minutes, and nodeCron fires
+  // regardless of whether the last one finished, so sweeps overlapped and each built its own
+  // sandboxes. Three guards now stand between this line and that outcome, and all three postdate
+  // the incident: `sweepInFlight` refuses an overlapping run outright; MAX_TIER2_PER_SWEEP caps
+  // sandbox builds at three per sweep; and resolveScanScope keeps scanning opt-in per site.
+  // Daily at 03:00 is chosen so a sweep cannot lap itself even at the worst measured duration —
+  // the cost controls above are what make it survivable, the interval is what makes it unlikely.
+  //
+  // The user may still pick a faster cadence in Settings (it outranks this line — see
+  // resolveAgentCron); at 15 minutes they will get overlap-skip warnings in the log rather than
+  // a stampede. If you widen this, re-read the two incident notes below first: a schedule is
+  // only as safe as the guards standing under it, and this agent has removed a trigger twice.
   // wpe:sync.completed EXCLUDED (2026-08-06 incident) — this trigger, and resolveScanScope's
   // comment justifying its exemption from the scope check ("the user named the target"), assumed
   // the event only ever meant a human manually synced one install. WpeRefreshScheduler (opt-in,
@@ -571,6 +587,7 @@ module.exports = {
   // `source` field on the published event — and route the scheduler's case through
   // resolveScanScope like every other unattended trigger.
   triggers: [
+    { type: 'cron', expression: '0 3 * * *' },
     // wp:plugin.activated and wp:user.created work for local sites
     { type: 'event', pattern: 'wp:plugin.activated' },
     { type: 'event', pattern: 'wp:user.created' },
@@ -603,9 +620,10 @@ module.exports = {
     // MAX_TIER2_PER_SWEEP exists to prevent, self-inflicted.
     const forceEscalate = !!fullRun && (!!scope.installId || !!scope.installName);
 
-    // The cron fires every 15 minutes; a fleet sweep takes considerably longer than that, and
-    // AgentScheduler starts a run without checking whether the last one finished. Refuse rather
-    // than pile up — overlapping sweeps duplicate every SSH round trip and every sandbox.
+    // A fleet sweep can outlive its own interval — certainly at the 15-minute cadence the picker
+    // still offers — and AgentScheduler starts a run without checking whether the last one
+    // finished. Refuse rather than pile up: overlapping sweeps duplicate every SSH round trip and
+    // every sandbox. This guard, not the interval, is what makes scheduling this agent safe.
     if (sweepInFlight) {
       log.warn(
         `security-sentinel: a sweep is already running — skipping this ${scopeLabel} trigger. ` +

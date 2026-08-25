@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { Ga4Binding, matchScore } from './analyticsSitesModel';
-import { openNexusPreferences, openExternalUrl, parseDisabledGoogleApi } from './openNexusPreferences';
+import { openExternalUrl, parseDisabledGoogleApi } from './openNexusPreferences';
 
 /**
  * Bind one GA4 property to one site.
@@ -28,6 +28,12 @@ interface Props {
   onClose: () => void;
   /** Fired after a successful bind or unbind so the caller reloads its derived set. */
   onBound: () => void;
+  /**
+   * Show the workspace's Connected accounts card, where the Google account is granted and revoked.
+   * Every credential error this modal can raise is fixed there and nowhere else — which is why the
+   * button offering it must actually arrive, rather than firing the old `goToRoute` no-op.
+   */
+  onOpenConnectedAccounts?: () => void;
 }
 
 interface State {
@@ -320,16 +326,21 @@ export class Ga4PropertyModal extends React.Component<Props, State> {
                 },
               }, 'Open Google Cloud Console')
             : credentialProblem
-            ? React.createElement('button', {
-                onClick: () => {
-                  if (this.state.error?.code === 'NotConnected') { this.props.onClose(); return; }
-                  openNexusPreferences();
-                },
-                style: {
-                  background: 'var(--ag-picker-teal)', border: 'none', color: 'var(--ag-picker-on-teal)',
-                  fontWeight: 600, fontSize: 13, padding: '10px 20px', borderRadius: 9, cursor: 'pointer',
-                },
-              }, this.state.error?.code === 'NotConnected' ? 'Close and grant access' : 'Open Connected accounts')
+            // One button for every credential problem, because they all end at the same card:
+            // an account that was never connected and one whose grant no longer covers Analytics
+            // are both fixed there. It used to be two branches, and neither arrived — `NotConnected`
+            // closed the modal and left the user to find the card themselves, while the other fired
+            // `goToRoute('/main/nexus')` from inside `/main/nexus` and did nothing at all. Rendered
+            // only when the destination is reachable; Close/Cancel to its left still dismisses.
+            ? (this.props.onOpenConnectedAccounts
+                ? React.createElement('button', {
+                    onClick: () => { this.props.onClose(); this.props.onOpenConnectedAccounts!(); },
+                    style: {
+                      background: 'var(--ag-picker-teal)', border: 'none', color: 'var(--ag-picker-on-teal)',
+                      fontWeight: 600, fontSize: 13, padding: '10px 20px', borderRadius: 9, cursor: 'pointer',
+                    },
+                  }, 'Open Connected accounts')
+                : false)
             : React.createElement('button', {
                 onClick: () => { void this.commit(); },
                 disabled: phase === 'saving' || !this.state.selected,

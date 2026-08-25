@@ -27,15 +27,20 @@ const CONNECTED: AnalyticsState = {
 function makeTab(over: Partial<any> = {}) {
   const onReload = jest.fn();
   const invoke = jest.fn(async () => ({ content: [{ type: 'text', text: '{"ok":true}' }] }));
+  // Present unless a case withholds it explicitly — `hasOwnProperty`, so `undefined` is a choice.
+  const onOpenConnectedAccounts = Object.prototype.hasOwnProperty.call(over, 'onOpenConnectedAccounts')
+    ? over.onOpenConnectedAccounts
+    : jest.fn();
   const instance: any = new AnalyticsSitesTab({
     electron: { ipcRenderer: { invoke } },
     state: over.state ?? CONNECTED,
     loading: over.loading ?? false,
     cadenceLabel: over.cadenceLabel ?? 'every Monday',
     onReload,
+    onOpenConnectedAccounts,
   });
   spySetState(instance);
-  return { instance, onReload, invoke };
+  return { instance, onReload, invoke, onOpenConnectedAccounts };
 }
 
 function textOf(node: any): string {
@@ -44,6 +49,17 @@ function textOf(node: any): string {
   if (Array.isArray(node)) return node.map(textOf).join(' ');
   if (node.props) return textOf(node.props.children);
   return '';
+}
+
+/** Walk the rendered tree for a button whose visible text is exactly `label`. */
+function findButton(node: any, label: string): any {
+  if (!node || typeof node !== 'object') return null;
+  if (Array.isArray(node)) {
+    for (const child of node) { const hit = findButton(child, label); if (hit) return hit; }
+    return null;
+  }
+  if (node.type === 'button' && textOf(node.props?.children).trim() === label) return node;
+  return findButton(node.props?.children, label);
 }
 
 function findAll(node: any, type: any, out: any[] = []): any[] {
@@ -73,6 +89,25 @@ describe('account card', () => {
       },
     };
     expect(textOf(makeTab({ state: shared }).instance.render())).toContain('1 property in use');
+  });
+
+  it('its button goes to the Connected accounts card, and says so', () => {
+    // It used to say "Manage account" and fire `goToRoute('/main/nexus')` — the route the user was
+    // already on, so nothing happened at all. Worse, the Connections section it aimed at holds no
+    // Google credential; the only connect/disconnect UI is this workspace's own Settings tab. The
+    // label now names that card, and the click reaches the callback that shows it.
+    const { instance, onOpenConnectedAccounts } = makeTab();
+    const rendered = instance.render();
+    expect(textOf(rendered)).toContain('Connected accounts');
+    expect(textOf(rendered)).not.toContain('Manage account');
+    findButton(rendered, 'Connected accounts').props.onClick();
+    expect(onOpenConnectedAccounts).toHaveBeenCalled();
+  });
+
+  it('withholds the button entirely when nothing can show that card', () => {
+    // Absent beats dead: the card is still a truthful status card without it.
+    const { instance } = makeTab({ onOpenConnectedAccounts: undefined });
+    expect(findButton(instance.render(), 'Connected accounts')).toBeNull();
   });
 });
 
@@ -188,6 +223,15 @@ describe('the picker', () => {
 
   it('is not rendered until a row asks for it', () => {
     expect(findAll(makeTab().instance.render(), Ga4PropertyModal)).toHaveLength(0);
+  });
+
+  it('hands the picker the same way out this tab has', () => {
+    // Its credential errors end at the card this tab's own header points at. Without the prop the
+    // picker's only recourse was `openNexusPreferences()`, which went nowhere.
+    const { instance, onOpenConnectedAccounts } = makeTab();
+    instance.setState({ picking: 'myloop' });
+    const modal = findAll(instance.render(), Ga4PropertyModal)[0];
+    expect(modal.props.onOpenConnectedAccounts).toBe(onOpenConnectedAccounts);
   });
 });
 

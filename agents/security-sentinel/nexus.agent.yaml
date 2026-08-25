@@ -5,9 +5,18 @@ author:
   name: WP Engine
   verified: true
 
+# Documentation only — the runtime reads triggers from agent.js's `module.exports.triggers`, and
+# loadManifest() takes just `contributes.tools` from this file. Kept in agreement with it because
+# this is the file someone opens to change a schedule, and it was left claiming
+# `wpe:sync.completed` for nineteen days after that trigger was removed as the cause of an
+# incident. The rationale for each entry is in agent.js beside the array that actually runs.
 triggers:
+  - type: cron
+    expression: "0 3 * * *"
   - type: event
-    pattern: wpe:sync.completed
+    pattern: wp:plugin.activated
+  - type: event
+    pattern: wp:user.created
 
 tools:
   - fleet_sql

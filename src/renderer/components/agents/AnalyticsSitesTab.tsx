@@ -2,7 +2,6 @@ import * as React from 'react';
 import { AnalyticsState, AnalyticsSiteRow, deriveAnalyticsRows } from './analyticsSitesModel';
 import { Ga4PropertyModal } from './Ga4PropertyModal';
 import { deriveScale, renderScaleControls, renderPager, PAGE, PAGE_MORE, ScaleFilter } from './sitesScale';
-import { openNexusPreferences } from './openNexusPreferences';
 
 /**
  * web-analytics' Sites tab.
@@ -36,6 +35,13 @@ interface Props {
   cadenceLabel: string;
   /** The scopes the agent itself declares. Requested verbatim — never a constant kept here. */
   googleScopes?: string[];
+  /**
+   * Show the workspace's Connected accounts card — where the Google account is actually connected
+   * and disconnected. It is a sibling tab of this one, not a page in the app's Settings: the
+   * dashboard's Connections section holds no Google credential, which is why the button that used
+   * to point there could not have worked even if the navigation had.
+   */
+  onOpenConnectedAccounts?: () => void;
   onReload: () => void;
 }
 
@@ -90,14 +96,19 @@ export class AnalyticsSitesTab extends React.Component<Props, State> {
             `${distinct} propert${distinct === 1 ? 'y' : 'ies'} in use`,
           ].join(' · ')),
         ),
-        React.createElement('button', {
-          onClick: () => openNexusPreferences(),
+        // Named for where it goes, and rendered only when it can go there. It used to say
+        // "Manage account" and fire `goToRoute('/main/nexus')` — the route already on screen — so
+        // every click was a no-op, and the Connections section it pointed at has no Google
+        // credential in it anyway. Absent beats dead: without the callback the card is just a
+        // status card, and the Settings tab in this same workspace is one click away regardless.
+        this.props.onOpenConnectedAccounts && React.createElement('button', {
+          onClick: () => this.props.onOpenConnectedAccounts!(),
           style: {
             flex: 'none', background: 'var(--ag-picker-bg-raised)', border: '1px solid var(--ag-picker-border)',
             color: 'var(--ag-picker-text-secondary)', fontWeight: 500, fontSize: 12.5,
             padding: '8px 15px', borderRadius: 8, cursor: 'pointer',
           },
-        }, 'Manage account'),
+        }, 'Connected accounts'),
       ),
     );
   }
@@ -377,6 +388,9 @@ export class AnalyticsSitesTab extends React.Component<Props, State> {
         current: state.bindings[this.state.picking],
         onClose: () => this.setState({ picking: null }),
         onBound: this.props.onReload,
+        // The picker's credential errors all end at the same card this tab's header points at.
+        // It closes itself first — the destination is behind this modal, not inside it.
+        onOpenConnectedAccounts: this.props.onOpenConnectedAccounts,
       }),
     );
   }

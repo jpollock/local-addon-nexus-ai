@@ -31,6 +31,10 @@ function makeTab(over: Partial<any> = {}) {
   const onScopeChange = jest.fn();
   const onReload = jest.fn();
   const invoke = jest.fn(async () => ({ content: [{ type: 'text', text: '{"ok":true}' }] }));
+  // Present unless a case withholds it explicitly — `hasOwnProperty`, so `undefined` is a choice.
+  const onOpenAwsSettings = Object.prototype.hasOwnProperty.call(over, 'onOpenAwsSettings')
+    ? over.onOpenAwsSettings
+    : jest.fn();
   const instance: any = new LogSitesTab({
     electron: { ipcRenderer: { invoke } },
     state: over.state ?? CONNECTED,
@@ -39,9 +43,21 @@ function makeTab(over: Partial<any> = {}) {
     cadenceLabel: over.cadenceLabel ?? 'every 15 minutes',
     onScopeChange,
     onReload,
+    onOpenAwsSettings,
   });
   spySetState(instance);
-  return { instance, onScopeChange, onReload, invoke };
+  return { instance, onScopeChange, onReload, invoke, onOpenAwsSettings };
+}
+
+/** Walk the rendered tree for a button whose visible text is exactly `label`. */
+function findButton(node: any, label: string): any {
+  if (!node || typeof node !== 'object') return null;
+  if (Array.isArray(node)) {
+    for (const child of node) { const hit = findButton(child, label); if (hit) return hit; }
+    return null;
+  }
+  if (node.type === 'button' && textOf(node.props?.children).trim() === label) return node;
+  return findButton(node.props?.children, label);
 }
 
 /** Flatten a React element tree into the strings it would render. */
@@ -89,6 +105,28 @@ describe('empty states', () => {
     expect(text).toContain('Connect AWS account');
     // Never a disabled bucket button beside it — the enabled one would win by visual weight.
     expect(text).not.toContain('Connect a bucket');
+  });
+
+  it('the AWS action actually reaches Settings rather than re-navigating to this page', () => {
+    // It used to call `openNexusPreferences()`, which asked Local to go to `/main/nexus` — the
+    // route this tab is already on. The button looked live and did nothing, every time.
+    const { instance, onOpenAwsSettings } = makeTab({
+      state: { bucket: null, installs: [], fleet: [], aws: { connected: false } },
+    });
+    findButton(instance.render(), 'Connect AWS account').props.onClick();
+    expect(onOpenAwsSettings).toHaveBeenCalled();
+  });
+
+  it('withholds the AWS action when nothing can open Settings, and still says where to go', () => {
+    // Same rule this empty state already applies to the bucket button: absent beats dead. The
+    // footnote names the location, so the user is not stranded.
+    const { instance } = makeTab({
+      onOpenAwsSettings: undefined,
+      state: { bucket: null, installs: [], fleet: [], aws: { connected: false } },
+    });
+    const rendered = instance.render();
+    expect(findButton(rendered, 'Connect AWS account')).toBeNull();
+    expect(textOf(rendered)).toContain('Nexus AI → Settings → Connections');
   });
 
   it('offers the bucket form once the credential exists', () => {

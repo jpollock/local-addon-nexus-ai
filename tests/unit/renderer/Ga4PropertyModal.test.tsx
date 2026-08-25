@@ -6,7 +6,6 @@ jest.mock('../../../src/renderer/components/agents/openNexusPreferences', () => 
   // behaviour is what these tests are checking, so it stays genuine — mocking it would have the
   // suite assert against a fixture instead of the parser that runs in production.
   ...jest.requireActual('../../../src/renderer/components/agents/openNexusPreferences'),
-  openNexusPreferences: jest.fn(() => true),
   openExternalUrl: jest.fn(() => true),
 }));
 
@@ -36,15 +35,31 @@ function makeModal(over: Partial<any> = {}) {
     }
     return over.mapResult ?? toolResult({ ok: true, siteId: req.args.siteId, binding: null });
   });
+  // Present unless a case withholds it explicitly — `hasOwnProperty`, so `undefined` is a choice.
+  const onOpenConnectedAccounts = Object.prototype.hasOwnProperty.call(over, 'onOpenConnectedAccounts')
+    ? over.onOpenConnectedAccounts
+    : jest.fn();
   const instance: any = new Ga4PropertyModal({
     electron: { ipcRenderer: { invoke } },
     siteName: over.siteName ?? 'myloop',
     current: over.current,
     onClose,
     onBound,
+    onOpenConnectedAccounts,
   });
   spySetState(instance);
-  return { instance, onClose, onBound, invoke };
+  return { instance, onClose, onBound, invoke, onOpenConnectedAccounts };
+}
+
+/** Walk the rendered tree for a button whose visible text is exactly `label`. */
+function findButton(node: any, label: string): any {
+  if (!node || typeof node !== 'object') return null;
+  if (Array.isArray(node)) {
+    for (const child of node) { const hit = findButton(child, label); if (hit) return hit; }
+    return null;
+  }
+  if (node.type === 'button' && textOf(node.props?.children).trim() === label) return node;
+  return findButton(node.props?.children, label);
 }
 
 function textOf(node: any): string {
@@ -124,6 +139,33 @@ describe('failures', () => {
     expect(text).toContain('Nothing has been changed.');
     // A credential problem makes the credential the primary action, not a dead Bind button.
     expect(text).toContain('Open Connected accounts');
+  });
+
+  it('the credential button dismisses the modal and asks the caller to show the card', async () => {
+    // The half that used to be missing. The button existed and read the same either way, but for
+    // `NotConnected` it only closed, and for the rest it fired `goToRoute('/main/nexus')` from
+    // inside `/main/nexus` — a no-op. Both are one arrival now, and the modal gets out of the way
+    // first, because the card is behind this overlay rather than inside it.
+    const { instance, onClose, onOpenConnectedAccounts } = makeModal({
+      listResult: toolResult({ ok: false, errorCode: 'Revoked', message: 'Google access was revoked.' }),
+    });
+    await instance['load']();
+    findButton(instance.render(), 'Open Connected accounts').props.onClick();
+    expect(onClose).toHaveBeenCalled();
+    expect(onOpenConnectedAccounts).toHaveBeenCalled();
+  });
+
+  it('offers no credential button when nothing can show the card', async () => {
+    // Cancel to its left still dismisses, so the modal is never a trap — but a button promising a
+    // destination it cannot reach is not offered at all.
+    const { instance } = makeModal({
+      onOpenConnectedAccounts: undefined,
+      listResult: toolResult({ ok: false, errorCode: 'NotConnected', message: 'No Google account is connected.' }),
+    });
+    await instance['load']();
+    const rendered = instance.render();
+    expect(findButton(rendered, 'Open Connected accounts')).toBeNull();
+    expect(findButton(rendered, 'Cancel') ?? findButton(rendered, 'Close')).not.toBeNull();
   });
 
   it('does not offer Preferences for a non-credential failure', async () => {

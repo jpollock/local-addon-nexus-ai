@@ -139,3 +139,74 @@ describe('SettingsShell — a failed save is not left on screen', () => {
     delete (global as any).window;
   });
 });
+
+describe('opening on a section another surface named', () => {
+  /**
+   * The plain sibling of the refusal `door`. It exists because the dashboard is a single route and
+   * both the Settings tab and the section inside it are React state: a button deep in an agent's
+   * workspace cannot navigate to the AWS credential, it can only ask. Before this, those buttons
+   * called `sendIPCEvent('goToRoute', '/main/nexus')` — the page already on screen — and did
+   * nothing at all, silently, from all five of their call sites.
+   */
+  // These are the only tests here that run `componentDidMount`, which injects the theme stylesheet.
+  // A `document` whose lookup already succeeds makes `injectThemeVars` return on its first line —
+  // this suite is a node environment, and the section request is what is under test.
+  const realDocument = (global as any).document;
+  beforeAll(() => { (global as any).document = { getElementById: () => ({}) }; });
+  afterAll(() => { (global as any).document = realDocument; });
+
+  const mount = (props: any = {}) => {
+    const c: any = new (SettingsShell as any)({
+      electron: { ipcRenderer: { invoke: jest.fn(async () => ({})) } },
+      ...props,
+    });
+    c.state = { ...c.state, loading: false, settings: {} };
+    jest.spyOn(c, 'setState').mockImplementation(function (this: any, u: any) {
+      Object.assign(this.state, typeof u === 'function' ? u(this.state) : u);
+    });
+    // The section request is the subject; the IPC fan-out behind mount is not.
+    jest.spyOn(c, 'loadAll').mockImplementation(() => Promise.resolve());
+    return c;
+  };
+
+  test('a request that arrives with the mount opens that section, not the default one', () => {
+    const onSectionOpened = jest.fn();
+    const c = mount({ openSection: 'connections', onSectionOpened });
+    expect(c.state.active).toBe('background');   // the default, before mount runs
+    c.componentDidMount();
+    expect(c.state.active).toBe('connections');
+    // The sender is told, so it can clear its own state — see the repeat case below.
+    expect(onSectionOpened).toHaveBeenCalled();
+  });
+
+  test('no request leaves the shell on its own default', () => {
+    const c = mount();
+    c.componentDidMount();
+    expect(c.state.active).toBe('background');
+  });
+
+  test('a request that arrives after the mount still opens', () => {
+    const onSectionOpened = jest.fn();
+    const c = mount({ onSectionOpened });
+    c.componentDidMount();
+    c.props = { ...c.props, openSection: 'connections' };
+    c.componentDidUpdate({ ...c.props, openSection: null });
+    expect(c.state.active).toBe('connections');
+    expect(onSectionOpened).toHaveBeenCalled();
+  });
+
+  test('asking for the same section twice works twice', () => {
+    // The sender clears `openSection` back to null once honoured. If the guard compared identity
+    // of the request rather than its value, the second press of the same button would be a no-op
+    // — the same class of dead control this whole change removes.
+    const c = mount({ openSection: 'connections', onSectionOpened: jest.fn() });
+    c.componentDidMount();
+    c.state.active = 'advanced';                                   // the user browsed away
+    c.props = { ...c.props, openSection: null };                    // sender cleared it
+    c.componentDidUpdate({ ...c.props, openSection: 'connections' });
+    expect(c.state.active).toBe('advanced');                        // clearing is not a request
+    c.props = { ...c.props, openSection: 'connections' };           // pressed again
+    c.componentDidUpdate({ ...c.props, openSection: null });
+    expect(c.state.active).toBe('connections');
+  });
+});

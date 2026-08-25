@@ -2,7 +2,7 @@ import * as React from 'react';
 import { IPC_CHANNELS } from '../../../common/constants';
 import { AwsCredential, normalizeLogPrefix } from './logSourcesModel';
 import { ScopeSite } from './fetchScopeSites';
-import { openNexusPreferences, AWS_CREDENTIAL_LOCATION } from './openNexusPreferences';
+import { AWS_CREDENTIAL_LOCATION } from './openNexusPreferences';
 
 /**
  * Connect (or re-point) log-processor's one account-level S3 log bucket.
@@ -52,6 +52,13 @@ interface Props {
   onClose: () => void;
   /** Fired after a successful commit, so the caller reloads its derived set. */
   onConnected: () => void;
+  /**
+   * Open Nexus AI → Settings → Connections, where the shared AWS credential lives — the fix for
+   * every credential failure this modal reports. Optional: `AWS_CREDENTIAL_LOCATION` already names
+   * the place in every one of those messages, so without the callback the user is told where to go
+   * rather than handed a button that stays put.
+   */
+  onOpenAwsSettings?: () => void;
 }
 
 interface State {
@@ -182,8 +189,10 @@ export class LogBucketModal extends React.Component<Props, State> {
           ? (aws.label ?? 'access key stored') + (aws.createdAt ? ` · added ${new Date(aws.createdAt).toLocaleDateString()}` : '')
           : 'Needed to read access logs from S3'),
       ),
-      React.createElement('button', {
-        onClick: () => openNexusPreferences(),
+      // Closes first: this is a fixed overlay, so navigating without dismissing it would land the
+      // user on Settings underneath a modal still covering the screen.
+      this.props.onOpenAwsSettings && React.createElement('button', {
+        onClick: () => { this.props.onClose(); this.props.onOpenAwsSettings!(); },
         style: {
           flex: 'none', background: 'none', border: 'none', padding: 0, cursor: 'pointer',
           fontSize: 12, fontWeight: 500, color: 'var(--ag-picker-teal)',
@@ -459,7 +468,18 @@ export class LogBucketModal extends React.Component<Props, State> {
     // primary and leave the user to find the real one in the body.
     if (!this.props.aws.connected
       || (failure && ['InvalidAccessKeyId', 'SignatureDoesNotMatch', 'NotConnected'].includes(failure.errorCode))) {
-      return { label: 'Open Connected accounts', onClick: () => openNexusPreferences(), disabled: false };
+      // Dismiss on the way — Settings is behind this overlay, not inside it. With nothing able to
+      // open Settings for us the primary becomes plain Close: the body of every one of these
+      // failures already names `AWS_CREDENTIAL_LOCATION`, so leaving is the whole action, and a
+      // button labelled "Open Connected accounts" that only ever closed the modal would be the
+      // same lie this replaces.
+      return this.props.onOpenAwsSettings
+        ? {
+            label: 'Open Connected accounts',
+            onClick: () => { this.props.onClose(); this.props.onOpenAwsSettings!(); },
+            disabled: false,
+          }
+        : { label: 'Close', onClick: this.props.onClose, disabled: false };
     }
     return {
       label: failure ? 'Scan again' : 'Scan bucket',

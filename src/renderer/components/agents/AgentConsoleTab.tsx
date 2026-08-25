@@ -10,10 +10,19 @@ import { ExecuteModal } from './ExecuteModal';
 import type { SentinelCase } from './SentinelTypes';
 import { rendererGql } from '../../utils/rendererGql';
 import { isReviewStatus, totalPending } from './pending';
+import type { Section as SettingsSection } from '../settings/SettingsShell';
 
 interface AgentConsoleTabProps {
   electron: any;
   onNavigateToInbox?: () => void;
+  /**
+   * Open the dashboard's Settings tab on a named section.
+   *
+   * Passed down for surfaces inside an agent workspace that need a setting this tab does not
+   * own — the shared AWS credential. They cannot navigate there themselves: the dashboard is a
+   * single route, and both the tab and the section within it are React state one component up.
+   */
+  onOpenSettingsSection?: (section: SettingsSection) => void;
 }
 
 interface AgentConsoleTabState {
@@ -289,6 +298,7 @@ export class AgentConsoleTab extends React.Component<AgentConsoleTabProps, Agent
           electron,
           onBack: () => this.setState({ selectedAgentId: null }),
           onReviewEvent: (eventId: string) => this.openSentinelReview(eventId),
+          onOpenSettingsSection: this.props.onOpenSettingsSection,
         }),
         activeApproval && React.createElement(GenericApprovalDrawer, {
           approval: activeApproval,

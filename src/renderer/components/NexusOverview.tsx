@@ -23,6 +23,7 @@ import { SiteGroupsPanel } from './SiteGroupsPanel';
 // them. localDay stays: the run-complete handler below still needs its ICU guard.
 import { localDay } from './localDay';
 import { SettingsTab } from './SettingsTab';
+import type { Section as SettingsSection } from './settings/SettingsShell';
 import type { GovernDoorTarget } from '../../main/intelligence-host/sequenceGuard';
 import type { SessionRow } from '../../main/intelligence-host/sessionRegistry';
 import { Arrival } from './return/Arrival';
@@ -177,6 +178,14 @@ interface NexusOverviewState {
   activeTab: TabKey;
   /** WP-44 · the refusal door this dashboard is currently honouring. */
   governDoor: GovernDoorTarget | null;
+  /**
+   * A Settings section another tab asked us to open, held until the shell honours it.
+   *
+   * Settings is a tab of this component, and the section is state inside the shell — neither is
+   * addressable by a route. That is why an agent's "Connect AWS account" button could not simply
+   * navigate: `goToRoute('/main/nexus')` is the page it was already on, so it did nothing.
+   */
+  settingsSection: SettingsSection | null;
   /**
    * WP-46 · the session a waiting row promoted, and the row the registry folded
    * for it. Both null means the arrival itself is on screen.
@@ -335,6 +344,7 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
     returnSessionId: null,
     returnSession: null,
     governDoor: null,
+    settingsSection: null,
     siteRows: [],
     // Not zero-with-a-scope: nothing has been read yet, and the empty scope
     // string is what `loaded: false` renders behind anyway.
@@ -1204,6 +1214,18 @@ renderTabBar(): React.ReactNode {
     // state, so the user still sees what happened rather than the bar vanishing.
   };
 
+  /**
+   * Open Settings on a named section, for a surface deeper in the tree that needs a setting the
+   * dashboard owns — the shared AWS credential, reached from inside an agent's workspace.
+   *
+   * Both halves are this component's state, which is precisely why the callers could not do it
+   * themselves and why routing could not either: `activeTab` selects Settings, `settingsSection`
+   * travels into the shell and selects the section within it.
+   */
+  openSettingsSection = (section: SettingsSection): void => {
+    this.setState({ activeTab: 'settings', settingsSection: section });
+  };
+
   renderActiveTab(): React.ReactNode {
     switch (this.state.activeTab) {
       // WP-46 · M6. The arrival, and the re-entry a promoted row lands on.
@@ -1314,6 +1336,8 @@ renderTabBar(): React.ReactNode {
           nexusStore.update({ governDoorRequest: null });
           if (this.mounted) this.setState({ governDoor: null });
         },
+        openSection: this.state.settingsSection,
+        onSectionOpened: () => { if (this.mounted) this.setState({ settingsSection: null }); },
       });
       // 'agents' case handled in render() directly (no stats dependency)
       // Sites is the landing tab; fallback points there to handle any stale/in-flight 'overview' value
@@ -1505,6 +1529,7 @@ renderTabBar(): React.ReactNode {
             React.createElement(AgentConsoleTab, {
               electron: this.props.electron,
               onNavigateToInbox: () => this.setState({ activeTab: 'now' }),
+              onOpenSettingsSection: this.openSettingsSection,
             }),
           )
         : loading

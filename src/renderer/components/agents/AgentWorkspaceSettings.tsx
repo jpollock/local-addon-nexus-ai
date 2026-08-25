@@ -340,6 +340,37 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     }, 'This agent is not scoped to sites — each run performs the same fleet-wide checks.');
   }
 
+  /**
+   * Stand-in for the schedule row for an agent whose manifest declares no cron trigger.
+   *
+   * Such an agent cannot be put on one. `AgentScheduler.register()` returns before scheduling
+   * anything when `cronTriggers.length === 0`, and `effectiveCadenceExpression` refuses to let a
+   * stored cadence conjure a schedule that was never built.
+   *
+   * Note what this row is NOT for. security-sentinel was in this state, and the fix was to give
+   * it a real cron trigger, not to keep offering controls here — an agent a user wants on a timer
+   * needs one declared in its own `triggers` array in `agents/<name>/agent.js`, which is the only
+   * place the runtime looks. This row is the honest answer for an agent genuinely built without
+   * one.
+   *
+   * So the toggle and the cadence button are ABSENT here rather than disabled. Both wrote real,
+   * persisted settings — `scheduleEnabled`, and `cadence`/`cadenceSetAt` straight onto disk —
+   * that nothing downstream could read, while the label beside them kept reading "Not scheduled"
+   * however many times it was clicked. A control that saves a value nobody reads is worse than no
+   * control: it reports success at the one thing it cannot do.
+   */
+  private renderNoScheduleLine(hasEvents: boolean) {
+    return React.createElement('div', {
+      style: {
+        marginBottom: 14, padding: '11px 14px', borderRadius: 10,
+        background: 'var(--ag-bg-inset)', border: '1px solid var(--ag-border-subtle)',
+        fontSize: 13, color: 'var(--ag-text-secondary)',
+      },
+    }, hasEvents
+      ? 'Not on a schedule — this agent declares no timer. It runs on the events below, and whenever you press Run now.'
+      : 'Not on a schedule — this agent declares no timer. It runs only when you press Run now.');
+  }
+
   private renderScopeElsewhereLine() {
     const count = this.props.sitesTabCount ?? this.currentScopeSiteIds().length;
     const noun = this.props.sitesTabNoun ?? 'install';
@@ -645,6 +676,8 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     const { agentId } = this.props;
     const catalog = EVENT_CATALOG[agentId] || [];
     const currentAutonomy = agentStore.getState().autonomyById[agentId] || 'ask';
+    // Whether this agent can be scheduled at all — see renderNoScheduleLine.
+    const hasManifestCron = (this.props.cronExpression ?? '').trim() !== '';
 
     return React.createElement('div', { style: { maxWidth: 680 } },
 
@@ -686,26 +719,30 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
         React.createElement('div', null,
           React.createElement('div', { style: { fontSize: 14.5, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 16 } }, 'How this agent runs'),
 
-          // On a schedule
-          React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 } },
-            React.createElement(ToggleSwitch, { checked: settings.scheduleEnabled, onChange: (v) => this.updateSettings({ scheduleEnabled: v }) }),
-            React.createElement('div', { style: { flex: 1 } },
-              React.createElement('div', { style: { fontSize: 13.5, color: 'var(--ag-text-primary)' } }, 'On a schedule'),
-            ),
-            React.createElement('button', {
-              onClick: () => this.cycleCadence(),
-              style: {
-                background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border-control)',
-                borderRadius: 7, padding: '5px 12px', fontSize: 12.5, color: 'var(--ag-text-primary)',
-                cursor: 'pointer', fontWeight: 500,
-              },
-            }, (() => {
-              // The button shows what actually runs, so an untouched agent reads its manifest
-              // schedule rather than a cadence nobody picked. Clicking still cycles the picker.
-              const expr = effectiveCadenceExpression(settings, this.props.cronExpression);
-              return expr ? describeCron(expr) : 'Not scheduled';
-            })()),
-          ),
+          // On a schedule — offered only to an agent that has one. An agent with no cron trigger
+          // in its manifest gets the sentence instead of the controls; see renderNoScheduleLine.
+          hasManifestCron
+            ? React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 } },
+                React.createElement(ToggleSwitch, { checked: settings.scheduleEnabled, onChange: (v) => this.updateSettings({ scheduleEnabled: v }) }),
+                React.createElement('div', { style: { flex: 1 } },
+                  React.createElement('div', { style: { fontSize: 13.5, color: 'var(--ag-text-primary)' } }, 'On a schedule'),
+                ),
+                React.createElement('button', {
+                  onClick: () => this.cycleCadence(),
+                  style: {
+                    background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border-control)',
+                    borderRadius: 7, padding: '5px 12px', fontSize: 12.5, color: 'var(--ag-text-primary)',
+                    cursor: 'pointer', fontWeight: 500,
+                  },
+                }, (() => {
+                  // The button shows what actually runs, so an untouched agent reads its manifest
+                  // schedule rather than a cadence nobody picked. Clicking still cycles the picker.
+                  // `hasManifestCron` guarantees this is never the null branch.
+                  const expr = effectiveCadenceExpression(settings, this.props.cronExpression);
+                  return expr ? describeCron(expr) : 'Not scheduled';
+                })()),
+              )
+            : this.renderNoScheduleLine(catalog.length > 0),
 
           // Which sites the schedule may touch. Shown only when a schedule is on — it constrains
           // scheduled runs, not Run Now, and offering it otherwise implies it gates everything.
@@ -714,7 +751,11 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
           // sites run" is the specific failure handoff_log_sources_v3/DECISIONS.md §2 documents:
           // every state that reconciles them is an apology for a state that should never have
           // been representable. One line pointing at the real control, never a second copy of it.
-          settings.scheduleEnabled && (
+          // `hasManifestCron` as well as the toggle: a no-cron agent can still carry a stale
+          // `scheduleEnabled: true` from before the toggle was withdrawn, and "which sites the
+          // schedule may touch" beneath "this agent declares no timer" answers a question the
+          // row above just said does not exist.
+          hasManifestCron && settings.scheduleEnabled && (
             !(this.props.siteScoped ?? true)
               ? this.renderNotSiteScopedLine()
               : this.props.scopeLivesInSitesTab

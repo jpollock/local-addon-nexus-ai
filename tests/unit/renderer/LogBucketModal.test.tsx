@@ -1,12 +1,10 @@
 import { LogBucketModal, parseToolJson } from '../../../src/renderer/components/agents/LogBucketModal';
 import { IPC_CHANNELS } from '../../../src/common/constants';
 
-jest.mock('../../../src/renderer/components/agents/openNexusPreferences', () => ({
-  openNexusPreferences: jest.fn(() => true),
-  AWS_CREDENTIAL_LOCATION: 'Nexus AI → Settings → Connections',
-}));
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { openNexusPreferences } = require('../../../src/renderer/components/agents/openNexusPreferences');
+// No module mock any more, deliberately. The route out of this modal used to be a module-level
+// helper (`openNexusPreferences`) that asked Local to navigate to the route already on screen, so
+// every one of these assertions could pass while the button did nothing. It is a prop now, and a
+// prop is checkable: the test can see whether the caller was actually asked to open Settings.
 
 function spySetState(instance: any): void {
   jest.spyOn(instance, 'setState').mockImplementation(function (this: any, ...args: unknown[]) {
@@ -23,6 +21,11 @@ const toolResult = (payload: unknown, isError = false) =>
 function makeModal(over: Partial<any> = {}) {
   const onClose = jest.fn();
   const onConnected = jest.fn();
+  // Present unless a case explicitly withholds it — `hasOwnProperty`, not `??`, so a test can pass
+  // `onOpenAwsSettings: undefined` to exercise the no-destination branch.
+  const onOpenAwsSettings = Object.prototype.hasOwnProperty.call(over, 'onOpenAwsSettings')
+    ? over.onOpenAwsSettings
+    : jest.fn();
   const invoke = jest.fn(async () => over.result ?? toolResult({ ok: true, scan: EMPTY_SCAN }));
   const instance: any = new LogBucketModal({
     electron: { ipcRenderer: { invoke } },
@@ -31,9 +34,10 @@ function makeModal(over: Partial<any> = {}) {
     initial: over.initial,
     onClose,
     onConnected,
+    onOpenAwsSettings,
   });
   spySetState(instance);
-  return { instance, onClose, onConnected, invoke };
+  return { instance, onClose, onConnected, invoke, onOpenAwsSettings };
 }
 
 const EMPTY_SCAN = { totalObjects: 0, apacheStyleObjects: 0, unparsedObjects: 0, installs: [], truncated: false };
@@ -171,16 +175,38 @@ describe('the fix is always the footer primary button', () => {
     expect(textOf(instance['renderFailure']())).toContain('Only *.apachestyle.log.gz objects are read');
   });
 
-  it('sends a bad credential to Preferences', async () => {
-    (openNexusPreferences as jest.Mock).mockClear();
-    const { instance } = makeModal({ result: toolResult({ ok: false, errorCode: 'InvalidAccessKeyId', message: 'bad key' }, true) });
+  it('sends a bad credential to Settings, and dismisses itself on the way', async () => {
+    const { instance, onClose, onOpenAwsSettings } = makeModal({
+      result: toolResult({ ok: false, errorCode: 'InvalidAccessKeyId', message: 'bad key' }, true),
+    });
     instance.state.bucket = 'wpejpp';
     await instance['submit']();
 
     const primary = instance['footerPrimary']();
     expect(primary.label).toBe('Open Connected accounts');
     primary.onClick();
-    expect(openNexusPreferences).toHaveBeenCalled();
+    // Both, and this is the half that used to be missing: the click must actually reach the owner
+    // of the Settings tab. It used to call a helper that navigated to the route already on screen.
+    expect(onOpenAwsSettings).toHaveBeenCalled();
+    // A fixed overlay at z-index 1000 — leaving it up would put Settings behind a modal.
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('drops to a plain Close when nothing can open Settings for it', async () => {
+    // The body of every credential failure already names Nexus AI → Settings → Connections, so
+    // leaving IS the action. A button still labelled "Open Connected accounts" that only closed
+    // the modal would be the same false promise this replaced.
+    const { instance, onClose } = makeModal({
+      onOpenAwsSettings: undefined,
+      result: toolResult({ ok: false, errorCode: 'InvalidAccessKeyId', message: 'bad key' }, true),
+    });
+    instance.state.bucket = 'wpejpp';
+    await instance['submit']();
+
+    const primary = instance['footerPrimary']();
+    expect(primary.label).toBe('Close');
+    primary.onClick();
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('closes on the result screen', async () => {

@@ -18,13 +18,14 @@ describe('security-sentinel', () => {
     expect(agent.version).toBe('1.0.0');
   });
 
-  it('has event triggers and deliberately no cron', () => {
-    // The cron (`*/15 * * * *`) fired fleet-wide with no opt-in scope narrowing it, and removing
-    // it from nexus.agent.yaml's triggers list didn't stop it — AgentRegistry reads triggers
-    // only from this file's module.exports, never the YAML. See fleet-cost.test.js for the full
-    // regression test; this is the general smoke-test pinning the same fact.
+  it('has event triggers and a cron that is not the runaway interval', () => {
+    // The original cron (`*/15 * * * *`) fired fleet-wide with no opt-in scope narrowing it, and
+    // removing it from nexus.agent.yaml's triggers list didn't stop it — AgentRegistry reads
+    // triggers only from this file's module.exports, never the YAML. It is back (2026-08-25),
+    // daily, over the three guards that postdate the incident. See fleet-cost.test.js for the
+    // interval bound and the overlap guard; this is the general smoke-test pinning the shape.
     const types = agent.triggers.map(t => t.type);
-    expect(types).not.toContain('cron');
+    expect(types).toContain('cron');
     expect(types).toContain('event');
   });
 

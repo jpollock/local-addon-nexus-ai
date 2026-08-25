@@ -31,6 +31,16 @@ export interface SettingsShellProps {
   electron: any;
   door?: GovernDoorTarget | null;
   onDoorHandled?: () => void;
+  /**
+   * A section another surface asked this shell to open on — the plain sibling of `door`, for
+   * senders that name a section and nothing finer. An agent workspace pointing at the shared AWS
+   * credential is the motivating case: it used to fire `goToRoute('/main/nexus')`, the route the
+   * user was already on, so the button did nothing at all. Landing on the shell's default section
+   * would be the same "top of Settings" degradation `door` exists to avoid.
+   */
+  openSection?: Section | null;
+  /** Cleared by the sender once honoured, so asking for the same section twice works twice. */
+  onSectionOpened?: () => void;
 }
 
 export interface SectionProps<T> {
@@ -39,7 +49,8 @@ export interface SectionProps<T> {
   electron: any;
 }
 
-type Section = 'connections' | 'chat' | 'background' | 'permissions' | 'capabilities' | 'advanced';
+/** Exported so a sender can name a section in a type that fails to compile when one is renamed. */
+export type Section = 'connections' | 'chat' | 'background' | 'permissions' | 'capabilities' | 'advanced';
 
 interface SiteItem { id: string; name: string; status: string; }
 interface WpeAccount { id: string; name: string; nickname?: string; }
@@ -86,12 +97,24 @@ export class SettingsShell extends React.Component<SettingsShellProps, SettingsS
     // link would degrade to "the top of Settings" — the exact failure J-Refusal
     // names, reached by doing nothing rather than by doing something wrong.
     if (this.props.door?.section === 'capabilities') this.setState({ active: 'capabilities' });
+    if (this.props.openSection) this.openRequestedSection(this.props.openSection);
   }
 
   componentDidUpdate(prev: SettingsShellProps): void {
     if (prev.door !== this.props.door && this.props.door?.section === 'capabilities') {
       this.setState({ active: 'capabilities' });
     }
+    // Compared by value, not identity: the sender clears it back to null after each request, so a
+    // second request for the same section is a real transition and opens it again.
+    if (prev.openSection !== this.props.openSection && this.props.openSection) {
+      this.openRequestedSection(this.props.openSection);
+    }
+  }
+
+  /** Honour an `openSection` request and tell the sender, so it can clear its own state. */
+  private openRequestedSection(section: Section): void {
+    this.setState({ active: section });
+    this.props.onSectionOpened?.();
   }
 
   componentWillUnmount(): void {
