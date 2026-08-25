@@ -173,7 +173,24 @@ export class PowerProvider implements AIProvider {
         yield { type: 'done', stopReason: 'end_turn' };
         return;
       }
-      yield { type: 'error', message: `Power error: ${(err as Error).message}` };
+      // The one failure a person can actually fix themselves gets an
+      // actionable sentence, not an HTTP dump. Power returns 400
+      // "request is incompatible with the selected model" when the saved
+      // model id is one it does not serve — a stale pick survives in
+      // settings after Power's list moves (live case: a saved
+      // anthropic/claude-sonnet-5 against a list that serves 4-5). The raw
+      // body names a request_id and nothing the user can act on.
+      const msg = (err as Error).message;
+      if (/incompatible with the selected model/i.test(msg)) {
+        yield {
+          type: 'error',
+          message:
+            `Power doesn't serve the model "${config.model}". ` +
+            `Pick a current one in Settings → Chat — the menu lists what Power serves right now.`,
+        };
+        return;
+      }
+      yield { type: 'error', message: `Power error: ${msg}` };
     }
   }
 
