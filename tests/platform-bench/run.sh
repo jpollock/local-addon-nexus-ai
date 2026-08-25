@@ -69,7 +69,7 @@ PF_VERSION=$(node -p "require('$BENCH_DIR/providers/isolation.js').PF_VERSION")
 # cwd — each provider sets its own.
 cd /tmp
 
-OUT_JSON="$(mktemp -t nexus-bench-out)"
+OUT_JSON="$(mktemp -t nexus-bench-out).json"
 echo "Running benchmark from /tmp (avoids Electron ABI conflict)..."
 
 # promptfoo exits non-zero when any cell fails an assertion. That is a result,
