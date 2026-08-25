@@ -40,11 +40,14 @@ providers:
 #   Site B    palegreen-capybara-114180.hostingersite.com  col_tErE8KxfsfxWrtd1HscbCe
 
 defaultTest:
+  options:
+    # All llm-rubric assertions grade through this provider — claude -p on the
+    # pinned haiku model, blind (the rubric prompt never carries the column
+    # label), isolated like a column. See providers/grader.js.
+    provider: file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/grader.js
   assert:
     - type: latency
       threshold: 600000   # 10 min max per cell
-  # cost assertions are omitted globally — claude CLI does not return cost metadata.
-  # Track spend via Anthropic Console dashboard instead.
 
 # ── Test cases ────────────────────────────────────────────────────────────────
 tests:
@@ -56,91 +59,32 @@ tests:
         Which site's locations are missing opening hours data, and which has it?
         Be specific about which site has the gap.
     assert:
-      # Answer key: summitdermatol locations have acf_hours="" (empty).
-      # cedarvalehealt locations have hours on all 25 locations.
-      #
-      # Correct answer: summitdermatol is missing hours; cedarvalehealt has them.
-      # Wrong answers that must fail:
-      #   "neither has hours"    — Coworker said this (vacuously passed before)
-      #   "cedarvalehealt is missing" — hallucination
+      # Anchor: the site with the gap must be named. Necessary, not sufficient —
+      # the rubric below does the discrimination.
       - type: icontains
         value: "summitdermatol"
-      # A gap must be identified somewhere in the answer. This was
-      # icontains-any ["missing","no hours","without hours","empty","absent","lacks"]
-      # and produced a third false negative in eval-NHz-2026-08-25T12:47:28: Nexus
-      # wrote "**`summitdermatol` — no opening hours at all**", which is correct and
-      # which "no hours" does not match — one word of natural phrasing between "no"
-      # and "hours" defeats the literal. Same defect class as the clause below, in
-      # the clause next door.
-      #
-      # Deliberately NOT scoped to a summitdermatol clause: real answers use a
-      # heading-then-body shape ("### summitdermatol" / "No hours fields at all"),
-      # which puts the site name and the gap phrase in different clauses. The
-      # discrimination lives in the cedarvalehealt clause and the must-not list;
-      # this one only has to see that a gap was named at all.
-      - type: javascript
-        value: |
-          const GAP = /(missing|lacks?\b|lacking|absent|\bempty\b|\bnone\b|zero hours|without[^.;\n]{0,24}\bhours\b|\bno\b[^.;\n]{0,24}\bhours\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;
-          const m = GAP.exec(String(output));
-          return m
-            ? { pass: true, score: 1, reason: 'gap identified: "' + m[0] + '"' }
-            : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };
-      # cedarvalehealt must be stated as HAVING hours — this is what separates the
-      # correct answer from "neither site has hours", which is what Coworker says.
-      #
-      # This was `icontains-any: ["cedarvalehealt has", ...]` and produced two false
-      # negatives in eval-VWU-2026-08-25T02:50:14: Nexus answered
-      #   "**summitdermatol** has the gap. **cedarvalehealt** has the data."
-      # which is correct, and which no literal "cedarvalehealt has" can match — the
-      # markdown bold sits between the name and the verb. The one run that passed
-      # passed by accident of phrasing. A substring list cannot express "the site is
-      # said to have hours" over prose a model is free to format.
-      #
-      # So: split into clauses, find the ones naming cedarvalehealt, and read what is
-      # claimed about it. A clause that negates (missing/lacks/absent) does not count
-      # as having, so the inverted answer still fails here and not only on the
-      # must-not clause below. The domain suffix is stripped first because splitting
-      # on "." would otherwise cut "cedarvalehealt.wpenginepowered.com has hours"
-      # into a fragment holding the name and a fragment holding the verb.
-      - type: javascript
-        value: |
-          const out = String(output).replace(/\.wpenginepowered\.com/gi, '');
-          const NEG = /\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\b/i;
-          const POS = /\b(has|have|carries|carry|contains|populated|present|complete|covered)\b/i;
-          let ok = false, negated = false;
-          const clauses = out.split(/[.;\n]+/);
-          for (let c = 0; c < clauses.length; c++) {
-            const clause = clauses[c];
-            const i = clause.toLowerCase().indexOf('cedarvalehealt');
-            if (i === -1) continue;
-            let after = clause.slice(i + 'cedarvalehealt'.length);
-            // A clause that is a bare heading ("### cedarvalehealt", "**cedarvale-
-            // healt**") names the subject and defers the claim to the body that
-            // follows. Read the next clause in that case — but only then, and only
-            // if it does not name the other site, so a clause carrying its own
-            // content is never allowed to borrow a verdict from its neighbour.
-            const residue = (clause.slice(0, i) + after)
-              .replace(/[^a-z0-9\s]/gi, ' ').trim().split(/\s+/).filter(Boolean);
-            if (residue.length <= 3 && !/\b(has|have|missing|lacks?|absent|carries|carry)\b/i.test(after)) {
-              const next = clauses[c + 1] || '';
-              if (!/summitdermatol/i.test(next)) after = after + ' ' + next;
-            }
-            // Whichever verb sits NEARER the site name is the one making a claim
-            // about it. A clause can hold both — "cedarvalehealt has hours,
-            // summitdermatol is missing them" — and testing NEG first would read
-            // the other site's verb as this site's.
-            const p = POS.exec(after), n = NEG.exec(after);
-            if (p && (!n || p.index < n.index)) ok = true;
-            else if (n) negated = true;
-          }
-          if (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };
-          return { pass: false, score: 0, reason: negated
-            ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'
-            : 'no clause states cedarvalehealt has hours (the "neither site has hours" answer)' };
-      # must_not: a provider that says neither or both are missing is wrong
-      - type: not-icontains-any
-        value: ["neither site has", "neither has hours", "both sites are missing",
-                "both lack", "cedarvalehealt is missing", "cedarvalehealt lacks"]
+      # Answer key (keys.json: summit.locations, cedarvale.locations; verified by
+      # wp eval over SSH 2026-08-24). Rubric grading replaced two generations of
+      # literal-substring and clause-parser assertions here — three false
+      # negatives across eval-VWU and eval-NHz, all "a literal standing in for a
+      # semantic claim". The grader receives the key as supplied fact and judges
+      # meaning; markdown bold, clause order, and synonyms can no longer fail a
+      # correct answer. History: docs/planning/2026-08-25-platform-benchmark-v2.md §1.
+      - type: llm-rubric
+        value: >
+          Ground truth, verified against the sites themselves: the site
+          summitdermatol has 2 clinic locations and NONE of them have any
+          opening-hours data (the hours field is entirely absent). The site
+          cedarvalehealt has 25 clinic locations and ALL 25 have opening hours.
+
+          PASS only if the response asserts BOTH of the following, in any
+          wording or formatting: (1) summitdermatol is the site whose locations
+          are missing opening hours, AND (2) cedarvalehealt's locations have
+          opening hours.
+
+          FAIL if the response claims neither site has hours, claims both
+          sites are missing hours, inverts the two sites, only names a site
+          without identifying the missing-hours gap, or declines to answer.
   # ── CV-B-01: cross-site provider contradiction ────────────────────────────
   - description: "CV-B-01 — which providers accept new patients at two different practices?"
     vars:

@@ -116,6 +116,11 @@ const cfg = {
     { id: 'echo', label: 'Nexus' },
     { id: 'echo', label: 'Coworker' },
   ],
+  defaultTest: {
+    options: {
+      provider: `file://${path.join(__dirname, 'providers', 'grader.js')}`,
+    },
+  },
   tests: CASES.map((c, i) => ({
     description: `case${i}`,
     vars: { prompt: c.out },
