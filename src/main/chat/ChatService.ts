@@ -269,7 +269,33 @@ export class ChatService {
       // grant set could change mid-task without touching the message array.
       // Signature only in v0 — `grants` is always undefined (unrestricted),
       // which is today's behaviour exactly.
-      const tools = adaptToolsForChat(this.registry, this.services, grants);
+      let tools = adaptToolsForChat(this.registry, this.services, grants);
+
+      // ── Power's route caps tools per request ──────────────────────────────
+      // Chat-on-Power 400'd ("request is incompatible with the selected
+      // model") on EVERY model — sonnet-5, 4-6, 4-5 alike — while the agent
+      // path, which sends one tool through the same adapter, works. The one
+      // structural difference is this array: the full registry is ~190 tool
+      // schemas, and Vertex-fronted OpenAI-compatible routes (Power's catalog
+      // ids carry Vertex's `-maas` suffix) cap tools at 128. No log line on
+      // this machine has ever shown a successful full-registry Power chat, so
+      // this is a never-worked path, not a regression.
+      //
+      // The bound is deliberate and LOUD, never silent (the no-silent-caps
+      // rule): registration order is kept — it already puts the fleet/content
+      // tools a chat actually reaches first — and the dropped tail is named
+      // in the log with its count. The real fix is the scoped toolset the
+      // grants mechanism was built for (ContextBundle.tools, signature-only
+      // in v0); this bound is the floor that makes Power chat exist at all.
+      const POWER_MAX_TOOLS = 128;
+      if (providerId === 'power' && tools.length > POWER_MAX_TOOLS) {
+        const dropped = tools.length - POWER_MAX_TOOLS;
+        console.warn(
+          `[NexusAI] chat: Power tool cap — sending first ${POWER_MAX_TOOLS} of ${tools.length} tools, ` +
+          `${dropped} dropped (registration-order tail). Route rejects larger tool arrays.`,
+        );
+        tools = tools.slice(0, POWER_MAX_TOOLS);
+      }
 
       // Stream the LLM response
       let assistantContent = '';
