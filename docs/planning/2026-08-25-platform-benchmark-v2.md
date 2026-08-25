@@ -186,6 +186,49 @@ scenario is designed to catch). A small loader composes `promptfooconfig.yaml`
 tests from `cases/*`; `verify-assertions.js` iterates the same files. The
 config stops being the place where grading logic lives.
 
+**Case files are human-readable and human-editable — a requirement, not a
+hope.** Everything a case author touches is prose in YAML: the prompt, the
+rubric paragraph, the advantage declaration, the corpus answers. No JS in a
+case file. This falls out of the grading design — rubrics replace v1's
+clause-scoped JS parsers, so the code that made cases unreadable no longer
+exists. The permitted non-prose residue is small and declarative: anchor
+regexes (one line each) and, for the reach scenario only, a per-column
+expectation block. Numbers appear as `{{keys.<name>}}` references resolved
+from `keys.json`, so a hand-edited rubric cannot rot the facts. Safety net
+for hand edits: `verify-assertions.js` runs the edited rubric against the
+case's own canned right/wrong answers, so a wording change that breaks
+grading fails loudly before any live run.
+
+Illustrative shape (CV-G-01):
+
+```yaml
+id: CV-G-01
+dimension: temporal/staleness reasoning
+advantage: neutral            # declared before any results exist
+prompt: >
+  Which treatment pages on cedarvalehealt have not been clinically
+  reviewed in the last three years? How many are affected?
+anchors:
+  - regex: '\b{{keys.treatments_stale_total}}\b'
+rubric: >
+  Ground truth: {{keys.treatments_stale_total}} of
+  {{keys.treatments_total}} treatment pages are stale — 
+  {{keys.treatments_overdue}} marked overdue (2021–2022 review dates)
+  and {{keys.treatments_unreviewed}} with no review date at all.
+  PASS only if the response states the total and distinguishes overdue
+  from never-reviewed. FAIL if it reports only the overdue subset as
+  the whole answer, or gives a date without a count.
+corpus:
+  - want: pass
+    name: correct — full split
+    answer: >
+      10 of 45 treatment pages have not been reviewed in three years:
+      8 overdue (2021–2022) and 2 with no review date at all.
+  - want: fail
+    name: wrong — the stale key's answer, overdue subset only
+    answer: 8 of 45 treatment pages are overdue for clinical review.
+```
+
 ---
 
 ## 4. Scenario portfolio (target: ~10)
