@@ -79,7 +79,7 @@ EVAL_EXIT=0
 npx "promptfoo@$PF_VERSION" eval -c "$CONFIG" --no-cache -o "$OUT_JSON" "$@" || EVAL_EXIT=$?
 
 # ── Archive ───────────────────────────────────────────────────────────────────
-EVAL_ID=$(node -p "(require('$OUT_JSON').evalId) || ''")
+EVAL_ID=$(node -p "(require('$OUT_JSON').evalId) || ''" 2>/dev/null || true)
 if [ -z "$EVAL_ID" ]; then
   echo "WARNING: no evalId in promptfoo output — run NOT archived (promptfoo exit $EVAL_EXIT)." >&2
   exit "$EVAL_EXIT"

@@ -31,6 +31,8 @@ const keysPath = path.join(__dirname, 'keys.json');
 const configPath = path.join(__dirname, 'promptfooconfig.yaml');
 const repeatMatch = fs.readFileSync(configPath, 'utf8').match(/^\s*repeat:\s*(\d+)/m);
 
+const substrateSnapshot = JSON.parse(fs.readFileSync(gtSnapshotPath, 'utf8'));
+
 const manifest = {
   evalId,
   createdAt: new Date().toISOString(),
@@ -42,9 +44,14 @@ const manifest = {
   promptfooVersion: PF_VERSION,
   repeat: repeatMatch ? Number(repeatMatch[1]) : null,
   keysSha256: crypto.createHash('sha256').update(fs.readFileSync(keysPath)).digest('hex'),
-  substrateSnapshot: JSON.parse(fs.readFileSync(gtSnapshotPath, 'utf8')),
+  substrateSnapshot,
   backfilled: false,
 };
+
+// Mark runs where drift gate was skipped
+if (substrateSnapshot.skipped === true) {
+  manifest.note = 'DRIFT GATE SKIPPED (BENCH_SKIP_DRIFT=1) — substrate not verified against keys.json; do not publish these numbers.';
+}
 
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');

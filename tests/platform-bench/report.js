@@ -66,7 +66,8 @@ console.log('| run | date | model | grader | repeat | note |');
 console.log('|---|---|---|---|---|---|');
 for (const run of runs) {
   const m = run.manifest;
-  console.log(`| ${run.id} | ${(m.createdAt || '').slice(0, 10)} | ${m.benchModel || '?'} | ${m.graderModel || '–'} | ${m.repeat ?? '?'} | ${m.backfilled ? 'backfilled (pre-v2 grading)' : ''} |`);
+  const note = m.backfilled ? 'backfilled (pre-v2 grading)' : (m.substrateSnapshot?.skipped === true ? 'DRIFT-SKIPPED (unverified substrate)' : '');
+  console.log(`| ${run.id} | ${(m.createdAt || '').slice(0, 10)} | ${m.benchModel || '?'} | ${m.graderModel || '–'} | ${m.repeat ?? '?'} | ${note} |`);
 }
 console.log('\n| scenario | column | ' + runs.map((r) => r.id.slice(0, 12)).join(' | ') + ' |');
 console.log('|---|---|' + runs.map(() => '---').join('|') + '|');
