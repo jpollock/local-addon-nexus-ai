@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-08-25T15:59:20.868Z",
+  "measuredAt": "2026-08-25T18:24:12.060Z",
   "sites": {
     "cedarvalehealt": {
       "providers_total": 60,
@@ -33,6 +33,34 @@
     },
     "willowcreekderm": {
       "wp_version": "6.9.7"
+    },
+    "alpineoutfitte": {
+      "posts_total": 60,
+      "posts_uncategorized": 60,
+      "posts_family_focused": 1,
+      "posts_tagged_family": 0,
+      "post_tags_total": 22,
+      "post_tags_audience": [],
+      "destination_taxonomies": [
+        "difficulty",
+        "region",
+        "season",
+        "trail_type"
+      ],
+      "destinations_total": 40,
+      "destinations_difficulty1": 8,
+      "destinations_difficulty_le2": 13,
+      "destinations_difficulty1_family_mention": 8,
+      "trips_total": 30,
+      "trips_group_size_min_min": 4,
+      "trips_bookable_by_three": 0,
+      "products_total": 181,
+      "product_categories": 9,
+      "products_kids": 0,
+      "fingerprint": {
+        "published_posts": 383,
+        "last_modified_gmt": "2026-07-28 16:28:50"
+      }
     }
   },
   "npi_overlap": {

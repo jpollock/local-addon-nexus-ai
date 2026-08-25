@@ -39,6 +39,7 @@ providers:
 #   Flagship  cedarvalehealt.wpenginepowered.com    col_elNAyZoSKGhJoFCFqHSK12
 #   Site A    summitdermatol.wpenginepowered.com    col_KO2gvD3Tbw5Rvuv0msq4dQ
 #   Site B    palegreen-capybara-114180.hostingersite.com  col_tErE8KxfsfxWrtd1HscbCe
+#   Commerce  alpineoutfitte.wpenginepowered.com    col_dhR33vS98LEeZ0CVUVTnZK
 
 defaultTest:
   options:
@@ -220,3 +221,138 @@ tests:
             ? { pass: true, score: 1, reason: label + ' correctly declined — no route to this site' }
             : { pass: false, score: 0,
                 reason: label + ' neither declined nor gave a version: ' + out.slice(0, 300) };
+
+  # ══ In-site intelligence: Alpine Outfitters ═══════════════════════════════
+  # A different task class from CV-A/B/G. Those are lookups: one verifiable
+  # fact, retrievable in a few calls. These are AUDITS — the answer requires
+  # decomposing a vague business question into censuses nobody asked for, and
+  # then reasoning about ABSENCE (no audience taxonomy, no kids SKU, no trip a
+  # party of three can book). No retrieval hit can surface a thing that is not
+  # there; that is the capability under test.
+  #
+  # Both columns can reach this site: it is WPE install alpineoutfitte AND
+  # Coworker collection col_dhR33vS98LEeZ0CVUVTnZK (349 docs, post-type facets
+  # and metadata aggregations available). Counting is not rigged either way.
+  #
+  # The prompts name `alpineoutfitte` explicitly. Four Alpine installs exist
+  # (production / staging / development / a Local site), the exact name-collision
+  # hazard CLAUDE.md documents for `goldenecomm`. Left ambiguous, a column may
+  # route to the halted Local site and START it mid-run, and we would be
+  # grading harness side effects instead of intelligence.
+  #
+  # NO deterministic content anchors on this family, deliberately. CV-G already
+  # retired its numeric anchors (`\b8\b` matched "8:00"; dates contain \b10\b),
+  # and the whole-branch review flagged CV-B-01's `not-icontains` guard as able
+  # to false-negative an honest scoping mention. An audit's wording varies far
+  # more than a lookup's, and every site name worth guarding against already
+  # appears in the Coworker column's own prepended collection map — so a guard
+  # would fire on a model that merely says which collection it chose. The
+  # rubrics carry explicit fabrication FAIL clauses instead.
+  #
+  # Every figure below is gated by keys.json → sites.alpineoutfitte, so the
+  # drift gate catches substrate edits the same way it does for the clinics.
+  # Cost note: audit cells run long (~2-3 min each). 3 scenarios x 2 columns
+  # x repeat 3 = 18 cells. Use --filter-pattern 'AO-' to run this family alone.
+
+  # ── AO-A-01: family-hiking coverage audit ─────────────────────────────────
+  - description: "AO-A-01 — what family-hiking coverage exists on alpineoutfitte, and what is missing?"
+    vars:
+      prompt: >
+        We're thinking about expanding our content for families who like to hike.
+        Look at the site alpineoutfitte and tell me what family-focused coverage
+        we have today and what's missing.
+    assert:
+      - type: llm-rubric
+        value: >
+          Ground truth, measured against the site: alpineoutfitte has 60 blog
+          posts, of which exactly ONE is family-focused; zero posts carry a
+          family or kids tag; all 60 posts sit in Uncategorized; and the tag
+          vocabulary of 22 terms contains no family, kids, child or audience
+          term. It has 40 destinations, of which 8 are difficulty 1 and 13 are
+          difficulty 2 or easier — and all 8 of the difficulty-1 destinations
+          DO carry a boilerplate family-suitability sentence in their body
+          copy, while having no structured family data: the destination
+          taxonomies are difficulty, region, season and trail_type, with no
+          audience dimension. It sells 181 products across 9 categories, none
+          of them kids or youth. It offers 30 guided trips, the smallest
+          minimum group size being 4.
+
+          PASS only if the response asserts ALL FOUR of the following, in any
+          wording, order or formatting:
+          (1) dedicated family blog coverage is essentially a single post,
+              stated against the blog corpus (60 posts);
+          (2) easy or beginner destination inventory DOES exist, with a count —
+              either 8 at difficulty 1 or 13 at difficulty 2 or easier is
+              acceptable;
+          (3) there are no kids or youth products, grounded in the catalog by
+              giving the product total (181) or the category count (9);
+          (4) at least one structural findability gap — no family/kids tag or
+              audience taxonomy, or all posts being uncategorized, or the
+              absence of a family/age field on destinations.
+
+          FAIL if the response claims substantial existing family coverage,
+          claims the site has NO easy or beginner trail inventory, invents
+          family products, family trips or family blog posts that do not
+          exist, gives no counts anywhere, or declines to answer.
+
+          Do NOT grade the recommendations the response offers — what to build
+          next is judgment, and two good answers order it differently. Do NOT
+          fail a response for noting that the easy destinations already carry
+          a family-suitability mention; that is true and is a sign the
+          inventory was actually read.
+
+  # ── AO-B-01: bookability threshold ────────────────────────────────────────
+  - description: "AO-B-01 — can a family of three book any guided trip on alpineoutfitte?"
+    vars:
+      prompt: >
+        A family of three — two adults and one child — wants to book a guided
+        trip on alpineoutfitte. Which trips can they book?
+    assert:
+      - type: llm-rubric
+        value: >
+          Ground truth, measured against the site: alpineoutfitte lists 30
+          guided trips. Every one of them requires a minimum group size of 4
+          or more; the smallest minimum on the site is 4. NO trip on the site
+          can be booked by a party of three.
+
+          PASS only if the response states that no trip is bookable by a party
+          of three, AND grounds that claim in the trip data — either by citing
+          the minimum group size (4) or by stating that all 30 trips require
+          at least 4 people. Either grounding is acceptable.
+
+          FAIL if the response names any trip as bookable by this family, says
+          some trips are available to them, claims the trip data does not
+          exist or cannot be reached, or declines to answer. Also FAIL an
+          unsupported "no" — a response that reports no bookable trips without
+          any reference to group size or the trip inventory has not
+          demonstrated it looked, and a correct answer reached by not looking
+          is not a correct answer.
+
+  # ── AO-C-01: catalog gap, with denominator ────────────────────────────────
+  - description: "AO-C-01 — does alpineoutfitte sell kids gear, and how does the catalog break down?"
+    vars:
+      prompt: >
+        We're considering launching a kids' gear line on alpineoutfitte. What
+        kids or youth products do we sell today, and how does the current
+        catalog break down?
+    assert:
+      - type: llm-rubric
+        value: >
+          Ground truth, measured against the site: alpineoutfitte sells 181
+          products across 9 categories. NONE of them is a kids or youth
+          product — no product title and no product category contains a kids,
+          youth, junior, child or toddler term. The only kid-related string
+          anywhere in the product copy is the verb "baby" in one pack
+          description ("you do not have to baby your gear"), which is not a
+          kids product.
+
+          PASS only if the response states that there are no kids or youth
+          products today, AND grounds that in the catalog — either by giving
+          the product total (181) or by counting or enumerating the existing
+          categories (9). Either grounding is acceptable.
+
+          FAIL if the response claims kids or youth products exist, presents
+          the "baby your gear" copy as evidence of a kids product, or declines
+          to answer. Also FAIL a bare "none" offered with no product count and
+          no category breakdown — a correct negative that never enumerated the
+          catalog is correct by blindness, not by measurement.

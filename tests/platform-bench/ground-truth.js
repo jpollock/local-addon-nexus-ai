@@ -21,6 +21,7 @@
  *   summitdermatol  ssh summitdermatol@summitdermatol.ssh.wpengine.net, cd sites/summitdermatol
  *   ridgeline       ssh hostinger-test, cd ~/domains/palegreen-capybara-114180.hostingersite.com/public_html
  *   willowcreekderm ssh willowcreekderm, cd /sites/willowcreekderm.com/files
+ *   alpineoutfitte  ssh alpineoutfitte@alpineoutfitte.ssh.wpengine.net, cd sites/alpineoutfitte
  */
 
 const fs = require('fs');
@@ -35,6 +36,7 @@ const HOSTS = {
   summitdermatol: { target: 'summitdermatol@summitdermatol.ssh.wpengine.net', dir: 'sites/summitdermatol' },
   ridgeline: { target: 'hostinger-test', dir: '~/domains/palegreen-capybara-114180.hostingersite.com/public_html' },
   willowcreekderm: { target: 'willowcreekderm', dir: '/sites/willowcreekderm.com/files' },
+  alpineoutfitte: { target: 'alpineoutfitte@alpineoutfitte.ssh.wpengine.net', dir: 'sites/alpineoutfitte' },
 };
 
 /**
@@ -99,6 +101,74 @@ $r = $wpdb->get_row("SELECT COUNT(*) c, MAX(post_modified_gmt) m FROM {$wpdb->po
 echo "NEXUSGT:" . json_encode(["published_posts"=>(int)$r["c"], "last_modified_gmt"=>$r["m"]]) . "\\n";
 `;
 
+
+// ── Alpine Outfitters (in-site intelligence) ─────────────────────────────────
+// These atoms are structural, not date-relative: they describe what the site
+// HAS and, more importantly, what it LACKS. The absence facts are the point —
+// no audience taxonomy, no kids SKU, no trip a party of three can book — and
+// an audit answer that cannot reach them is the failure this family measures.
+
+const PHP_ALPINE_CONTENT = `
+$posts = get_posts(["post_type"=>"post","posts_per_page"=>-1,"fields"=>"ids","post_status"=>"publish"]);
+$uncat = 0; $fam = 0;
+foreach ($posts as $id) {
+  $cats = wp_get_post_terms($id, "category", ["fields"=>"slugs"]);
+  if (count($cats) === 1 && $cats[0] === "uncategorized") $uncat++;
+  if (preg_match("/(kid|child|famil|toddler)/i", get_the_title($id))) $fam++;
+}
+$tags = (array) get_terms(["taxonomy"=>"post_tag","hide_empty"=>false,"fields"=>"slugs"]);
+$aud = array_values(array_filter($tags, function($s){ return preg_match("/(famil|kid|child|youth|age|audience)/i", $s); }));
+$tagged = get_posts(["post_type"=>"post","posts_per_page"=>-1,"fields"=>"ids","post_status"=>"publish","tax_query"=>[["taxonomy"=>"post_tag","field"=>"slug","terms"=>["family","families","kids","children"],"operator"=>"IN"]]]);
+$dtax = (array) get_object_taxonomies("destination"); sort($dtax);
+echo "NEXUSGT:" . json_encode([
+  "posts_total"=>count($posts),
+  "posts_uncategorized"=>$uncat,
+  "posts_family_focused"=>$fam,
+  "posts_tagged_family"=>count($tagged),
+  "post_tags_total"=>count($tags),
+  "post_tags_audience"=>$aud,
+  "destination_taxonomies"=>array_values($dtax)
+]) . "\\n";
+`;
+
+// products_kids counts TITLE and CATEGORY only, deliberately. A body-copy scan
+// returns exactly one false positive on this substrate — the verb "baby" in
+// "you do not have to baby your gear" (Zephyr Ridge 38L Ultralight Pack).
+// Zero is therefore the honest count, and this comment is why a future reader
+// should not "fix" the detector when it reports none.
+const PHP_ALPINE_INVENTORY = `
+$dest = get_posts(["post_type"=>"destination","posts_per_page"=>-1,"post_status"=>"publish"]);
+$d1 = 0; $dle2 = 0; $d1fam = 0;
+foreach ($dest as $p) {
+  $d = (int) get_post_meta($p->ID, "difficulty", true);
+  if ($d === 1) { $d1++; if (preg_match("/(famil|kid|child)/i", $p->post_content)) $d1fam++; }
+  if ($d > 0 && $d <= 2) $dle2++;
+}
+$trips = get_posts(["post_type"=>"trip","posts_per_page"=>-1,"fields"=>"ids","post_status"=>"publish"]);
+$g = [];
+foreach ($trips as $id) { $g[] = (int) get_post_meta($id, "group_size_min", true); }
+$prod = get_posts(["post_type"=>"product","posts_per_page"=>-1,"fields"=>"ids","post_status"=>"publish"]);
+$kids = 0;
+foreach ($prod as $id) {
+  $c = wp_get_post_terms($id, "product_cat", ["fields"=>"names"]);
+  $blob = get_the_title($id) . " " . implode(" ", (array) $c);
+  if (preg_match("/(kid|child|youth|junior|toddler)/i", $blob)) $kids++;
+}
+$cats = array_filter((array) get_terms(["taxonomy"=>"product_cat","hide_empty"=>false]), function($t){ return $t->count > 0; });
+echo "NEXUSGT:" . json_encode([
+  "destinations_total"=>count($dest),
+  "destinations_difficulty1"=>$d1,
+  "destinations_difficulty_le2"=>$dle2,
+  "destinations_difficulty1_family_mention"=>$d1fam,
+  "trips_total"=>count($g),
+  "trips_group_size_min_min"=>(count($g) ? min($g) : 0),
+  "trips_bookable_by_three"=>count(array_filter($g, function($x){ return $x <= 3; })),
+  "products_total"=>count($prod),
+  "product_categories"=>count($cats),
+  "products_kids"=>$kids
+]) . "\\n";
+`;
+
 function measure() {
   process.stderr.write('measuring cedarvalehealt…\n');
   const cvProviders = sshWpEval('cedarvalehealt', PHP_PROVIDERS);
@@ -116,6 +186,11 @@ function measure() {
 
   process.stderr.write('measuring willowcreekderm…\n');
   const wcVersion = sshRaw('willowcreekderm', 'wp core version');
+
+  process.stderr.write('measuring alpineoutfitte…\n');
+  const aoContent = sshWpEval('alpineoutfitte', PHP_ALPINE_CONTENT);
+  const aoInventory = sshWpEval('alpineoutfitte', PHP_ALPINE_INVENTORY);
+  const aoFp = sshWpEval('alpineoutfitte', PHP_FINGERPRINT);
 
   // Overlap: NPIs accepting at BOTH sites; names from the flagship's roster.
   const overlapNpis = Object.keys(rgProviders.npis).filter((npi) => npi in cvProviders.npis);
@@ -140,6 +215,7 @@ function measure() {
         fingerprint: rgFp,
       },
       willowcreekderm: { wp_version: wcVersion },
+      alpineoutfitte: { ...aoContent, ...aoInventory, fingerprint: aoFp },
     },
     npi_overlap: { count: overlapNpis.length, names: overlapNames },
   };

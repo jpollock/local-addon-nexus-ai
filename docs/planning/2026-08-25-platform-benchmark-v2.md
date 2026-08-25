@@ -134,6 +134,33 @@ schema should anticipate being seeder-emitted.
   count, `keys.json` hash, per-site substrate fingerprint (content counts +
   latest `post_modified`), and index age per column (Nexus `get_index_status`;
   Coworker KB `last_indexed` where retrievable).
+- **The model backend is pinned by gate, not by hope.** The `claude` CLI serves
+  the same pinned model ids from Vertex, Bedrock or Anthropic direct, chosen
+  purely by environment — and verified 2026-08-25, both `claude-opus-5` and the
+  grader's haiku pin resolve cleanly under Vertex *and* under a direct OAuth
+  login. A run on the "wrong" backend therefore does not fail; it silently
+  succeeds and bills a different account, which is worse than failing because
+  nothing in the output says which one served. On the development machine
+  `~/.zshrc` exports `CLAUDE_CODE_USE_VERTEX=1`, so a fresh terminal bills WP
+  Engine's `wp-engine-ai` project while a shell that ran `unset
+  CLAUDE_CODE_USE_VERTEX` bills a personal account — invisible after the fact.
+  So: `run.sh` resolves the backend and **refuses** unless it matches
+  `BENCH_EXPECTED_BACKEND` (default `vertex` — this benchmark compares a WP
+  Engine product against a WP Engine service, so WP Engine is where it should
+  bill). There is deliberately no blanket skip flag; a deviation is *declared*
+  (`BENCH_EXPECTED_BACKEND=anthropic-oauth ./run.sh`), never stumbled into. The
+  gate runs before the drift gate because it is free and the drift gate is not.
+  `manifest.json` records what actually served, and the `report` ledger shows it
+  as its own column — printing `?`, never a guess, for the runs archived before
+  this was captured.
+
+  Scope of the damage this prevents: **column-vs-column fairness was never at
+  risk**, since both columns inherit one process environment and therefore
+  always share a backend. What is at risk is comparing one archived run against
+  another — cost is not comparable across backends (measured on one trivial
+  prompt: opus $0.136 via Vertex vs $0.168 direct; haiku $0.032 vs $0.020,
+  differing in *both* directions, largely cache state), and neither is latency,
+  since quotas differ. That is precisely what `results/` exists to support.
 - A `report` script renders the cross-run trend table (per-scenario,
   per-column pass rate + median cost/turns) from `results/`. Markdown out;
   no dashboard.
@@ -258,6 +285,65 @@ original doc), not guessed — the fairness claim "we built scenarios for their
 strengths" must be literally true. If Nexus wins those anyway, that is a
 result; if it loses them, the comparison gains the credibility only a loss
 can buy.
+
+### In-site intelligence (Alpine Outfitters) — landed ahead of the six above
+
+A different task class from CV-A/B/G. Those are lookups: one verifiable fact,
+retrievable in a few calls. These are **audits** — a vague business question
+must be decomposed into censuses nobody asked for, and the load-bearing
+findings are about **absence**: no audience taxonomy, no kids SKU, no trip a
+party of three can book. No retrieval hit can surface a thing that is not
+there, which is precisely the capability under test.
+
+Substrate: `alpineoutfitte` (WPE production, WP 7.1) — commerce-shaped, so it
+exercises post types the clinic sites do not (181 products, 30 trips, 40
+destinations). Both columns reach it: it is a WPE install for Nexus **and**
+Coworker collection `col_dhR33vS98LEeZ0CVUVTnZK` (349 docs, post-type facets
+and `metadata.acf_*` aggregations available). Counting is not rigged either
+way, and the Coworker column's scaffolding gets the same site→collection line
+the other three sites get — nothing more.
+
+| ID | Dimension | Expected advantage (declared before first run) |
+|---|---|---|
+| AO-A-01 | Open-ended coverage audit; reasoning about structural absence | **Nexus, weakly** — the findability blocker needs the tag vocabulary and the destination taxonomy *registration*, neither of which is a document in the KB. Genuinely uncertain: Coworker indexes `acf-field-group` as documents and can aggregate metadata, so it has a real path. |
+| AO-B-01 | Threshold aggregation over a metadata field (min group size across 30 trips) | **Neutral** — this is exactly what `metadata.acf_*` aggregations are for. Nexus reaches it by `wp eval`. Both have a route. |
+| AO-C-01 | Catalog enumeration with denominator discipline | **Neutral** — product totals and category breakdowns are KB facets. Coworker should answer this cleanly. |
+
+Two of three are declared neutral deliberately. A family stacked toward Nexus
+would tell us nothing; per the note above, a loss here buys credibility no win
+can.
+
+**Grading shape.** The audit answer decomposes into two layers, and only one is
+graded. The *facts* are measured atoms in `keys.json` (`sites.alpineoutfitte`),
+so the drift gate protects them exactly as it does the clinic figures. The
+*recommendations* — what to build first, in what order — are judgment, where
+two good answers legitimately differ; they are explicitly **not** graded, and
+the rubrics say so. Grading advice quality is where benchmark rubrics go to die.
+
+**Two guards this family adds:**
+
+- **Correct by blindness.** A negative finding can be accidentally right: a
+  column that cannot see products at all will say "no kids gear" and be
+  correct for the wrong reason — the same pathology REACH-01 exists to catch.
+  AO-B-01 and AO-C-01 therefore require the *denominator* (the 30-trip
+  inventory, the 181-product catalogue) and fail a bare, ungrounded "none".
+- **No deterministic content anchors.** CV-G-01 already retired its numeric
+  anchors (`\b8\b` matches "8:00"; dates contain `\b10\b`), and the P1+P2
+  whole-branch review flagged CV-B-01's `not-icontains` guard as able to
+  false-negative an honest scoping mention. An audit's wording varies far more
+  than a lookup's, and every site name worth guarding against already appears
+  in the Coworker column's own prepended collection map — a guard would fire on
+  a model that merely names the collection it chose. The rubrics carry explicit
+  fabrication FAIL clauses instead.
+
+**Prompts name `alpineoutfitte` explicitly.** Four Alpine installs exist
+(production / staging / development / a Local site) — the name-collision hazard
+`CLAUDE.md` documents for `goldenecomm`. Left ambiguous, a column may route to
+the halted Local site and **start** it mid-run, and the run would be grading
+harness side effects instead of intelligence.
+
+**Cost.** Audit cells run long (~2–3 min each). Three scenarios × 2 columns ×
+repeat 3 = 18 cells; `--filter-pattern 'AO-'` runs the family alone.
 
 Not in scope (YAGNI, revisit deliberately): multi-turn scenarios, mutation/
 write scenarios, CI integration, dashboards, the WordPress-abilities column

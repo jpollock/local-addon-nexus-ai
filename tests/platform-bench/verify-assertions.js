@@ -104,6 +104,47 @@ const CASES = [
     out: 'willowcreekderm.com is running WordPress 6.9.7.' },
   { t: 'Reach', col: 'Coworker', want: false, name: 'Coworker neither answers nor declines',
     out: 'WordPress sites should always be kept up to date with the latest release.' },
+
+  // ── AO-A-01: coverage audit ────────────────────────────────────────────────
+  // The audit family's answers are long and structured, so the corpus fixtures
+  // are too — a one-line canned answer would not exercise a rubric written for
+  // a four-part claim.
+  { t: 'AO-A-01', col: 'Nexus', want: true, name: 'correct — all four claims, difficulty-1 framing',
+    out: `## Family coverage on alpineoutfitte\n\n**Blog — one post of 60.** Exactly one post is family-focused; the other 59 skew climbing, backpacking and mountaineering. All 60 sit in Uncategorized, and none of the 22 post tags is a family or kids term, so even that one post cannot be browsed to.\n\n**Destinations — inventory exists, framing does not.** 8 of 40 destinations are difficulty 1. Each carries a boilerplate "ideal for families" sentence, but the destination taxonomies are difficulty, region, season and trail_type — no audience dimension, no age or carrier field.\n\n**Products — none.** 181 products across 9 categories, zero kids or youth SKUs.` },
+  { t: 'AO-A-01', col: 'Nexus', want: true, name: 'correct — le-2 framing, credits the boilerplate mention',
+    out: `Family coverage is thin. Exactly one of the 60 blog posts targets families, and no post carries a family tag. But the raw inventory is there: 13 destinations are difficulty 2 or easier, and the easiest ones already say they suit families in their copy — it is simply never structured. Destination taxonomies (difficulty, region, season, trail_type) carry no audience dimension. On gear, the catalogue is 181 products in 9 categories with nothing for kids.` },
+  { t: 'AO-A-01', col: 'Nexus', want: false, name: 'wrong — claims substantial coverage, fabricates a youth line',
+    out: `alpineoutfitte already has solid family coverage: a dedicated Hiking with Kids category, several family trip reports, and a youth gear line under Footwear. The main gap is seasonal content for winter family outings.` },
+  { t: 'AO-A-01', col: 'Nexus', want: false, name: 'wrong — inverts, claims no easy inventory exists',
+    out: `There is no beginner or easy trail inventory on this site at all — every one of the 40 destinations is difficulty 3 or harder. Only one of the 60 blog posts mentions kids, and there are no kids products among the 181.` },
+  { t: 'AO-A-01', col: 'Nexus', want: false, name: 'wrong — pure prose, no counts anywhere',
+    out: `The site skews heavily toward experienced hikers and technical objectives. There is very little for families, and the taxonomy does not help anyone find what little exists. I would add family-focused content and label it properly.` },
+  { t: 'AO-A-01', col: 'Nexus', want: false, name: 'wrong — products claim omitted entirely',
+    out: `Exactly one of the 60 blog posts is family-focused, and all 60 posts are uncategorized with no family tag in the 22-term vocabulary. On destinations, 8 of 40 are difficulty 1 and carry a boilerplate family line, but there is no audience taxonomy.` },
+
+  // ── AO-B-01: bookability ───────────────────────────────────────────────────
+  { t: 'AO-B-01', col: 'Nexus', want: true, name: 'correct — grounded on the minimum group size',
+    out: `None. Every one of the 30 guided trips requires a minimum group size of at least 4, so a party of three cannot book any of them.` },
+  { t: 'AO-B-01', col: 'Nexus', want: true, name: 'correct — grounded on the 30-trip enumeration',
+    out: `No trips are available to them. I checked all 30 trips on the site; the smallest minimum group size anywhere is 4.` },
+  { t: 'AO-B-01', col: 'Nexus', want: false, name: 'wrong — names bookable trips',
+    out: `They can book the Copper Creek Day Hike and the Desolation Lake overnight — both accept small parties of two or more.` },
+  { t: 'AO-B-01', col: 'Nexus', want: false, name: 'wrong — unsupported no (correct by blindness)',
+    out: `I could not find any trips that would suit a family of three.` },
+  { t: 'AO-B-01', col: 'Nexus', want: false, name: 'wrong — claims the data is unreachable',
+    out: `The trip data is not available in my index, so I cannot tell you which trips this family could book.` },
+
+  // ── AO-C-01: catalog gap ───────────────────────────────────────────────────
+  { t: 'AO-C-01', col: 'Nexus', want: true, name: 'correct — grounded on the product total',
+    out: `None today. The catalogue runs to 181 products and not one of them is a kids or youth SKU.` },
+  { t: 'AO-C-01', col: 'Nexus', want: true, name: 'correct — grounded on the category enumeration',
+    out: `There are no kids or youth products. The catalog breaks into 9 categories — Backpacks & Bags, Climbing Gear, Clothing, Cooking & Hydration, Footwear, Navigation & Safety, Sleeping Systems, Tents & Shelters and Winter & Snow — and none of them is a youth line.` },
+  { t: 'AO-C-01', col: 'Nexus', want: false, name: 'wrong — claims a youth range exists',
+    out: `You currently sell a small youth range: a junior daypack and a pair of kids trail shoes sit under Footwear alongside the adult models.` },
+  { t: 'AO-C-01', col: 'Nexus', want: false, name: 'wrong — bare none, no denominator (correct by blindness)',
+    out: `You do not sell any kids gear at the moment.` },
+  { t: 'AO-C-01', col: 'Nexus', want: false, name: 'wrong — reads the "baby your gear" copy as a kids product',
+    out: `There is one kids-adjacent item in the 181-product catalogue: the Zephyr Ridge 38L Ultralight Pack, whose description talks about babying gear for younger hikers.` },
 ];
 
 // Build a config that runs the REAL assert blocks against the canned answers.

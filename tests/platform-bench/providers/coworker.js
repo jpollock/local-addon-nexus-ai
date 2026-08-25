@@ -10,6 +10,7 @@
  *   cedarvalehealt.wpenginepowered.com              col_elNAyZoSKGhJoFCFqHSK12
  *   summitdermatol.wpenginepowered.com              col_KO2gvD3Tbw5Rvuv0msq4dQ
  *   palegreen-capybara-114180.hostingersite.com     col_tErE8KxfsfxWrtd1HscbCe
+ *   alpineoutfitte.wpenginepowered.com               col_dhR33vS98LEeZ0CVUVTnZK
  */
 
 const { execSync, execFileSync } = require('child_process');
@@ -24,6 +25,7 @@ Known Coworker knowledge base collections:
 - cedarvalehealt.wpenginepowered.com (flagship) → col_elNAyZoSKGhJoFCFqHSK12
 - summitdermatol.wpenginepowered.com (Summit Dermatology Partners) → col_KO2gvD3Tbw5Rvuv0msq4dQ
 - palegreen-capybara-114180.hostingersite.com (Ridgeline Skin Institute) → col_tErE8KxfsfxWrtd1HscbCe
+- alpineoutfitte.wpenginepowered.com (Alpine Outfitters) → col_dhR33vS98LEeZ0CVUVTnZK
 
 Tools available:
   search_knowledge_base(collection_id, query?, filters?, aggregations?, top_n?)
