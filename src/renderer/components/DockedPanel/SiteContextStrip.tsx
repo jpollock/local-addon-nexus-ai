@@ -84,7 +84,7 @@ const styles = {
   // in each case the clause that was truncated is the one carrying the meaning. A band
   // that grows a line is cheaper than a disclosure that is unreadable.
   primary: {
-    fontSize: 12,
+    fontSize: 12.5,
     lineHeight: 1.35,
     color: 'var(--nxai-card-text)',
     overflowWrap: 'anywhere' as const,
@@ -110,14 +110,19 @@ const styles = {
     color: 'var(--nxai-card-sub)',
     overflowWrap: 'anywhere' as const,
   },
+  // The sheet's scope action: an outline button at 32px, reading as a
+  // control rather than a whisper — the row is "a fact about the ask", and
+  // its one affordance should look pressable.
   action: {
     background: 'none',
     border: '1px solid var(--nxai-card-border)',
-    borderRadius: 4,
-    color: 'var(--nxai-card-sub)',
+    borderRadius: 6,
+    color: 'var(--nxai-card-text)',
     cursor: 'pointer',
-    fontSize: 11,
-    padding: '2px 8px',
+    fontSize: 12,
+    fontWeight: 500 as const,
+    padding: '0 12px',
+    height: 32,
     flexShrink: 0,
   },
   popover: {

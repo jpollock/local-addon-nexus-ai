@@ -59,32 +59,28 @@ describe('display type — the hierarchy IS the contrast', () => {
   });
 });
 
-describe('suggestions are pills below the field, and only ever the derived ones', () => {
-  const opening = { verdict: null, invitation: 'x', asks: [
+describe('the empty session offers NOTHING beside the field (owner ruling, 2026-08-25 16:09)', () => {
+  const opening = { verdict: '2 things need you', invitation: 'x', asks: [
     { classId: 'c1', situationId: 's1', text: 'Why is checkout failing on Charlie?' },
   ] };
 
-  it('renders as a content-sized pill, never a full-width bar', () => {
-    const tree = chat({ opening, density: 'stage' }).render();
-    const ask = byData(tree, 'data-opening-ask')[0];
-    expect(ask).toBeTruthy();
-    expect(ask.props.style.width).toBe('auto');       // not '100%'
-    expect(ask.props.style.borderRadius).toBe(9999);  // a pill
+  it('renders no ask buttons, whatever the queue holds', () => {
+    // Suggestions were removed from this surface entirely — the empty session
+    // is headline, promise, composer, scope, disclosure. The queue's remaining
+    // home is the header door (board A), not this column.
+    expect(byData(chat({ opening, density: 'stage' }).render(), 'data-opening-ask')).toHaveLength(0);
   });
 
-  it('sits BELOW the composer, not above it', () => {
-    const tree = chat({ opening, density: 'stage' }).render();
-    const flat = all(tree);
-    const field = flat.findIndex((n) => n.props?.['aria-label'] === 'Chat input');
-    const ask = flat.findIndex((n) => n.props?.['data-opening-ask'] !== undefined);
-    expect(field).toBeGreaterThan(-1);
-    expect(ask).toBeGreaterThan(field);
+  it('renders no verdict as a column element', () => {
+    expect(byData(chat({ opening, density: 'stage' }).render(), 'data-opening-verdict')).toHaveLength(0);
   });
 
-  it('invents none when nothing is derived', () => {
-    const tree = chat({ opening: null }).render();
-    expect(byData(tree, 'data-opening-ask')).toHaveLength(0);
-    expect(JSON.stringify(tree)).not.toMatch(/open incident/i);
+  it('renders no footnote', () => {
+    expect(JSON.stringify(chat({ density: 'stage' }).render())).not.toMatch(/filed against the runbook/);
+  });
+
+  it('still invents nothing', () => {
+    expect(JSON.stringify(chat({ opening: null }).render())).not.toMatch(/open incident/i);
   });
 });
 

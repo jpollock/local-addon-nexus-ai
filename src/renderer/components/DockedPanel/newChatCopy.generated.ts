@@ -13,7 +13,7 @@
  */
 
 /** The invitation. The design system's ratified composer prompt, promoted. */
-export const NEW_CHAT_HEADLINE = "What do you need?";
+export const NEW_CHAT_HEADLINE = "What do you want to work on now?";
 
 /**
  * What the product differs on, said once, where a person decides whether to

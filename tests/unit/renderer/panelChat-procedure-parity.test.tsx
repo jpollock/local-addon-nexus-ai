@@ -151,14 +151,23 @@ describe('parity — the panel a user without a procedure sees', () => {
     expect(tree).not.toContain('Compare across places');
   });
 
-  it('WP-41 · offers the comparator once the records can actually serve one', () => {
+  it('WP-41 · offers the comparator once the records can serve one AND a transcript exists', () => {
     // The other side, so the pin above cannot pass by the feature being dead.
+    // Owner ruling 2026-08-25 16:09 scoped the affordance OUT of the empty
+    // session: the new chat offers nothing beside the field. It appears once
+    // there is a conversation for a comparison to serve.
     const instance = chat();
     instance.state.comparatorFacts = [{ fact: 'plugin:woocommerce', label: 'woocommerce', places: 3 }];
+    instance.state.messages = [{ id: 'm1', role: 'user', content: 'compare woo across places' }];
     const tree = JSON.stringify(serializeTree(instance.render()));
     expect(tree).toContain('Compare across places');
     // Offered, not opened: the shape appears when she asks for it.
     expect(tree).not.toContain('ComparatorPanel');
+
+    // And the empty session shows it to no one, facts or not.
+    const empty = chat();
+    empty.state.comparatorFacts = [{ fact: 'plugin:woocommerce', label: 'woocommerce', places: 3 }];
+    expect(JSON.stringify(serializeTree(empty.render()))).not.toContain('Compare across places');
   });
 
   it('WP-41 · mounts even when the host returns nothing thenable for the comparator', () => {
@@ -192,7 +201,8 @@ describe('parity — the panel a user without a procedure sees', () => {
     // ratified headline (newChatCopy.generated.ts) rather than a hand-typed
     // line. Still a real string from the real panel, which is all this guard
     // is for.
-    expect(JSON.stringify(baseTree)).toContain('What do you need?');
+    // Anchor follows the ruled copy (owner, 16:09).
+    expect(JSON.stringify(baseTree)).toContain('What do you want to work on now?');
     expect(JSON.stringify(baseTree)).toContain('SiteContextStrip');
   });
 });

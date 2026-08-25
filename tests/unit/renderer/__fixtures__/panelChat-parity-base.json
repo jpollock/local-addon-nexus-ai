@@ -69,7 +69,7 @@
                   "margin": 0
                 }
               },
-              "children": "What do you need?"
+              "children": "What do you want to work on now?"
             },
             {
               "type": "div",
@@ -158,20 +158,6 @@
               }
             ]
           }
-        },
-        null,
-        {
-          "type": "div",
-          "key": "footnote",
-          "props": {
-            "style": {
-              "fontSize": 11.5,
-              "lineHeight": 1.5,
-              "color": "var(--nxai-card-sub)",
-              "textAlign": "left"
-            }
-          },
-          "children": "What gets done is filed against the runbook that did it, in Record."
         },
         {
           "type": "SiteContextStrip",

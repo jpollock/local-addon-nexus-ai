@@ -22,7 +22,10 @@
     // "What do you need?" is the design system's ratified composer prompt — four words,
     // Geist, and the product's whole posture. Promoted to the invitation; the field then
     // says what kind of thing to type instead of repeating it.
-    headline: 'What do you need?',
+    // Amended by owner ruling, 2026-08-25 16:09: the composer-prompt four
+    // words read as a support greeting on this surface; the invitation names
+    // the session's actual frame — work, now.
+    headline: 'What do you want to work on now?',
 
     // What the product actually differs on, said once. This is the corroboration
     // doctrine arriving where a person decides whether to trust the answer.

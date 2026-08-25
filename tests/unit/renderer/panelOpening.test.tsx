@@ -2,15 +2,17 @@
  * @jest-environment jsdom
  */
 /**
- * WP-49 · ITEM 4, RENDERED — the panel opens on the queue beside it.
+ * WP-49 · ITEM 4 — RE-RULED at the new-chat sheet (owner, 2026-08-25 16:09).
  *
- * `openingAsks.test.ts` pins the derivation; this pins that the panel actually
- * draws it, and that taking an ask does the one thing an offer should do.
+ * The original pins put the queue ON this surface: verdict, invitation line,
+ * one button per ask. The ruling removed all three from the empty session —
+ * it opens on the invitation and nothing else, whatever the queue holds; the
+ * count's remaining home is the header door (board A). `openingAsks.test.ts`
+ * still pins the DERIVATION untouched: the queue data survives, this surface
+ * just no longer renders it.
  *
- * THE OFFER FILLS THE COMPOSER AND DOES NOT SEND. That is the assertion worth
- * having: a click that sent would turn three suggestions into three ways to
- * start a turn nobody typed, and an ask the reader wanted to edit first would be
- * gone before they could.
+ * What this suite now pins is the ruling itself, so a later packet cannot
+ * quietly bring the report back to where the invitation belongs.
  */
 import { PanelChat } from '../../../src/renderer/components/DockedPanel/PanelChat';
 import { serializeTree } from './helpers/serializeTree';
@@ -55,41 +57,24 @@ function textOf(node: any, out: string[] = []): string[] {
 }
 const attr = (n: any, name: string): unknown => n?.props?.[name];
 
-describe('the docked panel opens on the queue, never on a blank', () => {
-  test('the verdict, the invitation and one button per ask', () => {
+describe('the empty session opens on the invitation, whatever the queue holds', () => {
+  test('a full queue renders NO verdict, NO invitation line, NO ask buttons here', () => {
     const nodes = rawWalk(chat(OPENING).render());
     const opening = nodes.filter((n) => attr(n, 'data-panel-opening') !== undefined);
     expect(opening).toHaveLength(1);
+    // Still labelled 'queue' so instrumentation can tell the states apart…
     expect(attr(opening[0], 'data-panel-opening')).toBe('queue');
-
-    const verdict = nodes.find((n) => attr(n, 'data-opening-verdict') !== undefined);
-    expect(textOf(verdict).join('')).toBe(OPENING.verdict);
-    expect(textOf(opening[0]).join(' ')).toContain(PANEL_INVITATION);
-
-    const asks = nodes.filter((n) => attr(n, 'data-opening-ask') !== undefined);
-    expect(asks.map((n) => attr(n, 'data-opening-ask'))).toEqual(OPENING.asks.map((a) => a.classId));
-    expect(asks.map((n) => textOf(n).join(''))).toEqual(OPENING.asks.map((a) => a.text));
-    // Each button names the ROW it came from, so the offer is traceable to the
-    // thing on the list it is about.
-    expect(asks.map((n) => attr(n, 'data-opening-ask-row'))).toEqual(OPENING.asks.map((a) => a.situationId));
+    // …but none of the queue's content is drawn in the column.
+    expect(nodes.filter((n) => attr(n, 'data-opening-verdict') !== undefined)).toHaveLength(0);
+    expect(nodes.filter((n) => attr(n, 'data-opening-ask') !== undefined)).toHaveLength(0);
+    expect(textOf(opening[0]).join(' ')).not.toContain(PANEL_INVITATION);
+    expect(textOf(opening[0]).join(' ')).not.toContain(OPENING.verdict);
   });
 
-  test('taking an ask FILLS the composer and does not send', () => {
-    const instance = chat(OPENING);
-    const applied: any[] = [];
-    instance.setState = (patch: any, cb?: any) => {
-      applied.push(patch);
-      Object.assign(instance.state, patch);
-      if (typeof cb === 'function') cb();
-    };
-    const sendSpy = jest.spyOn(instance, 'handleSend');
-
-    const ask = rawWalk(instance.render()).find((n) => attr(n, 'data-opening-ask') === 'incident.no-run');
-    ask.props.onClick();
-
-    expect(applied).toEqual([{ input: 'Why is nothing fixing the open findings?' }]);
-    expect(instance.state.input).toBe('Why is nothing fixing the open findings?');
-    expect(sendSpy).not.toHaveBeenCalled();
+  test('the invitation is IDENTICAL on a busy fleet and a quiet one', () => {
+    const busy = textOf(rawWalk(chat(OPENING).render()).find((n) => attr(n, 'data-panel-opening') !== undefined)).join(' ');
+    const quiet = textOf(rawWalk(chat(null).render()).find((n) => attr(n, 'data-panel-opening') !== undefined)).join(' ');
+    expect(busy).toBe(quiet);
   });
 
   test('no queue means the panel\'s own invitation — a real state, and a labelled one', () => {
@@ -98,15 +83,6 @@ describe('the docked panel opens on the queue, never on a blank', () => {
     expect(opening).toHaveLength(1);
     expect(attr(opening[0], 'data-panel-opening')).toBe('invitation');
     expect(nodes.filter((n) => attr(n, 'data-opening-ask') !== undefined)).toHaveLength(0);
-  });
-
-  test('an opening state with no asks still states the verdict', () => {
-    // The verdict is about the whole list and does not depend on any row's class
-    // being one the ask set covers. Withholding the asks must not withhold it.
-    const nodes = rawWalk(chat({ ...OPENING, asks: [] }).render());
-    expect(nodes.filter((n) => attr(n, 'data-opening-ask') !== undefined)).toHaveLength(0);
-    const verdict = nodes.find((n) => attr(n, 'data-opening-verdict') !== undefined);
-    expect(textOf(verdict).join('')).toBe(OPENING.verdict);
   });
 
   test('the opening state is replaced by the transcript, never stacked above it', () => {

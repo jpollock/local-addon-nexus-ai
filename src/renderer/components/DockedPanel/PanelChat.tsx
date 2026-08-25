@@ -21,7 +21,7 @@ import type { OpeningState } from './openingAsksModel';
 import type { CitationTurn } from './citationModel';
 import type { ChatSession, ChatMessage } from '../../../common/types';
 import type { ProcedureApprovalContext } from '../../../common/chat-types';
-import { NEW_CHAT_HEADLINE, NEW_CHAT_PROMISE, NEW_CHAT_PROMISE_SHORT, NEW_CHAT_FOOTNOTE, NEW_CHAT_PLACEHOLDER, NEW_CHAT_PLACEHOLDER_SHORT, NEW_CHAT_SUGGESTIONS, NEW_CHAT_DISCLOSURE } from './newChatCopy.generated';
+import { NEW_CHAT_HEADLINE, NEW_CHAT_PROMISE, NEW_CHAT_PROMISE_SHORT, NEW_CHAT_PLACEHOLDER, NEW_CHAT_PLACEHOLDER_SHORT, NEW_CHAT_DISCLOSURE } from './newChatCopy.generated';
 import type { AIProvider } from '../../../common/types';
 
 const safeRenderer = new Renderer();
@@ -763,31 +763,10 @@ export class PanelChat extends React.Component<Props, State> {
         },
         'data-panel-opening': opening ? 'queue' : 'invitation',
       },
-      // The verdict at ambient weight — one line, no action, never the
-      // subject. Kept above the display headline so the count stays
-      // reachable without displacing the invitation.
-      ...(opening?.verdict
-        ? [React.createElement(
-            'div',
-            {
-              key: 'verdict',
-              'data-opening-verdict': 'true',
-              style: { fontSize: 12, lineHeight: 1.45, color: 'var(--nxai-card-sub)' },
-            },
-            opening.verdict,
-          ),
-          // WP-49's ratified invitation line rides WITH the verdict, at the
-          // same ambient weight — "Ask about any of them" is a sentence about
-          // the count, so it belongs beside the count, not where the display
-          // headline now stands. Two ratified sheets meet here: the Now
-          // screen's line keeps its presence, the new-chat sheet keeps the
-          // subject.
-          React.createElement(
-            'div',
-            { key: 'queue-invitation', style: { fontSize: 12, lineHeight: 1.45, color: 'var(--nxai-card-sub)' } },
-            opening.invitation,
-          )]
-        : []),
+      // The verdict and WP-49's invitation line were REMOVED from this
+      // surface by owner ruling (2026-08-25 16:09). The needs-you count's
+      // remaining home is the header door (sheet board A), not this column —
+      // an empty session opens on the invitation and nothing else.
       // The headline is DISPLAY type. At body size the invitation reads as a
       // status line, and the 30px-against-13.5px contrast is the entire
       // hierarchy of this screen.
@@ -1450,79 +1429,11 @@ export class PanelChat extends React.Component<Props, State> {
     // filling the width implied there were only two things one could ask.
     // Empty session only: with a transcript the invitation is spent.
     const emptySession = this.state.messages.length === 0;
-    // THE DERIVED ASKS, never the fixture's. NEW_CHAT_SUGGESTIONS are
-    // SPECIMENS of a derivation ("an open incident, 14h"); shipping them
-    // would put a fabricated incident on a quiet fleet. `opening.asks` is the
-    // real thing, and it is what needed the pill treatment — it was rendering
-    // as full-width grey bars ABOVE the field, which read as disabled inputs.
-    const derivedAsks = this.props.opening?.asks ?? [];
-    const pills = emptySession && derivedAsks.length > 0
-      ? React.createElement(
-          'div',
-          {
-            key: 'suggestions',
-            style: {
-              display: 'flex',
-              flexWrap: 'wrap' as const,
-              gap: stage ? 8 : 7,
-              justifyContent: stage ? ('center' as const) : ('flex-start' as const),
-              flexDirection: stage ? ('row' as const) : ('column' as const),
-              alignItems: stage ? ('center' as const) : ('flex-start' as const),
-            },
-          },
-          ...derivedAsks.map((sug) =>
-            React.createElement(
-              'button',
-              {
-                key: sug.classId,
-                'data-opening-ask': sug.classId,
-                'data-opening-ask-row': sug.situationId,
-                onClick: this.takeOpeningAsk(sug.text),
-                style: {
-                  // Content-sized, never full-width: a pill, not a field.
-                  width: 'auto',
-                  alignSelf: stage ? undefined : ('flex-start' as const),
-                  height: 32,
-                  padding: '0 12px',
-                  borderRadius: 9999,
-                  border: '1px solid var(--nxai-card-border)',
-                  background: 'transparent',
-                  color: 'var(--nxai-card-text)',
-                  font: 'inherit',
-                  fontSize: 12,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap' as const,
-                  maxWidth: '100%',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                },
-              },
-              sug.text,
-            ),
-          ),
-        )
-      : null;
-
-    const footnote = emptySession
-      ? React.createElement(
-          'div',
-          {
-            key: 'footnote',
-            style: {
-              fontSize: stage ? 12 : 11.5,
-              lineHeight: 1.5,
-              color: 'var(--nxai-card-sub)',
-              textAlign: stage ? ('center' as const) : ('left' as const),
-            },
-          },
-          NEW_CHAT_FOOTNOTE,
-        )
-      : null;
-
+    // Suggestions and the footnote were REMOVED by owner ruling (2026-08-25
+    // 16:09): the empty session is headline, promise, composer, scope,
+    // disclosure — nothing else competes with the field.
     return [
       React.createElement(React.Fragment, { key: 'composer' }, composer),
-      pills,
-      footnote,
       React.createElement(SiteContextStrip, { key: 'scope', ...this.props.siteContext }),
       React.createElement(
         'div',
@@ -1582,7 +1493,10 @@ export class PanelChat extends React.Component<Props, State> {
       // band just changes, and the next turn carries the new id.
       // WP-41 · the comparator, spread from an array — empty when there is
       // nothing to compare, so a user it cannot serve sees the panel unchanged.
-      ...this.renderComparator(),
+      // Comparator affordance scoped OUT of the empty session (owner ruling
+      // 16:09 removed 'Compare across places' from the new-chat screen; the
+      // WP-41 surface stays reachable once a transcript exists).
+      ...(messages.length === 0 ? [] : this.renderComparator()),
       ...(messages.length === 0 ? [] : this.renderComposerBlock()),
     );
   }

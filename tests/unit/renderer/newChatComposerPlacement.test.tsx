@@ -106,7 +106,9 @@ describe('the invitation carries the ratified copy, and no invented situations',
     // the promise's first clause only — the second is what a 380px column can
     // afford to drop, because a refusal states its own reason when it happens.
     expect(t).toContain(NEW_CHAT_PROMISE.split('. Where it cannot')[0] + '.');
-    expect(t).toContain(NEW_CHAT_FOOTNOTE);
+    // The footnote was removed from this surface by owner ruling (16:09) —
+    // the empty session is headline, promise, composer, scope, disclosure.
+    expect(t).not.toContain(NEW_CHAT_FOOTNOTE);
     expect(t).not.toContain('Ask anything about your WordPress sites.');
   });
 
