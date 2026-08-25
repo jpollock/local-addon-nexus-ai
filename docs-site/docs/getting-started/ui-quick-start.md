@@ -62,7 +62,9 @@ Every `⚠️` or `❌` includes the exact command to fix it.
      web-analytics, seo-insights) with consoles, run history, and settings
    - **Settings** — sync schedules, WPE access permissions, advanced actions
 
-   The **Docked Panel** chat is available alongside every tab.
+   The **Docked Panel** chat is available alongside every tab, and
+   **Cmd+K / Ctrl+K** opens the AI Site Finder — a quick search panel in
+   Local's sidebar.
 
 ## First Steps
 

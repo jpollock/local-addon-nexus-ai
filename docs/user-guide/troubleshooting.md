@@ -208,7 +208,7 @@ Rate limit exceeded: 100 requests per hour
 
 **Symptoms:**
 - Local sites visible but not WPE sites
-- Fleet Overview shows "0 remote sites"
+- The Sites tab shows no remote sites
 
 **Fixes:**
 
@@ -217,7 +217,7 @@ Rate limit exceeded: 100 requests per hour
    - Must connect before seeing sites
 
 2. **Refresh sites list:**
-   - **Fleet Overview → Refresh** button
+   - **Sites tab → Refresh** button
    - CAPI calls can be slow
 
 3. **Account permissions:**
@@ -293,11 +293,11 @@ Rate limit exceeded: 100 requests per hour
 **Fixes:**
 
 1. **Index site first:**
-   - **Fleet Overview → Index** button
+   - **Sites tab → ⚡ Index** (bulk bar)
    - Wait for completion
 
 2. **Check index status:**
-   - **Fleet Overview** → column shows indexed sites
+   - **Sites tab** → the data-level column shows indexed sites
    - Green = indexed, Gray = not indexed
 
 3. **Re-index:**

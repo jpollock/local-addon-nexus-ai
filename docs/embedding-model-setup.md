@@ -22,7 +22,7 @@ console.log(settings.embeddingModel); // "nomic"
 
 ### Via Local UI (when implemented)
 
-Preferences → Nexus AI → Search & Discovery → Embedding Model
+the `embeddingModel` setting: `nexus settings set embeddingModel bge-small` (values: `minilm` | `bge-small`)
 
 **Radio buttons:**
 - ○ Standard (MiniLM, 22MB) - Fast, good quality

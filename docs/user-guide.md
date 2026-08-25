@@ -206,7 +206,7 @@ These tools work on both local sites (pass `site`) and remote WP Engine installs
 | `wp_run_ability` | Execute a registered ability (e.g., `acf/list-field-groups`) |
 | `wp_sync_ai_credentials` | Sync AI provider API keys to WordPress 7.0+ Connector Screen |
 
-See [WP Connector](wp-connector.md) for full details.
+(The WP Connector tools are documented in the MCP tool schemas; `wp_list_abilities` discovers what a site offers.)
 
 ### WP Engine (9 core tools + full fleet management)
 
@@ -236,7 +236,7 @@ Only two tools are Tier 3: `local_delete_site` and `local_wpe_push`.
 
 All Tier 2 and Tier 3 operations are logged to `~/Library/Application Support/Local/nexus-ai/audit.log`.
 
-See [Security](security.md) for the full tier listing and threat model.
+See [SECURITY.md](../SECURITY.md) for the full tier listing and threat model.
 
 ## Content Indexing
 
@@ -323,7 +323,7 @@ The AI Proxy is an OpenAI-compatible HTTP server backed by local Ollama. It's bu
 - `inject` — merges Nexus MCP tools into requests
 - `agentic` — executes MCP tools server-side
 
-See [AI Proxy Guide](ai-proxy-guide.md) for full documentation.
+(Connection details are shown in Settings → Advanced.)
 
 ## Database Health
 

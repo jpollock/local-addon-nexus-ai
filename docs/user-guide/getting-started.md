@@ -186,7 +186,7 @@ In Local's Nexus AI panel:
 
 ### Manage Multiple Sites (Fleet)
 
-1. **Fleet Overview** panel
+1. The **Sites** tab (Properties view)
 2. See all local + remote (WPE) sites
 3. Create **Site Groups** for organization
 4. Use **Bulk Operations** to setup AI on many sites

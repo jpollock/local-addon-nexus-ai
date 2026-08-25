@@ -167,7 +167,7 @@ The `nexus` command-line tool gives you direct terminal access to all WordPress 
 nexus sites list
 
 # Search content across all sites
-nexus search "WooCommerce shipping configuration"
+nexus content search-all "WooCommerce shipping configuration"
 
 # Get plugin status on a specific site
 nexus wp plugin list --site mysite
@@ -203,7 +203,7 @@ This will show all sites running WordPress 6.3."
 - `nexus search` — Semantic content search
 - `nexus wp` — Execute WP-CLI on local or remote sites
 - `nexus wpe` — WP Engine account and install management
-- `nexus scan` — Index site content
+- `nexus content index <site>` — Index site content
 - `nexus db` — Database operations
 
 See full CLI reference: [CLI Commands](docs-site/docs/cli/commands.md)

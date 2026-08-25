@@ -99,7 +99,7 @@ Structured events carry a fixed set of fields. Anything else is a freeform `info
 
 Four levels: `ERROR | WARN | INFO | DEBUG`
 
-- **Global default**: set in Preferences → Nexus AI → Logging, defaults to `INFO`
+- **Global default**: the `logLevel` setting (`nexus settings set logLevel DEBUG`), defaults to `INFO`; `NEXUS_LOG_LEVEL` overrides it
 - **Per-agent override**: set in agent settings (debugging one agent shouldn't flood the whole log)
 - **`NEXUS_LOG_LEVEL` env var**: wins over both, for dev launches from a shell
 
