@@ -37,7 +37,6 @@ graph LR
 3. Click **Scan All Sites** button
 4. Watch progress in real-time
 
-![Scan progress](../assets/scan-progress.png)
 
 ### Via CLI
 
@@ -774,6 +773,6 @@ Now that you've scanned your first site:
 
 For developers and power users:
 
-- **[Vector Database](../architecture/vector-database.md)** - LanceDB internals
+- **[Vector Database](../architecture/smart-search.md)** - LanceDB internals
 - **[Data Flow](../architecture/data-flow.md)** - Scanning pipeline
 - **[Performance]** - Benchmarks and optimization

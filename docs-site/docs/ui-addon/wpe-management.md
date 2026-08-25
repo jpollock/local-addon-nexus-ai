@@ -1002,8 +1002,8 @@ Always:
 
 ## Next Steps
 
-- **[Fleet Overview](fleet-overview.md)** - Monitor all sites
-- **[Bulk Operations](bulk-operations.md)** - Multi-site management
+- **[Fleet Overview](../mcp-tools/fleet.md)** - Monitor all sites
+- **[Bulk Operations](../mcp-tools/fleet.md)** - Multi-site management
 - **[WP-CLI Integration](../features/wp-cli-integration.md)** - Remote command execution
 - **[Safety System](../features/safety-system.md)** - Understanding operation safety
 - **[WPE Integration Architecture]** - Technical details

@@ -403,5 +403,5 @@ Step-by-step workflows for common Nexus AI operations.
 ## Next Steps
 
 - **All tools:** [MCP Tools](../mcp-tools/index.md)
-- **CLI usage:** [CLI Commands](../cli/commands.md)
+- **CLI usage:** [CLI Commands](../reference/cli-command-reference.md)
 - **Troubleshooting:** [Troubleshooting](troubleshooting.md)

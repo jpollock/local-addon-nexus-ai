@@ -77,4 +77,4 @@ nexus doctor
 
 Run this first. It checks Local, the addon, MCP server, AI provider, and site configuration in one command.
 
-[Full Troubleshooting Guide →](../reference/faq.md)
+[Full Troubleshooting Guide →](../cli/troubleshooting.md)

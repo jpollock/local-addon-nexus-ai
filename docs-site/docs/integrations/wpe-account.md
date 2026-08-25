@@ -739,4 +739,4 @@ Benefits:
 - **[Remote WP-CLI](../features/wp-cli-integration.md)** - Run commands remotely
 - **WPE Integration Architecture** - Technical details
 - **SSH ControlMaster** - Connection pooling
-- **[Fleet Overview](../ui-addon/fleet-overview.md)** - Dashboard for all sites
+- **[Fleet Overview](../mcp-tools/fleet.md)** - Dashboard for all sites

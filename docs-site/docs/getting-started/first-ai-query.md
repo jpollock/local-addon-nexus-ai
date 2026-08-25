@@ -154,7 +154,6 @@ nexus search "WooCommerce" --format markdown > woo-content.md
 2. Click **Site Finder** panel
 3. Type your query in the search box
 
-![Site Finder](../assets/site-finder.png)
 
 ### Try These Queries
 
@@ -776,9 +775,9 @@ Now that you can search your content:
 
 ### Explore Other Features
 
-- **[WP Engine Management](../cli/wpe-sites.md)** - Remote site management
-- **[Bulk Operations](../ui-addon/bulk-operations.md)** - Fleet operations
-- **[Fleet Overview](../ui-addon/fleet-overview.md)** - Dashboard and analytics
+- **[WP Engine Management](../mcp-tools/wpe-sites.md)** - Remote site management
+- **[Bulk Operations](../mcp-tools/fleet.md)** - Fleet operations
+- **[Fleet Overview](../mcp-tools/fleet.md)** - Dashboard and analytics
 
 ---
 

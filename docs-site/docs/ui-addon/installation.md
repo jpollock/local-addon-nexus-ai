@@ -379,13 +379,13 @@ npm run rebuild
 
     Explore the fleet dashboard and site management features.
 
-    [→ Fleet Overview](fleet-overview.md)
+    [→ Fleet Overview](../mcp-tools/fleet.md)
 
 - **Search**
 
     Use AI-powered search to find content across your sites.
 
-    [→ Site Finder](site-finder.md)
+    [→ Site Finder](../mcp-tools/fleet.md)
 
 - **WPE Management**
 

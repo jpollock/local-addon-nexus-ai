@@ -910,4 +910,4 @@ sqlite3 /tmp/nexus-export.db "SELECT * FROM documents LIMIT 10"
 - [First Scan](../getting-started/first-scan.md) - Understanding the scan process
 - [Semantic Search](semantic-search.md) - How indexed content is searched
 - [Privacy & Telemetry](../index.md#privacy--telemetry) - What data is collected
-- [Vector Database](../architecture/vector-database.md) - How data is stored
+- [Vector Database](../architecture/smart-search.md) - How data is stored

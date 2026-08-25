@@ -1019,7 +1019,7 @@ Health Check:
 
 ## Next Steps
 
-- **[Keyboard Shortcuts](keyboard-shortcuts.md)** - Complete shortcut reference
+- **[Keyboard Shortcuts](preferences.md)** - Complete shortcut reference
 - **[Safety System](../features/safety-system.md)** - Understanding operation safety
 - **Telemetry** - Data collection and privacy
 - **[CLI Troubleshooting](../cli/troubleshooting.md)** - Common issues

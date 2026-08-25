@@ -1205,7 +1205,7 @@ await callTool("local_wpe_push", {
 
 ## Next Steps
 
-- [Local Sites Tools](local-sites.md) - Create and manage local sites
+- [Local Sites Tools](index.md) - Create and manage local sites
 - [WPE Sites Tools](wpe-sites.md) - WP Engine remote operations
-- [Search Tools](search.md) - Content search across sites
-- [Tool Matrix](tool-matrix.md) - Full capability comparison
+- [Search Tools](../features/semantic-search.md) - Content search across sites
+- [Tool Matrix](tool-schemas.md) - Full capability comparison

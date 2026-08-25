@@ -52,7 +52,6 @@ Every `⚠️` or `❌` includes the exact command to fix it.
 
    Click the **Nexus AI** icon in the Local toolbar (top-right).
 
-   ![Nexus AI toolbar icon](../assets/nexus-toolbar-icon.png)
 
 2. **The sidebar opens:**
 
@@ -78,7 +77,6 @@ The Fleet Overview shows all your sites at a glance.
 - WP Engine linked sites
 - Health status indicators
 
-![Fleet Overview](../assets/fleet-overview.png)
 
 **Quick actions:**
 
@@ -94,7 +92,6 @@ Index your WordPress content for AI-powered search and analysis.
 2. Click **Scan All Sites** button
 3. Watch progress in real-time
 
-![Scanning progress](../assets/scan-progress.png)
 
 **What gets indexed:**
 
@@ -120,7 +117,6 @@ Use natural language to find sites.
    - "Linked to WP Engine"
 3. See results instantly
 
-![Site Finder](../assets/site-finder.png)
 
 **Try these queries:**
 
@@ -138,7 +134,6 @@ Link your WP Engine sites to Local for unified management.
 3. Sign in with WP Engine credentials
 4. See all your WPE installs
 
-![WPE Management](../assets/wpe-management.png)
 
 **What you can do:**
 
@@ -164,7 +159,6 @@ Perform operations on multiple sites at once.
 4. Click **Execute**
 5. Watch progress in real-time
 
-![Bulk Operations](../assets/bulk-operations.png)
 
 **Example: Update plugins on all running sites**
 
@@ -286,7 +280,7 @@ Speed up your workflow with keyboard shortcuts.
 | `Cmd/Ctrl + Shift + B` | Open Bulk Operations |
 | `Escape` | Close sidebar |
 
-[Full Keyboard Reference →](../ui-addon/keyboard-shortcuts.md)
+[Full Keyboard Reference →](../ui-addon/preferences.md)
 
 ## Preferences
 
@@ -415,10 +409,10 @@ If WP Engine sites don't appear:
 
 ### Learn More
 
-- **[Fleet Overview](../ui-addon/fleet-overview.md)** - Detailed fleet dashboard guide
-- **[Site Finder](../ui-addon/site-finder.md)** - Advanced search patterns
+- **[Fleet Overview](../mcp-tools/fleet.md)** - Detailed fleet dashboard guide
+- **[Site Finder](../mcp-tools/fleet.md)** - Advanced search patterns
 - **[WPE Management](../ui-addon/wpe-management.md)** - WP Engine integration
-- **[Bulk Operations](../ui-addon/bulk-operations.md)** - Fleet management
+- **[Bulk Operations](../mcp-tools/fleet.md)** - Fleet management
 - **[Preferences](../ui-addon/preferences.md)** - Customize your workflow
 
 ### Combine with CLI
@@ -444,7 +438,7 @@ nexus mcp setup --agent claude-desktop --write
 
 - **[Semantic Search](../features/semantic-search.md)** - How vector search works
 - **[Safety System](../features/safety-system.md)** - Understanding safety tiers
-- **[Keyboard Shortcuts](../ui-addon/keyboard-shortcuts.md)** - Efficiency tips
+- **[Keyboard Shortcuts](../ui-addon/preferences.md)** - Efficiency tips
 - **[MCP Tools](../mcp-tools/index.md)** - Use with AI assistants
 
 ## Help and Support

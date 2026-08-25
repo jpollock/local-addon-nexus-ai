@@ -185,7 +185,6 @@ Look for the MCP indicator in Claude Desktop:
 3. Click it to see available tools
 4. You should see "nexus-ai" listed
 
-![MCP tools indicator](../assets/claude-mcp-tools.png)
 
 **If you see Nexus AI tools, you're ready!**
 

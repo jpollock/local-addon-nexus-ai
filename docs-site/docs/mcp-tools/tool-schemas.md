@@ -884,7 +884,7 @@ Tools validate inputs using JSON Schema. Invalid inputs return error:
 - [Tool Reference](index.md) - Browse all tools by category
 - [WordPress Tools](wordpress.md) - Detailed WP-CLI tool docs
 - [WPE Tools](wpe-sites.md) - WP Engine operation docs
-- [Tool Matrix](tool-matrix.md) - Capability comparison
+- [Tool Matrix](tool-schemas.md) - Capability comparison
 
 ---
 

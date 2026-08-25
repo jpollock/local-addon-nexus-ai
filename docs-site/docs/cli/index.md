@@ -143,7 +143,7 @@ nexus <command> [subcommand] [options]
 | `mcp` | Configure MCP clients (`nexus mcp setup`) — server runs inside the Local addon |
 | `telemetry` | View/control telemetry settings |
 
-[Command Reference →](commands.md)
+[Command Reference →](../reference/cli-command-reference.md)
 
 ## MCP Tools
 
@@ -165,7 +165,7 @@ When running as an MCP server, Nexus AI exposes 160+ tools to AI assistants.
 - `local_wpe_push`
 - And more...
 
-[Local Tools →](../mcp-tools/local-sites.md)
+[Local Tools →](../mcp-tools/index.md)
 
 </div>
 
@@ -208,7 +208,7 @@ When running as an MCP server, Nexus AI exposes 160+ tools to AI assistants.
 - `search_products`
 - `semantic_search`
 
-[Search Tools →](../mcp-tools/search.md)
+[Search Tools →](../features/semantic-search.md)
 
 </div>
 
@@ -235,7 +235,7 @@ When running as an MCP server, Nexus AI exposes 160+ tools to AI assistants.
 - `clear_telemetry_events`
 - `reset_telemetry`
 
-[Telemetry Tools →](../mcp-tools/telemetry.md)
+[Telemetry Tools →](../reference/telemetry-privacy.md)
 
 </div>
 
@@ -262,7 +262,7 @@ nexus wpe logout
 
 Authentication uses Local's saved WPE credentials (same as the UI addon).
 
-[Authentication Guide →](authentication.md)
+[Authentication Guide →](index.md)
 
 ## Configuration
 
@@ -307,7 +307,7 @@ nexus wp user list --install mysite-prod
 
 **10x faster** than establishing new SSH connections each time.
 
-[Performance Guide →](performance.md)
+[Performance Guide →](index.md)
 
 ### Parallel Execution
 
@@ -347,7 +347,7 @@ Error: Not authenticated with WP Engine
 Run 'nexus wpe auth' to connect your account.
 ```
 
-[Error Handling →](error-handling.md)
+[Error Handling →](troubleshooting.md)
 
 ## Examples
 
@@ -486,6 +486,6 @@ nexus wpe auth
 
 - [Installation Guide](installation.md) - Install and configure the CLI
 - [MCP Setup](mcp-setup.md) - Connect to AI assistants
-- [Command Reference](commands.md) - Complete command list
+- [Command Reference](../reference/cli-command-reference.md) - Complete command list
 - [Tool Reference](../mcp-tools/index.md) - All 160+ MCP tools
 - [Examples](examples.md) - Real-world usage examples

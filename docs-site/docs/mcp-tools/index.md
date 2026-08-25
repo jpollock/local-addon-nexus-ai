@@ -22,7 +22,7 @@ Nexus AI exposes **160+ tools** via the Model Context Protocol for AI-powered Wo
 - Backup management
 - Service control
 
-[View Tools →](local-sites.md)
+[View Tools →](index.md)
 
 </div>
 
@@ -64,7 +64,7 @@ Nexus AI exposes **160+ tools** via the Model Context Protocol for AI-powered Wo
 - Product search
 - Cross-site search
 
-[View Tools →](search.md)
+[View Tools →](../features/semantic-search.md)
 
 </div>
 
@@ -92,7 +92,7 @@ Nexus AI exposes **160+ tools** via the Model Context Protocol for AI-powered Wo
 - Clear events
 - Reset installation
 
-[View Tools →](telemetry.md)
+[View Tools →](../reference/telemetry-privacy.md)
 
 </div>
 
@@ -255,7 +255,7 @@ Tools are available via different access methods:
 | `wpe_get_installs` | N/A | ✅ | WPE only |
 | `wpe_create_backup` | N/A | ✅ | WPE only |
 
-[Complete Matrix →](tool-matrix.md)
+[Complete Matrix →](tool-schemas.md)
 
 ## Return Values
 
@@ -434,14 +434,14 @@ await callTool("nexus_bulk_operation", {
 
 ### Local Site Tools
 
-- [local_list_sites](local-sites.md)
-- [local_create_site](local-sites.md)
-- [local_start_site](local-sites.md)
-- [local_stop_site](local-sites.md)
-- [local_wpe_pull](local-sites.md)
-- [local_wpe_push](local-sites.md)
-- [local_get_site](local-sites.md)
-- [local_delete_site](local-sites.md)
+- [local_list_sites](index.md)
+- [local_create_site](index.md)
+- [local_start_site](index.md)
+- [local_stop_site](index.md)
+- [local_wpe_pull](index.md)
+- [local_wpe_push](index.md)
+- [local_get_site](index.md)
+- [local_delete_site](index.md)
 
 ### WP Engine Tools
 
@@ -466,10 +466,10 @@ await callTool("nexus_bulk_operation", {
 
 ### Search Tools
 
-- [search_site_content](search.md)
-- [search_posts](search.md)
-- [search_products](search.md)
-- [semantic_search](search.md)
+- [search_site_content](../features/semantic-search.md)
+- [search_posts](../features/semantic-search.md)
+- [search_products](../features/semantic-search.md)
+- [semantic_search](../features/semantic-search.md)
 
 ### Fleet Tools
 
@@ -485,10 +485,10 @@ await callTool("nexus_bulk_operation", {
 
 ### Telemetry Tools
 
-- [get_telemetry_status](telemetry.md)
-- [set_telemetry_enabled](telemetry.md)
-- [clear_telemetry_events](telemetry.md)
-- [reset_telemetry](telemetry.md)
+- [get_telemetry_status](../reference/telemetry-privacy.md)
+- [set_telemetry_enabled](../reference/telemetry-privacy.md)
+- [clear_telemetry_events](../reference/telemetry-privacy.md)
+- [reset_telemetry](../reference/telemetry-privacy.md)
 
 ## Complete Schemas
 
@@ -499,7 +499,7 @@ For complete JSON schemas of all tools, see:
 ## Next Steps
 
 - [WordPress Tools](wordpress.md) - Most commonly used tools
-- [Local Sites](local-sites.md) - Local site management
+- [Local Sites](index.md) - Local site management
 - [WPE Sites](wpe-sites.md) - WP Engine operations
-- [Search Tools](search.md) - Content search
-- [Tool Matrix](tool-matrix.md) - Capability comparison
+- [Search Tools](../features/semantic-search.md) - Content search
+- [Tool Matrix](tool-schemas.md) - Capability comparison

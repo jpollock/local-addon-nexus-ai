@@ -271,4 +271,4 @@ graph LR
 - [Getting Started](../features/smart-search/getting-started.md) — step-by-step setup
 - [Local vs Cloud](../features/smart-search/limitations.md) — detailed behavior differences
 - [Architecture Overview](overview.md) — where Smart Search fits in the full Nexus picture
-- [Vector Database](vector-database.md) — LanceDB internals
+- [Vector Database](smart-search.md) — LanceDB internals

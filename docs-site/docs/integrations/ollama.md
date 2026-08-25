@@ -727,6 +727,6 @@ ollama prune
 
 - **[First Scan](../getting-started/first-scan.md)** - Scan sites with Ollama
 - **[Semantic Search](../features/semantic-search.md)** - How embeddings work
-- **[Vector Database](../architecture/vector-database.md)** - Technical deep dive
+- **[Vector Database](../architecture/smart-search.md)** - Technical deep dive
 - **[Preferences](../ui-addon/preferences.md)** - Configure Ollama settings
 - **Custom AI Providers** - Use other embedding models

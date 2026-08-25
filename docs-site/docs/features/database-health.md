@@ -160,4 +160,4 @@ This is also the right environment for cleanup: local sites carry no production 
 
 - [Safety System](safety-system.md) — How `clean_database_items` Tier 3 protection works
 - [WP-CLI Integration](wp-cli-integration.md) — How `nexus wp db` commands execute
-- [CLI Commands](../cli/commands.md) — Full `nexus wp db` reference
+- [CLI Commands](../reference/cli-command-reference.md) — Full `nexus wp db` reference

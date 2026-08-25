@@ -1163,5 +1163,5 @@ Configuration is stored in `~/.nexus/config.json`:
 - [UI Architecture](ui-architecture.md) - Local addon architecture
 - [Data Flow](data-flow.md) - End-to-end data flow
 - [MCP Protocol](mcp-protocol.md) - Protocol details
-- [Vector Database](vector-database.md) - LanceDB internals
+- [Vector Database](smart-search.md) - LanceDB internals
 - WPE Integration - WP Engine integration

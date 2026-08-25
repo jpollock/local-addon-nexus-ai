@@ -522,7 +522,7 @@ See [MCP SDK documentation](https://github.com/modelcontextprotocol/sdk) for mor
 
 **Available MCP tools:**
 
-See [Tool Reference](../reference/tool-reference.md) for complete list.
+See [Tool Reference](../mcp-tools/tool-schemas.md) for complete list.
 
 **Example tool call:**
 
@@ -722,5 +722,5 @@ export NEXUS_LOG_LEVEL=info
 - **[Claude Desktop](claude-desktop.md)** - Full Claude Desktop setup
 - **[Cursor](cursor.md)** - Detailed Cursor integration
 - **[MCP Protocol](../architecture/mcp-protocol.md)** - Technical deep dive
-- **[Tool Reference](../reference/tool-reference.md)** - Complete tool catalog
+- **[Tool Reference](../mcp-tools/tool-schemas.md)** - Complete tool catalog
 - **Custom AI Providers** - Build custom integrations

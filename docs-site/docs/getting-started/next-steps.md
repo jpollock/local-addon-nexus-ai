@@ -91,12 +91,12 @@ nexus sync wpe
 
     Manage and audit all your sites at scale.
 
-    [→ Fleet Overview](../features/fleet-overview.md)
+    [→ Fleet Overview](../mcp-tools/fleet.md)
 
 - **Troubleshooting**
 
     Something broken? Start with `nexus doctor`.
 
-    [→ FAQ](../reference/faq.md)
+    [→ FAQ](../cli/troubleshooting.md)
 
 </div>

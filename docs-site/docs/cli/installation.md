@@ -289,13 +289,13 @@ nvm alias default 18
 
     List your WordPress sites and run your first CLI command.
 
-    [→ Commands](commands.md)
+    [→ Commands](../reference/cli-command-reference.md)
 
 - **WPE Authentication**
 
     Connect your WP Engine account for remote site management.
 
-    [→ Authentication](authentication.md)
+    [→ Authentication](index.md)
 
 - **Examples**
 

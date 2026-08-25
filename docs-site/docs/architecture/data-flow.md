@@ -893,7 +893,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 ## Next Steps
 
-- **[Vector Database](vector-database.md)** - LanceDB deep dive
+- **[Vector Database](smart-search.md)** - LanceDB deep dive
 - **[MCP Protocol](mcp-protocol.md)** - MCP implementation details
 - **[Shared Core](shared-core.md)** - Reusable business logic
 - **[UI Architecture](ui-architecture.md)** - Component structure

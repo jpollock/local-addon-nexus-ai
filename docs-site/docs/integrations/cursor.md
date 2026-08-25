@@ -99,7 +99,6 @@ Cursor will show a red indicator if JSON is invalid. Common mistakes:
 3. You should see **@nexus-ai** in the list
 4. Or check the MCP status indicator in the bottom bar
 
-![MCP Status](../assets/cursor-mcp-status.png)
 
 ## Using Nexus AI in Cursor
 

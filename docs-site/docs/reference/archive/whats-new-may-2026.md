@@ -60,7 +60,7 @@ The single `WP-CLI over SSH` permission is now two separate permissions:
 
 **Impact:** Metadata sync now works on production installs by default. Previously, 188 production installs were blocked from SSH entirely, showing as perpetually "stale" with no WP version, plugin, or user data.
 
-See [Permissions Reference](./permissions-access-control-v2.md) for full details.
+See [Permissions Reference](../permissions-access-control-v2.md) for full details.
 
 ### Account Scope UI Improvements
 

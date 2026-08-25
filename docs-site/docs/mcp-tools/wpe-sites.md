@@ -454,5 +454,5 @@ Compare local development sites against their linked WP Engine production instal
 ## Next Steps
 
 - [CLI `nexus wpe` commands](../reference/cli-command-reference.md#nexus-wpe)
-- [WPE Account Tools](wpe-account.md)
-- [Local Sites Tools](local-sites.md)
+- [WPE Account Tools](../integrations/wpe-account.md)
+- [Local Sites Tools](index.md)

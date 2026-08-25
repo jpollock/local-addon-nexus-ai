@@ -402,7 +402,7 @@ nexus plugin list mysite-production
 nexus plugin update mysite-staging --all
 ```
 
-[WP Engine Guide →](../cli/wpe-sites.md)
+[WP Engine Guide →](../mcp-tools/wpe-sites.md)
 
 ## Best Practices
 
@@ -588,7 +588,7 @@ nexus config set ai.provider ollama
 nexus config set ai.model nomic-embed-text
 ```
 
-[Command Reference →](../cli/commands.md)
+[Command Reference →](../reference/cli-command-reference.md)
 
 ## Next Steps
 
@@ -597,7 +597,7 @@ nexus config set ai.model nomic-embed-text
 - **[CLI Examples](../cli/examples.md)** - Real-world usage patterns
 - **[CLI Commands](../reference/cli-command-reference.md)** - Complete command reference
 - **[MCP Tools](../mcp-tools/index.md)** - All 160+ tools available to AI assistants
-- **[WP Engine Management](../cli/wpe-sites.md)** - Remote site management
+- **[WP Engine Management](../mcp-tools/wpe-sites.md)** - Remote site management
 
 ### Connect AI Assistants
 

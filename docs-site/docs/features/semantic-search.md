@@ -824,6 +824,6 @@ const overlap = 0.1; // 10%
 ## Next Steps
 
 - [Content Extraction](content-extraction.md) - What gets indexed
-- [Vector Database](../architecture/vector-database.md) - LanceDB internals
+- [Vector Database](../architecture/smart-search.md) - LanceDB internals
 - [First Scan](../getting-started/first-scan.md) - Indexing process
 - [First AI Query](../getting-started/first-ai-query.md) - Search examples

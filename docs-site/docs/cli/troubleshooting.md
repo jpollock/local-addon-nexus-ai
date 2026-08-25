@@ -290,5 +290,5 @@ If you're still stuck:
 ## Next Steps
 
 - [Installation Guide](./installation.md)
-- [CLI Commands](./commands.md)
+- [CLI Commands](../reference/cli-command-reference.md)
 - [Architecture](../architecture/cli-architecture.md)

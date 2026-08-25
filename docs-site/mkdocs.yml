@@ -125,36 +125,21 @@ nav:
     - Overview: cli/index.md
     - Installation: cli/installation.md
     - MCP Setup: cli/mcp-setup.md
-    - Authentication: cli/authentication.md
-    - Commands: cli/commands.md
     - Examples: cli/examples.md
-    - Local Sites: cli/local-sites.md
-    - WPE Sites: cli/wpe-sites.md
-    - WP-CLI Integration: cli/wp-cli.md
-    - Bulk Operations: cli/bulk-operations.md
-    - Error Handling: cli/error-handling.md
-    - Performance: cli/performance.md
     - Troubleshooting: cli/troubleshooting.md
 
   - MCP Tools Reference:
     - Overview: mcp-tools/index.md
-    - Local Sites: mcp-tools/local-sites.md
     - WPE Sites: mcp-tools/wpe-sites.md
     - WordPress: mcp-tools/wordpress.md
-    - Search: mcp-tools/search.md
     - Fleet: mcp-tools/fleet.md
-    - Telemetry: mcp-tools/telemetry.md
     - Tool Schemas: mcp-tools/tool-schemas.md
-    - Capability Matrix: mcp-tools/tool-matrix.md
 
   - UI Addon:
     - Installation: ui-addon/installation.md
-    - Fleet Overview: ui-addon/fleet-overview.md
-    - Site Finder: ui-addon/site-finder.md
     - WPE Management: ui-addon/wpe-management.md
-    - Bulk Operations: ui-addon/bulk-operations.md
     - Preferences: ui-addon/preferences.md
-    - Keyboard Shortcuts: ui-addon/keyboard-shortcuts.md
+    - WPE Access Preferences: ui-addon/preferences-wpe-access.md
 
   - Architecture:
     - Overview: architecture/overview.md
@@ -162,9 +147,9 @@ nav:
     - UI Architecture: architecture/ui-architecture.md
     - Data Flow: architecture/data-flow.md
     - MCP Protocol: architecture/mcp-protocol.md
-    - Vector Database: architecture/vector-database.md
     - Shared Core: architecture/shared-core.md
     - Smart Search Backend: architecture/smart-search.md
+    - WPE Sync Architecture: architecture/wpe-sync-architecture.md
 
   - Integrations:
     - Claude Desktop: integrations/claude-desktop.md
@@ -192,7 +177,6 @@ nav:
 
   - Reference:
     - CLI Commands: reference/cli-command-reference.md
-    - Tool Reference: reference/tool-reference.md
+    - Permissions & Access Control: reference/permissions-access-control-v2.md
+    - Model Catalog: reference/model-catalog.md
     - Telemetry & Privacy: reference/telemetry-privacy.md
-    - FAQ: reference/faq.md
-    - WPE Access Control: reference/wpe-access-control.md

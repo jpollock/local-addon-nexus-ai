@@ -932,7 +932,7 @@ describe('MCP Server Integration', () => {
 
 ## Next Steps
 
-- **[Tool Reference](../reference/tool-reference.md)** - Complete tool catalog
+- **[Tool Reference](../mcp-tools/tool-schemas.md)** - Complete tool catalog
 - **[Claude Desktop](../integrations/claude-desktop.md)** - Client setup
 - **[Data Flow](data-flow.md)** - System data flow
 - **[Shared Core](shared-core.md)** - Business logic

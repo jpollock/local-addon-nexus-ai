@@ -16,7 +16,7 @@ This section provides structured context for AI assistants (Claude, ChatGPT, etc
 |----------|---------|-----|
 | **[Features](features.md)** | Complete list of verified features | Understanding capabilities |
 | **[MCP Tools](../mcp-tools/index.md)** | All 111 tools with examples | Tool selection and usage |
-| **[CLI Commands](../cli/commands.md)** | All CLI commands with examples | Command-line workflows |
+| **[CLI Commands](../reference/cli-command-reference.md)** | All CLI commands with examples | Command-line workflows |
 | **[Common Tasks](common-tasks.md)** | Task-based workflows | Step-by-step guidance |
 | **[Troubleshooting](troubleshooting.md)** | Common issues and solutions | Problem resolution |
 
@@ -137,6 +137,6 @@ Check **[Troubleshooting](troubleshooting.md)** for:
 
 - **New to Nexus AI?** Start with [Features](features.md)
 - **Using MCP tools?** See [MCP Tools](../mcp-tools/index.md)
-- **Using CLI?** See [CLI Commands](../cli/commands.md)
+- **Using CLI?** See [CLI Commands](../reference/cli-command-reference.md)
 - **Specific task?** Check [Common Tasks](common-tasks.md)
 - **Having issues?** Try [Troubleshooting](troubleshooting.md)
