@@ -49,7 +49,7 @@
 import { assemble } from '../../intelligence';
 import type { BundleManifest, ContextBundle, EntityRef } from '../../intelligence';
 import type { AgentDefinition } from '../agent-sdk/types';
-import { resolveSite } from '../mcp/site-resolver';
+import { resolveLocalSite } from '../mcp/site-resolver';
 import type { NexusServices } from '../mcp/types';
 import { getIntelligenceCore } from './coreRegistry';
 import { environmentEntityId, siteEntityId } from './provisionalEntity';
@@ -87,12 +87,15 @@ export const AGENT_ASSEMBLER_SYSTEM = 'assembler:agent';
  * honest answer and the assembler treats it as first-class.
  */
 export function agentRunTargets(
-  services: Pick<NexusServices, 'siteData'> | undefined,
+  services: Pick<NexusServices, 'siteData' | 'graphService'> | undefined,
   siteId: string | undefined
 ): EntityRef[] {
   if (!siteId || !services?.siteData) return [];
   try {
-    const site = resolveSite(siteId, services.siteData);
+    // resolveLocalSite (WP-58): ids pass through unambiguously; a bare name
+    // colliding with a remote row returns null — which lands on the empty
+    // answer this function already documents as the honest one.
+    const site = resolveLocalSite(siteId, services.siteData, services.graphService);
     if (!site) return [];
     const core = getIntelligenceCore();
     // Both, as chat does: the running copy and the logical site are different

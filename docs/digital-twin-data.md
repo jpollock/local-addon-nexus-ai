@@ -398,7 +398,8 @@ diverge in either direction. Measured 2026-08-22.
 | `task.action.executed` | `src/main/intelligence-host/actionProducer.ts` | One gated Tier 2/3 tool call that ran |
 | `task.outcome.recorded` | `src/main/intelligence-host/actionProducer.ts` | That call's result, one event per resolved target |
 | `task.rationale.recorded` | `src/main/intelligence-host/actionProducer.ts` | The human's approval decision |
-| `task.run.completed` | `src/main/intelligence-host/incidentProducer.ts` | A completed scan run |
+| `task.run.assigned` | `src/main/intelligence-host/agentTaskFrame.ts` | An agent run opened its task frame (WP-57) |
+| `task.run.completed` | `src/main/intelligence-host/agentTaskFrame.ts` | That run's completion; pipeline L1/L2/L3 runs also emit it, via `pipelineRunProducer.ts` |
 | `control.grant.issued` | `src/main/intelligence-host/capabilityGrants.ts` | A capability grant was announced |
 | `control.grant.revoked` | `src/main/intelligence-host/capabilityGrants.ts` | A capability grant was withdrawn |
 
@@ -416,7 +417,6 @@ cannot outlive its own reason.
 | `procedure.runbook.deprecated` | Same — no runbook lifecycle producer exists |
 | `policy.constraint.published` | Policy lives in settings and `operation-permissions.ts`, not in events |
 | `policy.constraint.retired` | Same |
-| `task.run.assigned` | No agent-runtime producer. **Three rows exist in this machine's ledger from a WP-57 smoke run on 2026-08-21/22 — written by a script, not by the product** |
 | `control.threshold.changed` | No threshold surface emits |
 | `control.audit.finding` | Audit findings go to `operation-audit.log`, not to the ledger |
 
@@ -514,21 +514,24 @@ fixed here.
 
 ### 6.5 Runs, agents and the ledger
 
-- **There is no success-side agent-run producer.** `episodic.agent_run.failed`
-  exists; its counterpart does not. `graph.db.agent_runs` holds 116 rows and the
-  ledger holds **2** failure events — both from the WP-57 smoke run on
-  2026-08-21/22, neither from an ordinary run. So the producer works and no real
-  agent run has ever reached it.
+- **Agent runs are now bracketed by the task frame** (WP-57, merged
+  2026-08-25): `task.run.assigned` opens and `task.run.completed` closes every
+  real run, from `agentTaskFrame.ts`. In the `episodic.*` namespace the
+  asymmetry remains by design — `episodic.agent_run.failed` exists and has no
+  success counterpart, because episodic IS the ledger and a success is already
+  recorded by the frame; the failure event is the incident-shaped exception.
 - **`agent_runs.run_id` is written but never read back.** `getLastRun()` and
   `getRunHistory()` drop the column in their mapping.
 - **Nothing records a site as halted.** `comparatorRead.ts:78-91` reads
   halted-ness *from nowhere* rather than from Local's live store, deliberately:
   a `WorldExclusionRecord` must carry the record that caused it, and no record
   exists. The comparator's exclusion list is therefore permanently empty.
-- **The ledger holds rows for a topic no source file emits** — three
-  `task.run.assigned` events written by a smoke script. A check anchored to the
-  ledger rather than to source would report that topic as live; §5's check is
-  anchored to source for exactly this reason.
+- **The ledger briefly held rows for a topic no source file emitted** — three
+  `task.run.assigned` events written by a WP-57 smoke script, days before the
+  producer itself merged (2026-08-25). Resolved by the merge, but the lesson
+  stands: a check anchored to the ledger rather than to source would have
+  reported that topic as live; §5's check is anchored to source for exactly
+  this reason.
 - **Run id reaches `operation-audit.log` from one of three audit writers.**
   `ToolRegistry.call()` passes it; `AgentDispatcher.dispatch()` and
   `auditDirectOperation()` do not. The join between the compliance record and
