@@ -147,3 +147,37 @@ describe('issue 1 — the reset does not depend on the id having changed', () =>
     expect(chat.state.actionCount).toBe(0);
   });
 });
+
+describe('issue 6 — a Now door lands where the work is', () => {
+  beforeEach(() => { localStorage.clear(); jest.resetModules(); });
+
+  it('opens a blank chat scoped to the site, never the sessions list', () => {
+    const { DockedPanelContainer } = require('../../../src/renderer/components/DockedPanel/DockedPanelContainer');
+    const { nexusStore } = require('../../../src/renderer/store/NexusStateManager');
+    const inst = new DockedPanelContainer({});
+    inst.setState = (patch: any) => Object.assign(inst.state, patch);
+    let started = 0;
+    (inst as any).chatRef = { current: { startNewChat: () => { started += 1; return Promise.resolve(); } } };
+    let picked: string | null = null;
+    (inst as any).pickSite = (id: string) => { picked = id; };
+
+    // The state a returning user is actually in: the panel last showed old chats.
+    Object.assign(inst.state, {
+      showSessions: true,
+      activeTab: 'chat',
+      activeSessionId: 'old-session',
+      siteChoices: [{ id: 'site-7', name: 'theawfulpm-test' }],
+    });
+    nexusStore.update({ nowDoorRequest: { kind: 'site', target: 'theawfulpm-test' } });
+
+    (inst as any).honourNowDoor();
+
+    expect(picked).toBe('site-7');            // scoped to the site the finding is about
+    expect(inst.state.showSessions).toBe(false); // NOT the list of old chats
+    expect(inst.state.activeSessionId).toBeNull();
+    expect(inst.state.activeTab).toBe('chat');
+    expect(inst.state.panelState).toBe('docked');
+    expect(started).toBe(1);
+    expect(nexusStore.get().nowDoorRequest).toBeNull(); // cleared whether or not it resolved
+  });
+});

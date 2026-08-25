@@ -2,6 +2,7 @@ import * as React from 'react';
 import { IPC_CHANNELS } from '../../common/constants';
 import type { NexusSettings } from '../../common/types';
 import { PRICES_AS_OF } from '../../main/logging/modelPricing';
+import { LOG_LOCATIONS } from '../../common/logLocations';
 
 export interface LoggingStats {
   root: string;
@@ -213,13 +214,30 @@ export class LoggingSection extends React.Component<
     const logLevel = settings.logLevel ?? 'INFO';
 
     return React.createElement('div', null,
-      // Where they are
+      // Where they are.
+      //
+      // fixes-082526 · issue 4: this used to print the root and stop, which
+      // told someone hunting "why didn't my agent run" to go and read a
+      // folder. Four families ship, with different jobs; each one says which
+      // question it answers so the reader opens the right file first.
       React.createElement('div', { style: { marginBottom: '16px' } },
         React.createElement('div', { style: { fontSize: '13px', marginBottom: '6px' } }, stats.root),
         React.createElement('button', {
           onClick: this.handleRevealLogs,
           style: { padding: '6px 12px', fontSize: '13px', cursor: 'pointer' },
         }, 'Reveal in Finder'),
+        React.createElement('div', { style: { marginTop: '10px' } },
+          ...LOG_LOCATIONS.map((l) =>
+            React.createElement('div', { key: l.relPath, style: { marginBottom: '6px' } },
+              React.createElement('code', {
+                style: { fontSize: '11px', color: 'var(--nxai-card-text, inherit)' },
+              }, l.relPath),
+              React.createElement('div', {
+                style: { fontSize: '11px', color: 'var(--nxai-card-sub, #888)' },
+              }, `${l.label} — ${l.answers}`),
+            ),
+          ),
+        ),
       ),
 
       // Usage against budget

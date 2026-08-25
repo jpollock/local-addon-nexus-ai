@@ -395,7 +395,24 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
     nexusStore.update({ nowDoorRequest: null });
     const match = this.state.siteChoices.filter((s) => s.name === door.target)[0];
     if (match) this.pickSite(match.id);
-    this.setState({ panelState: 'docked' });
+
+    // fixes-082526 · issue 6. The door carried its whole target and then
+    // dropped it on the doormat: it set the site context and opened the
+    // panel, but never said which surface to open ON — so the panel came up
+    // showing whatever it last showed, which for anyone who had used the
+    // sessions list was the list of old chats. A door from "needs you" has
+    // to land where the work is: a blank chat, already scoped to the site
+    // the finding is about.
+    const chat = this.chatRef.current as any;
+    if (chat && typeof chat.startNewChat === 'function') {
+      chat.startNewChat().catch(() => {});
+    }
+    this.setState({
+      panelState: 'docked',
+      activeTab: 'chat',
+      showSessions: false,
+      activeSessionId: null,
+    });
   }
 
   // ── Site context ───────────────────────────────────────────────────────────────

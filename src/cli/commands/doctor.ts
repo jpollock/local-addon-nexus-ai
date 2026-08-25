@@ -19,6 +19,7 @@ import { isLocalInstalled, isLocalRunning } from '../bootstrap/process';
 import { isAddonInstalled, isAddonActivated, getInstalledAddonVersion, isDevAddon } from '../bootstrap/addon';
 import { readConnectionInfo } from '../bootstrap/graphql';
 import { getLocalPaths } from '../bootstrap/paths';
+import { resolveLogLocations } from '../../common/logLocations';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -595,6 +596,23 @@ function renderReport(checks: CheckResult[], version: string): void {
     console.log(formatRow(check));
   }
   console.log(line);
+
+  // fixes-082526 · issue 4 — "I have no way to tell where the Nexus logs are."
+  // doctor is where people already go when something is wrong, so it is where
+  // the answer belongs. Four families, each with the question it answers: a
+  // bare folder path sends someone into the wrong file.
+  try {
+    const dataDir = getLocalPaths().dataDir;
+    console.log('');
+    console.log('  Logs and records:');
+    for (const l of resolveLogLocations(dataDir)) {
+      console.log(`    ${l.label.padEnd(20)} ${l.path}`);
+      console.log(`    ${' '.repeat(20)} ${l.answers}`);
+    }
+    console.log(line);
+  } catch {
+    // Paths unavailable (Local not installed) — the checks above already said so.
+  }
 
   const nextSteps = checks
     .filter((c) => c.action && (c.status === 'warn' || c.status === 'error'))
