@@ -23,7 +23,7 @@ If `$ARGUMENTS` is provided, filter results to that specific concern (e.g., `/ne
 ## Suggested actions
 
 Based on the health report, propose specific next steps:
-- Bulk plugin updates: `nexus bulk plugin-update --all`
+- Bulk plugin updates: `nexus fleet plugin-update`
 - Individual site fixes: `nexus wp health --site <name>`
 - Sites to review: list by priority
 
