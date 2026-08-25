@@ -48,7 +48,8 @@ for (const run of runs) {
     const slot = (((cells[scenario] ??= {})[column] ??= {})[run.id] ??= { pass: 0, total: 0, costs: [], turns: [] });
     slot.total += 1;
     if (r.success) slot.pass += 1;
-    if (typeof r.cost === 'number') slot.costs.push(r.cost);
+    const c = r.response?.cost;
+    if (typeof c === 'number') slot.costs.push(c);
     const turns = r.response?.metadata?.numTurns ?? r.metadata?.numTurns;
     if (typeof turns === 'number') slot.turns.push(turns);
   }
