@@ -131,3 +131,76 @@ describe('the invitation carries the ratified copy, and no invented situations',
     expect(nodesWithTitle.join(' ')).toMatch(/sonnet|claude|\//); // ...but is still disclosed
   });
 });
+
+describe('the scope row and the disclosure travel WITH the composer', () => {
+  const depthOf = (tree: any, pred: (n: any) => boolean): number => {
+    let found = -1;
+    const walk = (n: any, d: number) => {
+      if (!n || typeof n !== 'object' || found >= 0) return;
+      if (Array.isArray(n)) return n.forEach((x) => walk(x, d));
+      if (pred(n)) { found = d; return; }
+      walk(n.props?.children, d + 1);
+    };
+    walk(tree, 0);
+    return found;
+  };
+  const isScope = (n: any) => n.type?.name === 'SiteContextStrip' || n.type === 'SiteContextStrip'
+    || (typeof n.type === 'function' && /SiteContext/.test(n.type.name ?? ''));
+  const isDisclosure = (n: any) =>
+    typeof n.props?.children?.props?.title === 'string' && /sends site data/.test(
+      String(n.props?.children?.props?.children ?? ''),
+    );
+
+  it('on an empty session all three sit inside the centred column', () => {
+    const tree = makeChat([]).render();
+    const log = findLog(tree);
+    // The disclosure is not adjacent to what it discloses unless it is in the
+    // same block — that was the defect the composer move created.
+    expect(depthOf(log, isScope)).toBeGreaterThan(-1);
+    expect(depthOf(log, isDisclosure)).toBeGreaterThan(-1);
+  });
+
+  it('with a transcript all three sit at the bottom, together', () => {
+    const tree = makeChat([{ id: '1', role: 'user', content: 'hi' }]).render();
+    const log = findLog(tree);
+    expect(depthOf(log, isScope)).toBe(-1);        // not in the scroll area
+    expect(depthOf(tree, isScope)).toBeGreaterThan(-1);   // but on screen
+    expect(depthOf(tree, isDisclosure)).toBeGreaterThan(-1);
+  });
+
+  it('exactly one scope row and one disclosure in either state', () => {
+    const count = (tree: any, pred: (n: any) => boolean) => {
+      let n = 0;
+      const walk = (x: any) => {
+        if (!x || typeof x !== 'object') return;
+        if (Array.isArray(x)) return x.forEach(walk);
+        if (pred(x)) n += 1;
+        walk(x.props?.children);
+      };
+      walk(tree); return n;
+    };
+    for (const msgs of [[], [{ id: '1', role: 'user', content: 'hi' }]]) {
+      const tree = makeChat(msgs as any).render();
+      expect(count(tree, isScope)).toBe(1);
+      expect(count(tree, isDisclosure)).toBe(1);
+    }
+  });
+});
+
+describe('the disclosure never renders a raw config key', () => {
+  it('names WP Engine Power, not "power"', () => {
+    const chat = makeChat([]);
+    Object.assign(chat.state, { providerId: 'power', model: 'x' });
+    const joined = JSON.stringify(chat.render());
+    expect(joined).toMatch(/WP Engine Power · sends site data/);
+    expect(joined).not.toMatch(/"power · sends site data"/);
+  });
+
+  it('falls back to a phrase a person recognises for an id outside the union', () => {
+    const chat = makeChat([]);
+    Object.assign(chat.state, { providerId: 'some-stale-key', model: 'x' });
+    const joined = JSON.stringify(chat.render());
+    expect(joined).not.toMatch(/some-stale-key · sends/);
+    expect(joined).toMatch(/sends site data/);   // the disclosure itself survives
+  });
+});

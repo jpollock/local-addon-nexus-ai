@@ -9,93 +9,96 @@
       "overflow": "hidden"
     }
   },
-  "children": [
-    {
+  "children": {
+    "type": "div",
+    "key": null,
+    "props": {
+      "aria-live": "polite",
+      "data-nexus-chat": true,
+      "ref": {
+        "current": null
+      },
+      "style": {
+        "flex": 1,
+        "overflowY": "auto",
+        "padding": "0",
+        "display": "flex",
+        "flexDirection": "column",
+        "justifyContent": "center"
+      }
+    },
+    "children": {
       "type": "div",
       "key": null,
       "props": {
-        "aria-live": "polite",
-        "data-nexus-chat": true,
-        "ref": {
-          "current": null
-        },
         "style": {
-          "flex": 1,
-          "overflowY": "auto",
-          "padding": "0",
+          "maxWidth": 720,
+          "margin": "0 auto",
+          "padding": "12px 14px",
           "display": "flex",
           "flexDirection": "column",
-          "justifyContent": "center"
+          "gap": 10
         }
       },
-      "children": {
-        "type": "div",
-        "key": null,
-        "props": {
-          "style": {
-            "maxWidth": 720,
-            "margin": "0 auto",
-            "padding": "12px 14px",
-            "display": "flex",
-            "flexDirection": "column",
-            "gap": 10
-          }
-        },
-        "children": [
-          {
-            "type": "div",
-            "key": null,
-            "props": {
-              "data-panel-opening": "invitation",
-              "style": {
-                "padding": "8px 14px",
-                "color": "var(--nxai-card-sub)",
-                "textAlign": "center",
-                "fontSize": 13
-              }
-            },
-            "children": [
-              {
-                "type": "div",
-                "key": "headline",
-                "props": {
-                  "style": {
-                    "color": "var(--nxai-card-text)",
-                    "fontSize": 19,
-                    "fontWeight": 600,
-                    "marginBottom": 8
-                  }
-                },
-                "children": "What do you need?"
-              },
-              {
-                "type": "div",
-                "key": "promise",
-                "props": {
-                  "style": {
-                    "fontSize": 12.5,
-                    "lineHeight": 1.5,
-                    "maxWidth": 520,
-                    "margin": "0 auto"
-                  }
-                },
-                "children": "Answers come from what Nexus has read, each one dated and linked to the record it came from. Where it cannot verify something, it says so rather than guess."
-              },
-              {
-                "type": "div",
-                "key": "footnote",
-                "props": {
-                  "style": {
-                    "fontSize": 11,
-                    "marginTop": 10,
-                    "opacity": 0.85
-                  }
-                },
-                "children": "What gets done is filed against the runbook that did it, in Record."
-              }
-            ]
+      "children": [
+        {
+          "type": "div",
+          "key": null,
+          "props": {
+            "data-panel-opening": "invitation",
+            "style": {
+              "padding": "8px 14px",
+              "color": "var(--nxai-card-sub)",
+              "textAlign": "center",
+              "fontSize": 13
+            }
           },
-          {
+          "children": [
+            {
+              "type": "div",
+              "key": "headline",
+              "props": {
+                "style": {
+                  "color": "var(--nxai-card-text)",
+                  "fontSize": 19,
+                  "fontWeight": 600,
+                  "marginBottom": 8
+                }
+              },
+              "children": "What do you need?"
+            },
+            {
+              "type": "div",
+              "key": "promise",
+              "props": {
+                "style": {
+                  "fontSize": 12.5,
+                  "lineHeight": 1.5,
+                  "maxWidth": 520,
+                  "margin": "0 auto"
+                }
+              },
+              "children": "Answers come from what Nexus has read, each one dated and linked to the record it came from. Where it cannot verify something, it says so rather than guess."
+            },
+            {
+              "type": "div",
+              "key": "footnote",
+              "props": {
+                "style": {
+                  "fontSize": 11,
+                  "marginTop": 10,
+                  "opacity": 0.85
+                }
+              },
+              "children": "What gets done is filed against the runbook that did it, in Record."
+            }
+          ]
+        },
+        {
+          "type": "Unknown",
+          "key": "composer",
+          "props": {},
+          "children": {
             "type": "div",
             "key": null,
             "props": {
@@ -163,46 +166,45 @@
                 "children": "↑"
               }
             ]
-          },
-          []
-        ]
-      }
-    },
-    null,
-    {
-      "type": "SiteContextStrip",
-      "key": null,
-      "props": {
-        "mode": "none",
-        "onClear": "[fn]",
-        "onPick": "[fn]",
-        "siteName": null,
-        "sites": [],
-        "viewedSiteName": null
-      },
-      "children": null
-    },
-    {
-      "type": "div",
-      "key": null,
-      "props": {
-        "style": {
-          "padding": "3px 14px 6px",
-          "color": "var(--nxai-card-sub)",
-          "fontSize": 10,
-          "display": "flex",
-          "gap": 6,
-          "flexShrink": 0
-        }
-      },
-      "children": {
-        "type": "span",
-        "key": null,
-        "props": {
-          "title": "anthropic/claude-sonnet-5 · site names, versions and plugin lists are sent with your question. Destructive actions still need your confirmation."
+          }
         },
-        "children": "Claude · sends site data"
-      }
+        {
+          "type": "SiteContextStrip",
+          "key": "scope",
+          "props": {
+            "mode": "none",
+            "onClear": "[fn]",
+            "onPick": "[fn]",
+            "siteName": null,
+            "sites": [],
+            "viewedSiteName": null
+          },
+          "children": null
+        },
+        {
+          "type": "div",
+          "key": "disclosure",
+          "props": {
+            "style": {
+              "padding": "3px 14px 6px",
+              "color": "var(--nxai-card-sub)",
+              "fontSize": 10,
+              "display": "flex",
+              "gap": 6,
+              "flexShrink": 0
+            }
+          },
+          "children": {
+            "type": "span",
+            "key": null,
+            "props": {
+              "title": "anthropic/claude-sonnet-5 · site names, versions and plugin lists are sent with your question. Destructive actions still need your confirmation."
+            },
+            "children": "Claude · sends site data"
+          }
+        },
+        []
+      ]
     }
-  ]
+  }
 }

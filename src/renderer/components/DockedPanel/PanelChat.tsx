@@ -22,6 +22,7 @@ import type { CitationTurn } from './citationModel';
 import type { ChatSession, ChatMessage } from '../../../common/types';
 import type { ProcedureApprovalContext } from '../../../common/chat-types';
 import { NEW_CHAT_HEADLINE, NEW_CHAT_PROMISE, NEW_CHAT_FOOTNOTE, NEW_CHAT_PLACEHOLDER, NEW_CHAT_DISCLOSURE } from './newChatCopy.generated';
+import type { AIProvider } from '../../../common/types';
 
 const safeRenderer = new Renderer();
 // Suppress raw HTML passthrough — LLM output should never need raw HTML
@@ -281,16 +282,36 @@ function truncateAtWord(text: string, maxLen: number): string {
   return lastSpace > 0 ? trimmed.slice(0, lastSpace) : trimmed;
 }
 
-const PROVIDER_LABELS: Record<string, string> = {
+/**
+ * Provider labels for the P0-5 disclosure line.
+ *
+ * TYPED `Record<AIProvider, string>` ON PURPOSE. This map lost track of the
+ * union once already: `power` was added to `AIProvider` and not to this
+ * object, so `providerLabel` fell through to `?? id` and the disclosure read
+ * "power · sends site data" — a config key on the one line whose job is
+ * naming, recognisably, who receives the user's site data. A disclosure that
+ * names nothing a person recognises is the failure the line exists to
+ * prevent. With this type, the next provider added to the union is a COMPILE
+ * ERROR here rather than a key on screen.
+ */
+const PROVIDER_LABELS: Record<AIProvider, string> = {
   anthropic: 'Claude',
   openai: 'OpenAI',
   google: 'Gemini',
   ollama: 'Ollama',
   'local-gateway': 'Gateway',
+  power: 'WP Engine Power',
 };
 
+/**
+ * Never returns a raw config key. An id outside the union can still arrive
+ * from stale settings on disk, and the honest answer there is a phrase a
+ * person can act on ("your configured AI provider") rather than a token they
+ * have never seen — the disclosure still says data is being sent, which is
+ * the part that must not be lost.
+ */
 function providerLabel(id: string): string {
-  return PROVIDER_LABELS[id] ?? id;
+  return PROVIDER_LABELS[id as AIProvider] ?? 'your configured AI provider';
 }
 
 const TOOL_NAMES: Record<string, string> = {
@@ -1310,9 +1331,11 @@ export class PanelChat extends React.Component<Props, State> {
    * invitation in the top third, so the one thing you came to do was the
    * furthest thing from what you were reading.
    */
-  renderComposer(): React.ReactNode {
-    const { offline, input, streaming } = this.state;
-    return (
+  renderComposerBlock(): React.ReactNode[] {
+    const { offline, input, streaming, providerId, model } = this.state;
+    const providerName = providerLabel(providerId);
+    const modelName = model;
+    const composer = (
         offline
           ? React.createElement(
               'div',
@@ -1354,6 +1377,29 @@ export class PanelChat extends React.Component<Props, State> {
               ),
             )
     );
+
+    // The scope row and the disclosure BELONG TO THE COMPOSER, so they move
+    // with it. When the composer came up to the centre of an empty session and
+    // these two stayed pinned to the bottom, the line describing what the
+    // question is about — and the line naming who receives the data — sat some
+    // 340px below the field they describe. For a P0-5 disclosure that is worse
+    // than where it started: adjacency IS the disclosure.
+    return [
+      React.createElement(React.Fragment, { key: 'composer' }, composer),
+      React.createElement(SiteContextStrip, { key: 'scope', ...this.props.siteContext }),
+      React.createElement(
+        'div',
+        {
+          key: 'disclosure',
+          style: { padding: '3px 14px 6px', color: 'var(--nxai-card-sub)', fontSize: 10, display: 'flex', gap: 6, flexShrink: 0 },
+        },
+        React.createElement(
+          'span',
+          { title: `${providerId}/${modelName} · ${NEW_CHAT_DISCLOSURE.tooltip.split('· ').slice(1).join('· ')}` },
+          `${providerName} · sends site data`,
+        ),
+      ),
+    ];
   }
 
 
@@ -1387,7 +1433,7 @@ export class PanelChat extends React.Component<Props, State> {
           // The composer sits HERE while the session is empty — directly under
           // the invitation — and moves to the bottom on the first turn, when
           // there is finally a transcript for it to sit under.
-          messages.length === 0 ? this.renderComposer() : null,
+          ...(messages.length === 0 ? this.renderComposerBlock() : []),
           messages.map((m) => this.renderMessage(m)),
           // The empty run's derived plan, attached where the refusal turn is.
           ...this.renderProcedurePlan(),
@@ -1400,29 +1446,7 @@ export class PanelChat extends React.Component<Props, State> {
       // WP-41 · the comparator, spread from an array — empty when there is
       // nothing to compare, so a user it cannot serve sees the panel unchanged.
       ...this.renderComparator(),
-      messages.length === 0 ? null : this.renderComposer(),
-      // §5 · "Below the composer, the scope line." A question with no stated
-      // subject is this panel's most common failure, and the band that states it
-      // is the one that already knew the answer — moved, not duplicated. A
-      // second scope surface would be two answers to "what am I asking about".
-      React.createElement(SiteContextStrip, this.props.siteContext),
-      React.createElement(
-        'div',
-        { style: { padding: '3px 14px 6px', color: 'var(--nxai-card-sub)', fontSize: 10, display: 'flex', gap: 6, flexShrink: 0 } },
-        // P0-5 disclosure: name the data flow, not just the model. Tooltip carries the detail.
-        // P0-5, amended 2026-08-25 with the disclosure kept intact. The
-        // PROVIDER and the PAYLOAD stay visible — they name who receives what,
-        // which is the disclosure's substance. The model VERSION moves into
-        // the tooltip: it is the part a person cannot act on and it changes
-        // without them. The sheet's earlier absence said "no model identifier
-        // in the footer", which read as "no disclosure"; this split is the
-        // correction, and the confirmation rule rides the tooltip with it.
-        React.createElement(
-          'span',
-          { title: `${providerId}/${modelName} · ${NEW_CHAT_DISCLOSURE.tooltip.split('· ').slice(1).join('· ')}` },
-          `${providerName} · sends site data`,
-        ),
-      ),
+      ...(messages.length === 0 ? [] : this.renderComposerBlock()),
     );
   }
 }

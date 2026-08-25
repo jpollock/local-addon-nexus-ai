@@ -746,10 +746,16 @@ describe('pin 8 · a plan of zero cells opens no container', () => {
     });
     instance.state = { ...instance.state, procedure: { procedure: emptyRun(), abort: null } };
     const tree: any = render(instance);
+    // fixes-082526: on an EMPTY session the composer block moved inside the
+    // centred column, so the panel can now have a single top-level child and
+    // React hands back that child rather than an array. Normalise before
+    // reading — the assertion below is unchanged, and it is about WHERE the
+    // procedure node is, not how many siblings it happens to have.
+    const topLevel: any[] = Array.isArray(tree.children) ? tree.children : [tree.children];
     // Not pinned: no procedure node among the panel's own top-level children…
-    expect(tree.children.map((c: any) => c?.type)).not.toContain('ProcedureSurfaces');
+    expect(topLevel.map((c: any) => c?.type)).not.toContain('ProcedureSurfaces');
     // …and present inside the transcript, where the turns are.
-    const transcript = tree.children.find((c: any) => c?.props?.['data-nexus-chat']);
+    const transcript = topLevel.find((c: any) => c?.props?.['data-nexus-chat']);
     const inFlow = walk(transcript).filter((n: any) => n?.type === 'ProcedureSurfaces');
     expect(inFlow).toHaveLength(1);
     expect(inFlow[0].key).toBe('procedure-plan');
