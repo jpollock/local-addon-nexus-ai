@@ -18,6 +18,7 @@
  */
 import * as React from 'react';
 import { KNOWLEDGE_LABELS, STATE_SENTENCES } from '../../../main/fleet/knowledgeLadder';
+import type { KnowledgeRung } from '../../../main/fleet/knowledgeLadder';
 import type { FleetCollapse, PropertyView, PlaceView, CheckedView } from '../../../main/fleet/fleetCollapse';
 import { reasonBlame } from '../../../main/fleet/fleetCollapse';
 import type { BulkJobView } from './SitesTab';
@@ -79,8 +80,21 @@ export function removeChipFromFilters(
   return next;
 }
 
+/** One selectable value on an axis, and what picking it does. */
+interface AxisValue { label: string; picked: boolean; apply: () => void }
+/**
+ * One tab in the Add-a-filter panel. `facet` = enumerable from the fleet;
+ * `fixed` = a closed set the product defines. Exactly one of the two.
+ */
+interface AxisDef {
+  key: string;
+  label: string;
+  facet?: 'plugins' | 'themes' | 'phpVersions' | 'wpVersions';
+  fixed?: AxisValue[];
+}
+
 type OriginFilter = 'all' | 'local' | 'wpe' | 'external';
-type StateFilter = 'all' | 'nothing' | 'copy' | 'attention' | 'ceiling';
+type StateFilter = 'all' | 'nothing' | 'on-machine' | 'attention' | 'ceiling';
 
 interface PropertiesTabProps {
   /** False until the first GET_FLEET_COLLAPSE response has landed. */
@@ -139,8 +153,16 @@ interface PropertiesTabState {
   /** Board F: the interpreter's question, with the facet whose menu opens beneath it. */
   clarify: { question: string; facet: string | null; forText: string } | null;
   /** The Add-a-filter menu: which axis's values are open, if any. */
-  menuAxis: 'plugins' | 'themes' | 'phpVersions' | 'wpVersions' | null;
+  menuAxis: string | null;
   menuOpen: boolean;
+  /** Round-9: an axis with more than five values searches within itself. */
+  menuFilter: string;
+  /**
+   * Round-9: Depth is an axis the panel offers, and the `nothing` rung already
+   * has a control (the state segment) — so this holds the OTHER three only,
+   * and the two are kept mutually exclusive wherever either is set.
+   */
+  rung: KnowledgeRung | null;
 }
 
 const ORIGIN_LABELS: Array<{ key: OriginFilter; label: string }> = [
@@ -154,7 +176,7 @@ const STATE_LABELS: Array<{ key: StateFilter; label: string }> = [
   { key: 'all', label: 'All' },
   { key: 'attention', label: 'Needs you' },
   { key: 'nothing', label: STATE_SENTENCES.neverLookedInside },
-  { key: 'copy', label: 'Has a copy here' },
+  { key: 'on-machine', label: 'On your machine' },
   { key: 'ceiling', label: 'At its ceiling' },
 ];
 
@@ -229,7 +251,7 @@ function checkedText(c: CheckedView, labelOldest: boolean, short = false): strin
 function matchesState(p: PropertyView, state: StateFilter): boolean {
   if (state === 'ceiling') return p.places.some((pl) => pl.ceiling !== null);
   if (state === 'nothing') return p.rungs.includes('nothing');
-  if (state === 'copy') return p.hasCopy || p.origin === 'local';
+  if (state === 'on-machine') return p.hasCopy || p.origin === 'local';
   if (state === 'attention')
     return p.oldest.state === 'fail' || p.collision || p.rungs.includes('nothing') || p.places.some((pl) => pl.ceiling !== null);
   return true;
@@ -238,7 +260,7 @@ function matchesState(p: PropertyView, state: StateFilter): boolean {
 export class PropertiesTab extends React.Component<PropertiesTabProps, PropertiesTabState> {
   constructor(props: PropertiesTabProps) {
     super(props);
-    this.state = { origin: 'all', state: 'all', query: '', open: {}, view: null, sortBy: 'consequence', armed: false, armedAt: null, removed: {}, declineStart: false, interp: null, interpreting: false, clarify: null, menuAxis: null, menuOpen: false };
+    this.state = { origin: 'all', state: 'all', query: '', open: {}, view: null, sortBy: 'consequence', armed: false, armedAt: null, removed: {}, declineStart: false, interp: null, interpreting: false, clarify: null, menuAxis: null, menuOpen: false, menuFilter: '', rung: null };
   }
 
   /**
@@ -566,6 +588,19 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
 
     if (!this.props.onBulkIndex || inView.length === 0) return null;
 
+    // Round-9: the offer belongs to a NARROWED view. On the unfiltered list
+    // "Read them" would mean the whole fleet, which is not a scope anyone
+    // chose — the filter is the selector, so with no filter there is no
+    // selection. Once armed it stays up, so clearing a filter mid-decision
+    // does not yank the declaration out from under the user.
+    const isNarrowed =
+      this.state.origin !== 'all' ||
+      this.state.state !== 'all' ||
+      this.state.rung !== null ||
+      this.state.interp !== null ||
+      this.state.query.trim() !== '';
+    if (!isNarrowed && !this.state.armed) return null;
+
     // ONE derivation for every figure below (the no-count-stated-twice rule).
     const allPlaces = inView.flatMap(({ p }) => p.places.map((pl) => ({ p, pl })));
     const scope = allPlaces.filter(({ pl }) => !this.state.removed[pl.rowId]);
@@ -584,7 +619,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
         h('span', {
           style: { ...btn(true), marginLeft: 'auto', marginRight: 0 },
           onClick: () => this.setState({ armed: true, armedAt: Date.now(), removed: {}, declineStart: false }),
-        }, 'Arm'),
+        }, 'Read them'),
       );
     }
 
@@ -641,12 +676,113 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
     );
   }
 
+  /**
+   * Round-9: the panel offers every axis this view can actually filter on —
+   * thirteen, not four.
+   *
+   * Four are ENUMERABLE: their values are whatever the fleet happens to hold,
+   * so they come from `filterOptions` and carry counts where counts exist. The
+   * rest are FIXED: their values are a closed set the product defines, so they
+   * are written here rather than derived from data (a boolean axis whose value
+   * list came from the fleet would silently lose `false` the day nothing in the
+   * fleet was false).
+   *
+   * `source` and `depth` APPLY THROUGH THE CONTROLS THAT ALREADY OWN THEM —
+   * the origin segment and the state segment / rung — instead of minting a
+   * second chip beside them. That is the same one-control-per-axis rule
+   * `applyFilters` follows for `source` when the interpreter returns it.
+   */
+  private axes(): AxisDef[] {
+    const f = (this.state.interp?.filters ?? {}) as Record<string, any>;
+    const bool = (key: string, yes: string, no: string): AxisValue[] => [
+      { label: yes, picked: f[key] === true, apply: () => void this.applyFilters({ ...f, [key]: true }) },
+      { label: no, picked: f[key] === false, apply: () => void this.applyFilters({ ...f, [key]: false }) },
+    ];
+    const RUNGS: KnowledgeRung[] = ['nothing', 'basic', 'detailed', 'searchable'];
+    return [
+      { key: 'plugins', label: 'Plugins', facet: 'plugins' },
+      { key: 'themes', label: 'Themes', facet: 'themes' },
+      { key: 'phpVersions', label: 'PHP', facet: 'phpVersions' },
+      { key: 'wpVersions', label: 'WordPress', facet: 'wpVersions' },
+      {
+        key: 'depth', label: 'Depth',
+        fixed: RUNGS.map((r) => ({
+          label: KNOWLEDGE_LABELS[r],
+          picked: r === 'nothing' ? this.state.state === 'nothing' : this.state.rung === r,
+          // `nothing` already has a segment; the other three get the rung.
+          // Setting either clears the other, so exactly one is ever lit.
+          apply: () => (r === 'nothing'
+            ? this.setState({ state: 'nothing', rung: null, menuOpen: false })
+            : this.setState({ rung: r, state: this.state.state === 'nothing' ? 'all' : this.state.state, menuOpen: false })),
+        })),
+      },
+      {
+        key: 'source', label: 'Where it lives',
+        fixed: ORIGIN_LABELS.filter((o) => o.key !== 'all').map((o) => ({
+          label: o.label,
+          picked: this.state.origin === o.key,
+          apply: () => this.setState({ origin: o.key, menuOpen: false }),
+        })),
+      },
+      {
+        key: 'wpeEnvironment', label: 'Environment',
+        fixed: ['production', 'staging', 'development'].map((v) => ({
+          label: v,
+          picked: f.wpeEnvironment === v,
+          apply: () => void this.applyFilters({ ...f, wpeEnvironment: v }),
+        })),
+      },
+      {
+        key: 'phpEolOnly', label: 'PHP end of life',
+        // One value, not two: "not past end of life" is not a thing anyone
+        // asks for, and the interpreter has no filter for it.
+        fixed: [{
+          label: 'Past end of life',
+          picked: f.phpEolOnly === true,
+          apply: () => void this.applyFilters({ ...f, phpEolOnly: true }),
+        }],
+      },
+      { key: 'commentsDisabled', label: 'Comments', fixed: bool('commentsDisabled', 'Disabled', 'Enabled') },
+      { key: 'hiddenFromSearch', label: 'Search engines', fixed: bool('hiddenFromSearch', 'Discouraged', 'Allowed') },
+      { key: 'selfRegistrationOpen', label: 'Registration', fixed: bool('selfRegistrationOpen', 'Open', 'Closed') },
+      { key: 'staticFrontPage', label: 'Front page', fixed: bool('staticFrontPage', 'Static page', 'Blog roll') },
+      { key: 'plainPermalinks', label: 'Permalinks', fixed: bool('plainPermalinks', 'Plain', 'Pretty') },
+    ];
+  }
+
+  /** The values behind one axis tab, whichever kind it is. */
+  private axisValues(a: AxisDef): Array<AxisValue & { count: number | null }> {
+    if (!a.facet) return (a.fixed ?? []).map((v) => ({ ...v, count: null }));
+    const picked = ((this.state.interp?.filters as any)?.[a.facet] ?? []) as string[];
+    return this.facetValues(a.facet).map((v) => ({
+      label: v.value,
+      count: v.count,
+      picked: picked.indexOf(v.value) !== -1,
+      apply: () => this.pickFacetValue(a.facet!, v.value),
+    }));
+  }
+
+  /**
+   * Round-9: opening the panel must land on VALUES, not on the sentence
+   * saying what the panel cannot do. Default to the first axis that has any.
+   */
+  private openMenu = (): void => {
+    const first = this.axes().find((a) => this.axisValues(a).length > 0);
+    this.setState({ menuOpen: true, menuAxis: first ? first.key : null, menuFilter: '' });
+  };
+
   private facetValues(axis: 'plugins' | 'themes' | 'phpVersions' | 'wpVersions'): Array<{ value: string; count: number | null }> {
     const o = this.props.filterOptions;
     if (!o) return [];
     const counts: Record<string, number> | undefined =
       axis === 'plugins' ? o.pluginCounts : axis === 'wpVersions' ? o.wpVersionCounts : undefined;
-    return (o[axis] ?? []).map((v) => ({ value: v, count: counts?.[v] ?? null }));
+    const vals = (o[axis] ?? []).map((v) => ({ value: v, count: counts?.[v] ?? null }));
+    // Round-9: where a count exists it IS the order. Version order put twelve
+    // one-property versions above `7.0.4 269` — a list sorted by a key nobody
+    // is choosing on, which hides its own answer in the tail. An axis with no
+    // counts keeps the order it was given; there is nothing to rank it by.
+    if (!counts) return vals;
+    return vals.slice().sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.value.localeCompare(b.value));
   }
 
   /**
@@ -663,20 +799,62 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       borderRadius: 6, fontSize: 12, border: '1px solid var(--nxai-card-border)',
       background: 'var(--nxai-card-bg)', color: 'var(--nxai-card-text)', marginRight: 6,
     };
-    const AXES: Array<{ key: 'plugins' | 'themes' | 'phpVersions' | 'wpVersions'; label: string }> = [
-      { key: 'plugins', label: 'Plugins' }, { key: 'themes', label: 'Themes' },
-      { key: 'phpVersions', label: 'PHP' }, { key: 'wpVersions', label: 'WordPress' },
-    ];
-    const valueList = (axis: 'plugins' | 'themes' | 'phpVersions' | 'wpVersions'): React.ReactNode =>
-      h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 } },
-        ...this.facetValues(axis).slice(0, 40).map(({ value, count }) =>
-          h('span', {
-            key: value,
-            onClick: () => this.pickFacetValue(axis, value),
-            style: { ...chipStyle, cursor: 'pointer', color: 'var(--nxai-card-sub)' },
-          }, value, count !== null ? h('span', { style: { marginLeft: 5, fontSize: 11 } }, String(count)) : null),
+    const AXES = this.axes();
+    const CAP = 40;
+    const sub: React.CSSProperties = { fontSize: 11, color: 'var(--nxai-card-sub)' };
+
+    /**
+     * One axis's values. Round-9: the panel STATES ITS TOTAL (a chip cloud
+     * with no total does not say whether you are looking at all of it), and
+     * above five values it SEARCHES WITHIN ITSELF rather than making the
+     * reader scan 812 plugins. The cap is stated, never silent.
+     */
+    const valuePanel = (a: AxisDef): React.ReactNode => {
+      const all = this.axisValues(a);
+      const needle = this.state.menuFilter.trim().toLowerCase();
+      const shown = needle ? all.filter((v) => v.label.toLowerCase().includes(needle)) : all;
+      const capped = shown.slice(0, CAP);
+      return h('div', { key: `panel-${a.key}` },
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, ...sub } },
+          h('span', null, `${a.label} · ${all.length} value${all.length === 1 ? '' : 's'}`),
+          all.length > 5
+            ? h('input', {
+                value: this.state.menuFilter,
+                placeholder: `Search ${a.label.toLowerCase()}`,
+                onChange: (e: React.ChangeEvent<HTMLInputElement>) => this.setState({ menuFilter: e.target.value }),
+                style: {
+                  fontSize: 11, padding: '3px 8px', minWidth: 160,
+                  border: '1px solid var(--nxai-input-border)', borderRadius: 6,
+                  background: 'var(--nxai-input-bg)', color: 'var(--nxai-card-text)',
+                },
+              })
+            : null,
+          needle ? h('span', null, `${shown.length} match${shown.length === 1 ? '' : 'es'}`) : null,
         ),
+        capped.length === 0
+          ? h('div', { style: { ...sub, marginTop: 6 } },
+              needle ? `No ${a.label.toLowerCase()} value matches “${this.state.menuFilter.trim()}”.` : 'No values on this axis.')
+          : h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 } },
+              ...capped.map((v) =>
+                h('span', {
+                  key: v.label,
+                  onClick: v.apply,
+                  style: {
+                    ...chipStyle, cursor: 'pointer', marginRight: 0,
+                    color: v.picked ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)',
+                    fontWeight: v.picked ? 700 : 400,
+                    borderColor: v.picked ? 'var(--nxai-action)' : 'var(--nxai-card-border)',
+                  },
+                }, v.label,
+                  v.count !== null ? h('span', { style: { marginLeft: 5, fontSize: 11 } }, String(v.count)) : null),
+              ),
+            ),
+        shown.length > capped.length
+          ? h('div', { style: { ...sub, marginTop: 6 } },
+              `showing the first ${capped.length} of ${shown.length} — search above to narrow`)
+          : null,
       );
+    };
 
     const parts: React.ReactNode[] = [];
 
@@ -700,22 +878,29 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
           : null,
         h('span', { style: { position: 'absolute' as const, right: 10, top: 10 } },
           this.closeGlyph(() => this.setState({ clarify: null }))),
-        clarify.facet && ['plugins', 'themes', 'phpVersions', 'wpVersions'].indexOf(clarify.facet) !== -1
-          ? valueList(clarify.facet as 'plugins')
+        clarify.facet && AXES.some((a) => a.key === clarify.facet)
+          ? valuePanel(AXES.find((a) => a.key === clarify.facet)!)
           : null,
       ));
     }
 
     const chips = interp ? filtersToChips(interp.filters) : [];
-    if (chips.length > 0 || this.props.filterOptions) {
+    if (chips.length > 0 || this.state.rung || this.props.filterOptions) {
       parts.push(h('div', { key: 'chips', style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, padding: '0 12px 8px' } },
+        // The Depth pick is a clause like any other, so it is removable like
+        // any other. `nothing` is not here — its control is the state segment.
+        this.state.rung
+          ? h('span', { key: 'rung', style: chipStyle },
+              `Depth: ${KNOWLEDGE_LABELS[this.state.rung]}`,
+              this.closeGlyph(() => this.setState({ rung: null })))
+          : null,
         ...chips.map((c) =>
           h('span', { key: `${c.key}:${c.value ?? ''}`, style: chipStyle },
             c.label, this.closeGlyph(() => this.removeChip(c)))),
         this.props.filterOptions
           ? h('span', {
               style: { fontSize: 12, color: 'var(--nxai-accent)', cursor: 'pointer', fontWeight: 600 },
-              onClick: () => this.setState({ menuOpen: !menuOpen, menuAxis: null }),
+              onClick: () => (menuOpen ? this.setState({ menuOpen: false }) : this.openMenu()),
             }, '+ Add a filter')
           : null,
         interp && interp.ids === null
@@ -729,16 +914,23 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
         key: 'menu',
         style: { margin: '0 12px 10px', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--nxai-card-border)', background: 'var(--nxai-card-bg)' },
       },
-        h('div', { style: { display: 'flex', gap: 8 } },
+        h('div', { style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 10, rowGap: 4 } },
           ...AXES.map((a) =>
             h('span', {
               key: a.key,
-              onClick: () => this.setState({ menuAxis: a.key }),
+              // Switching axis clears the within-axis search: it belongs to
+              // the axis you are looking at, not to the panel.
+              onClick: () => this.setState({ menuAxis: a.key, menuFilter: '' }),
               style: { fontSize: 12, cursor: 'pointer', fontWeight: menuAxis === a.key ? 700 : 400, color: menuAxis === a.key ? 'var(--nxai-card-text)' : 'var(--nxai-card-sub)' },
             }, a.label)),
-          h('span', { style: { marginLeft: 'auto' } }, this.closeGlyph(() => this.setState({ menuOpen: false, menuAxis: null }))),
+          h('span', { style: { marginLeft: 'auto' } }, this.closeGlyph(() => this.setState({ menuOpen: false, menuAxis: null, menuFilter: '' }))),
         ),
-        menuAxis ? valueList(menuAxis) : h('div', { style: { fontSize: 11, color: 'var(--nxai-card-sub)', marginTop: 4 } },
+        menuAxis && AXES.some((a) => a.key === menuAxis)
+          ? valuePanel(AXES.find((a) => a.key === menuAxis)!)
+          : null,
+        // Round-9: what the panel cannot do is a FOOTNOTE, not the thing it
+        // opens on. The panel opens on the first axis that has values.
+        h('div', { style: { ...sub, marginTop: 8, paddingTop: 6, borderTop: '1px solid var(--nxai-card-border)' } },
           'Thresholds, dates and content have no fixed values — describe those in the field above.'),
       ));
     }
@@ -882,7 +1074,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
     }
 
     const { header } = collapse;
-    const { origin, state, query, sortBy } = this.state;
+    const { origin, state, query, sortBy, rung } = this.state;
     const q = query.trim().toLowerCase();
 
     const inView: Array<{ p: PropertyView; outside: boolean }> = [];
@@ -894,7 +1086,11 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
       if (!matchesQ) continue;
       const ids = this.state.interp?.ids;
       const inInterp = !ids || p.places.some((pl) => ids.includes(pl.rowId));
-      const inFilter = inInterp && (origin === 'all' || p.origin === origin) && matchesState(p, state);
+      const inFilter =
+        inInterp &&
+        (origin === 'all' || p.origin === origin) &&
+        matchesState(p, state) &&
+        (rung === null || p.rungs.includes(rung));
       if (!inFilter && !q) continue;
       inView.push({ p, outside: !inFilter });
     }
@@ -905,6 +1101,7 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
     const fromParts: string[] = [];
     if (origin !== 'all') fromParts.push(ORIGIN_LABELS.find((o) => o.key === origin)!.label);
     if (state !== 'all') fromParts.push(`“${STATE_LABELS.find((sl) => sl.key === state)!.label}”`);
+    if (rung) fromParts.push(`“${KNOWLEDGE_LABELS[rung]}”`);
     if (q) fromParts.push(`search “${query.trim()}”`);
     const fromLabel = fromParts.length ? `your ${fromParts.join(' · ')} view` : 'the full list';
     inView.sort((a, b) => {
@@ -1008,9 +1205,10 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
             }, o.key === 'all' ? `${o.label} ${header.total}` : `${o.label} ${header.byOrigin[o.key as 'local' | 'wpe' | 'external']}`),
           ),
         ),
-        // The partition note: the fact that makes it a partition.
-        h('span', { style: { fontSize: 11, color: 'var(--nxai-card-sub)' } },
-          `${header.byOrigin.local} + ${header.byOrigin.wpe} + ${header.byOrigin.external} = ${header.total}`),
+        // Round-9: no partition equation. The four segment counts already
+        // stand next to each other; spelling out `25 + 267 + 3 = 295` beside
+        // them is the same arithmetic a second time, and it read as a fifth
+        // figure rather than as the property of the four.
         ...STATE_LABELS.map((sl) =>
           h('span', {
             key: `s-${sl.key}`, style: stateBtn(state === sl.key),

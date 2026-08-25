@@ -131,3 +131,96 @@ describe('the interpretation flow', () => {
     expect(t).not.toContain('Ask/Tell');
   });
 });
+
+describe('designer round-9 — the Add-a-filter panel', () => {
+  // 812-plugin shape in miniature: a long tail of singletons and one that
+  // most of the fleet carries.
+  const OPTIONS = {
+    plugins: ['aa-solo', 'bb-solo', 'cc-solo', 'dd-solo', 'ee-solo', 'ff-solo', 'akismet'],
+    pluginCounts: { 'aa-solo': 1, 'bb-solo': 1, 'cc-solo': 1, 'dd-solo': 1, 'ee-solo': 1, 'ff-solo': 1, akismet: 269 },
+    themes: ['twentytwentyfour'],
+    phpVersions: ['7.4', '8.1'],
+    wpVersions: ['6.8', '7.0.4'],
+    wpVersionCounts: { '6.8': 3, '7.0.4': 269 },
+  };
+  const mk = (over: any = {}) => {
+    const i: any = new (PropertiesTab as any)(props(collapse([property()]), { filterOptions: OPTIONS, ...over }));
+    i.setState = (u: any) => { Object.assign(i.state, typeof u === 'function' ? u(i.state) : u); };
+    return i;
+  };
+
+  test('facet values are ordered by count, not by how the string sorts', () => {
+    const inst = mk();
+    const plugins = inst.facetValues('plugins').map((v: any) => v.value);
+    expect(plugins[0]).toBe('akismet');                      // 269, not 'aa-solo'
+    expect(plugins.slice(1)).toEqual(['aa-solo', 'bb-solo', 'cc-solo', 'dd-solo', 'ee-solo', 'ff-solo']);
+    // wpVersions too: the version everything is on leads, not the lowest string
+    expect(inst.facetValues('wpVersions').map((v: any) => v.value)).toEqual(['7.0.4', '6.8']);
+    // An axis with no counts keeps the order it was given — nothing to rank by
+    expect(inst.facetValues('phpVersions').map((v: any) => v.value)).toEqual(['7.4', '8.1']);
+  });
+
+  test('the panel opens on the first axis with values, never on its own limitation', () => {
+    const inst = mk();
+    inst.openMenu();
+    expect(inst.state.menuAxis).toBe('plugins');
+    const t = tree(inst);
+    expect(t).toContain('akismet');
+    // the sentence about what the panel cannot do survives — as a footnote
+    expect(t).toContain('Thresholds, dates and content have no fixed values');
+  });
+
+  test('every axis panel states its total, and searches within itself above five values', () => {
+    const inst = mk();
+    inst.openMenu();
+    expect(tree(inst)).toContain('Plugins · 7 values');
+    expect(tree(inst)).toContain('Search plugins');          // 7 > 5 → its own search
+    inst.state.menuFilter = 'solo';
+    const filtered = tree(inst);
+    expect(filtered).toContain('6 matches');
+    expect(filtered).not.toContain('akismet');
+    // an axis at or below five values states its total and offers no search
+    inst.state.menuAxis = 'phpVersions';
+    inst.state.menuFilter = '';
+    const small = tree(inst);
+    expect(small).toContain('PHP · 2 values');
+    expect(small).not.toContain('Search php');
+  });
+
+  test('the panel offers every axis this view filters on — not only the four enumerable ones', () => {
+    const keys = mk().axes().map((a: any) => a.key);
+    expect(keys).toEqual([
+      'plugins', 'themes', 'phpVersions', 'wpVersions',
+      'depth', 'source', 'wpeEnvironment', 'phpEolOnly',
+      'commentsDisabled', 'hiddenFromSearch', 'selfRegistrationOpen',
+      'staticFrontPage', 'plainPermalinks',
+    ]);
+    // A boolean axis carries BOTH sides — its values are the product's closed
+    // set, never whatever the fleet happens to hold today.
+    const comments = mk().axes().find((a: any) => a.key === 'commentsDisabled');
+    expect(comments.fixed.map((v: any) => v.label)).toEqual(['Disabled', 'Enabled']);
+  });
+
+  test('Depth applies through the controls that already own it, and is removable', () => {
+    const inst = mk();
+    const depth = inst.axes().find((a: any) => a.key === 'depth');
+    // `nothing` has a segment already — it presses that, and mints no rung
+    depth.fixed.find((v: any) => v.label === 'Never looked inside').apply();
+    expect(inst.state.state).toBe('nothing');
+    expect(inst.state.rung).toBeNull();
+    // any other rung sets the rung AND releases the segment — one lit at a time
+    inst.axes().find((a: any) => a.key === 'depth').fixed
+      .find((v: any) => v.label === 'Detailed').apply();
+    expect(inst.state.rung).toBe('detailed');
+    expect(inst.state.state).toBe('all');
+    expect(tree(inst)).toContain('Depth: Detailed');
+  });
+
+  test('the source axis presses the origin segment rather than minting a second chip', () => {
+    const inst = mk();
+    inst.axes().find((a: any) => a.key === 'source').fixed
+      .find((v: any) => v.label === 'WP Engine').apply();
+    expect(inst.state.origin).toBe('wpe');
+    expect(tree(inst)).not.toContain('Source: WP Engine');
+  });
+});

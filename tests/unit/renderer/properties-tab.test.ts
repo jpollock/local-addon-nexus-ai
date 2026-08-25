@@ -447,14 +447,21 @@ describe('designer round-6', () => {
     expect(withDoor).toContain('Add a site');
   });
 
-  test('the partition note states the arithmetic that makes Where a partition', () => {
+  test('round-9: Where carries the four counts and NOT the equation restating them', () => {
     const t = rendered(collapse([
       property(),
       property({ key: 'local:L1', origin: 'local', name: 'solo',
         places: [place({ rowId: 'L1', source: 'local', kind: 'local' })] }),
     ]));
-    expect(t).toContain('1 + 1 + 0 = 2');
     expect(t).toContain('Where');
+    // The partition is visible in the segments themselves…
+    expect(t).toContain('Everywhere 2');
+    expect(t).toContain('Your machine 1');
+    expect(t).toContain('WP Engine 1');
+    expect(t).toContain('External 0');
+    // …and the same arithmetic is not spelled out a second time beside them.
+    expect(t).not.toContain('1 + 1 + 0 = 2');
+    expect(t).not.toMatch(/\d+ \+ \d+ \+ \d+ = \d+/);
   });
 
   test('a group row shows the host SET, not a count of it', () => {
@@ -506,6 +513,10 @@ describe('sheet 18 — bulk indexing', () => {
 
   function inst(c: FleetCollapse, extra: any = {}, mutate?: (i: any) => void) {
     const i: any = new (PropertiesTab as any)(props(c, bulkProps(extra)));
+    // Round-9: the offer belongs to a NARROWED view, so every bulk test
+    // narrows. Both fixture properties are origin 'wpe', so this keeps the
+    // whole set in view while making the view a chosen one.
+    i.state.origin = 'wpe';
     if (mutate) mutate(i);
     return i;
   }
@@ -515,11 +526,26 @@ describe('sheet 18 — bulk indexing', () => {
     const t = tree(inst(collapse(twoProps())));
     expect(t).toContain('3 places');
     expect(t).toContain('2 properties');
-    expect(t).toContain('from the full list');
-    expect(t).toContain('Arm');
-    // no dispatch path → no offer
-    const bare = rendered(collapse(twoProps()));
-    expect(bare).not.toContain('Arm');
+    expect(t).toContain('from your WP Engine view');
+    expect(t).toContain('Read them');
+    // no dispatch path → no offer, even narrowed
+    const bare: any = new (PropertiesTab as any)(props(collapse(twoProps())));
+    bare.state.origin = 'wpe';
+    expect(JSON.stringify(serializeTree(bare.render()))).not.toContain('Read them');
+  });
+
+  test('round-9: no offer on the unfiltered list — the filter IS the selector', () => {
+    const wide: any = new (PropertiesTab as any)(props(collapse(twoProps()), bulkProps()));
+    expect(JSON.stringify(serializeTree(wide.render()))).not.toContain('Read them');
+    // any one narrowing brings it back
+    wide.state.state = 'attention';
+    expect(JSON.stringify(serializeTree(wide.render()))).toContain('Read them');
+    wide.state.state = 'all';
+    wide.state.rung = 'basic';
+    expect(JSON.stringify(serializeTree(wide.render()))).toContain('Read them');
+    wide.state.rung = null;
+    wide.state.query = 'ben';
+    expect(JSON.stringify(serializeTree(wide.render()))).toContain('Read them');
   });
 
   test('no checkboxes before arming; checkboxes after (refinement comes after arming)', () => {
@@ -588,7 +614,7 @@ describe('sheet 18 — bulk indexing', () => {
     const t = tree(running);
     expect(t).toContain('181 of 413 places');
     expect(t).toContain('Stop');
-    expect(t).not.toContain('Arm'); // the offer yields while a job exists
+    expect(t).not.toContain('Read them'); // the offer yields while a job exists
 
     const done = inst(collapse(twoProps()), {
       job: { phase: 'done', type: 'reindex', siteIds: [], startedAt: 1, completed: 413, total: 413, failed: 2, failedIds: [] },
