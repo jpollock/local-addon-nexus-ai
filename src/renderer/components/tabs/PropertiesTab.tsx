@@ -125,7 +125,8 @@ interface PropertiesTabProps {
   filterOptions?: {
     plugins: string[]; pluginCounts?: Record<string, number>;
     wpVersions: string[]; wpVersionCounts?: Record<string, number>;
-    phpVersions: string[]; themes: string[];
+    phpVersions: string[];
+    themes: string[]; themeCounts?: Record<string, number>;
   } | null;
   /** The no-dead-end door: hand the unresolved text to the composer. */
   onOpenComposer?: (text: string) => void;
@@ -775,7 +776,10 @@ export class PropertiesTab extends React.Component<PropertiesTabProps, Propertie
     const o = this.props.filterOptions;
     if (!o) return [];
     const counts: Record<string, number> | undefined =
-      axis === 'plugins' ? o.pluginCounts : axis === 'wpVersions' ? o.wpVersionCounts : undefined;
+      axis === 'plugins' ? o.pluginCounts
+        : axis === 'wpVersions' ? o.wpVersionCounts
+        : axis === 'themes' ? o.themeCounts
+        : undefined;
     const vals = (o[axis] ?? []).map((v) => ({ value: v, count: counts?.[v] ?? null }));
     // Round-9: where a count exists it IS the order. Version order put twelve
     // one-property versions above `7.0.4 269` — a list sorted by a key nobody

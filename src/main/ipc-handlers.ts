@@ -305,6 +305,7 @@ import type { CadenceSettings } from './agent-runtime/schedule';
 import { newRunId } from './logging/runId';
 import type { EventLog } from './logging/eventLog';
 import { asLevel } from './logging/resolveLogLevel';
+import { collectThemeFacet } from './fleet/filterOptions';
 
 // Shared agent settings — populated by AGENT_SETTINGS_UPDATE IPC, read by scheduler/event bus
 let _agentSettingsDepsRef: IpcHandlerDeps | null = null;
@@ -3695,22 +3696,15 @@ Answer:`,
       }
       const phpVersions = Array.from(phpSet).sort();
 
-      // Get themes from WP-CLI (running sites only, slow)
-      const themesSet = new Set<string>();
-      for (const [siteId] of Object.entries(allSites)) {
-        const isRunning = statuses[siteId] === 'running';
-        if (isRunning) {
-          try {
-            const themes = await localServicesBridge.getThemes(siteId);
-            for (const theme of themes) {
-              if (theme.name) themesSet.add(theme.name);
-            }
-          } catch {
-            // Site WP-CLI call failed, skip
-          }
-        }
-      }
-      const themes = Array.from(themesSet).sort();
+      // Themes from the graph, like plugins and WP versions above.
+      //
+      // fixes-082526 · issue 5: this used to run WP-CLI against every RUNNING
+      // LOCAL site, so a WPE-only fleet — or a laptop whose sites were simply
+      // stopped — got an empty list under an axis the UI still offered. The
+      // graph already holds themes for local, WPE and external rows alike.
+      const themeFacet = collectThemeFacet(db);
+      const themes = themeFacet.values;
+      const themeCounts = themeFacet.counts;
 
       return {
         success: true,
@@ -3721,6 +3715,7 @@ Answer:`,
         // Sheet-19 pin: every value the menu offers carries its count.
         pluginCounts,
         wpVersionCounts,
+        themeCounts,
       };
     } catch (err) {
       localLogger.error('[NexusAI] site-finder:get-options failed:', (err as Error).message);
