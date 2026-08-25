@@ -62,12 +62,16 @@ const fmt = (s) => {
 };
 
 console.log('# Platform benchmark — run ledger\n');
-console.log('| run | date | model | grader | repeat | note |');
-console.log('|---|---|---|---|---|---|');
+console.log('| run | date | backend | model | grader | repeat | note |');
+console.log('|---|---|---|---|---|---|---|');
 for (const run of runs) {
   const m = run.manifest;
   const note = m.backfilled ? 'backfilled (pre-v2 grading)' : (m.substrateSnapshot?.skipped === true ? 'DRIFT-SKIPPED (unverified substrate)' : '');
-  console.log(`| ${run.id} | ${(m.createdAt || '').slice(0, 10)} | ${m.benchModel || '?'} | ${m.graderModel || '–'} | ${m.repeat ?? '?'} | ${note} |`);
+  // An unrecorded backend prints '?', never a guess: runs archived before the
+  // backend was captured genuinely cannot say which one served them.
+  const mb = m.modelBackend;
+  const backend = mb ? (mb.backend + (mb.project ? `:${mb.project}` : '')) : '?';
+  console.log(`| ${run.id} | ${(m.createdAt || '').slice(0, 10)} | ${backend} | ${m.benchModel || '?'} | ${m.graderModel || '–'} | ${m.repeat ?? '?'} | ${note} |`);
 }
 console.log('\n| scenario | column | ' + runs.map((r) => r.id.slice(0, 12)).join(' | ') + ' |');
 console.log('|---|---|' + runs.map(() => '---').join('|') + '|');

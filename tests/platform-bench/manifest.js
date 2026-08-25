@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
-const { PF_VERSION, BENCH_MODEL, GRADER_MODEL } = require('./providers/isolation');
+const { PF_VERSION, BENCH_MODEL, GRADER_MODEL, resolveModelBackend } = require('./providers/isolation');
 
 const [evalId, outDir, gtSnapshotPath] = process.argv.slice(2);
 if (!evalId || !outDir || !gtSnapshotPath) {
@@ -40,6 +40,11 @@ const manifest = {
   harnessDirty: sh('git', ['status', '--porcelain', '--', 'tests/platform-bench']) !== '',
   benchModel: BENCH_MODEL,
   graderModel: GRADER_MODEL,
+  // Which backend served the pinned ids. Both Vertex and a direct login serve
+  // the same ids, so a run cannot be told apart after the fact without this.
+  // Absent from pre-2026-08-25 manifests and from backfills, where it is
+  // genuinely unknown and must never be inferred.
+  modelBackend: resolveModelBackend(),
   claudeCliVersion: sh('claude', ['--version']),
   promptfooVersion: PF_VERSION,
   repeat: repeatMatch ? Number(repeatMatch[1]) : null,

@@ -145,10 +145,16 @@ schema should anticipate being seeder-emitted.
   Engine's `wp-engine-ai` project while a shell that ran `unset
   CLAUDE_CODE_USE_VERTEX` bills a personal account — invisible after the fact.
   So: `run.sh` resolves the backend and **refuses** unless it matches
-  `BENCH_EXPECTED_BACKEND` (default `vertex` — this benchmark compares a WP
-  Engine product against a WP Engine service, so WP Engine is where it should
-  bill). There is deliberately no blanket skip flag; a deviation is *declared*
-  (`BENCH_EXPECTED_BACKEND=anthropic-oauth ./run.sh`), never stumbled into. The
+  `BENCH_EXPECTED_BACKEND` — default `anthropic-oauth`, the personal login. The
+  runs already in `results/` were produced with `CLAUDE_CODE_USE_VERTEX` unset,
+  so matching them keeps new runs comparable with the existing ledger; and
+  benchmark spend is discretionary and endlessly repeatable, so it should not
+  land on an employer’s cloud project merely because nobody chose. Because
+  `~/.zshrc` exports `CLAUDE_CODE_USE_VERTEX=1`, a *fresh terminal trips this
+  gate every time* — intended, and the refusal names the one-line fix (`unset
+  CLAUDE_CODE_USE_VERTEX`). There is deliberately no blanket skip flag; a
+  deviation is *declared* (`BENCH_EXPECTED_BACKEND=vertex ./run.sh`), never
+  stumbled into. The
   gate runs before the drift gate because it is free and the drift gate is not.
   `manifest.json` records what actually served, and the `report` ledger shows it
   as its own column — printing `?`, never a guess, for the runs archived before

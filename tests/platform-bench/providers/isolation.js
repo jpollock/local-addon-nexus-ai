@@ -71,6 +71,73 @@ const BENCH_MODEL = process.env.BENCH_MODEL ?? 'claude-opus-5';
 const GRADER_MODEL = 'claude-haiku-4-5-20251001';
 
 /**
+ * ── Model backend ─────────────────────────────────────────────────────────────
+ * The `claude` CLI serves the SAME pinned model ids from three different
+ * backends and chooses by environment: Vertex, Bedrock, or Anthropic direct.
+ * Verified 2026-08-25: both `claude-opus-5` and the grader's haiku pin resolve
+ * cleanly under Vertex AND under a direct OAuth login. A run on the wrong
+ * backend therefore does not fail — it silently succeeds and bills a different
+ * account, which is worse, because nothing in the output says which one served.
+ *
+ * It matters twice. Cost is not comparable across backends (measured on one
+ * trivial prompt: opus $0.136 via Vertex vs $0.168 direct; haiku $0.032 vs
+ * $0.020 — differing in BOTH directions, largely cache state), and neither is
+ * latency, since quotas differ. Column-vs-column fairness is untouched: both
+ * columns inherit one process environment, so they always share a backend. The
+ * damage is confined to comparing one archived run against another — which is
+ * exactly what results/ exists for.
+ *
+ * On this machine ~/.zshrc exports CLAUDE_CODE_USE_VERTEX=1, so a fresh
+ * terminal runs on WP Engine's Vertex project and a shell that unset it runs on
+ * a personal account — a distinction invisible after the fact. Hence the gate
+ * in run.sh and the record in the manifest.
+ */
+const envOn = (name) => {
+  const v = process.env[name];
+  return !!v && v !== '0' && v.toLowerCase() !== 'false';
+};
+
+function resolveModelBackend() {
+  if (envOn('CLAUDE_CODE_USE_BEDROCK')) {
+    return { backend: 'bedrock', region: process.env.AWS_REGION ?? null };
+  }
+  if (envOn('CLAUDE_CODE_USE_VERTEX')) {
+    return {
+      backend: 'vertex',
+      project: process.env.ANTHROPIC_VERTEX_PROJECT_ID ?? null,
+      region: process.env.CLOUD_ML_REGION ?? null,
+    };
+  }
+  if (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN) {
+    return { backend: 'anthropic-api' };
+  }
+  return { backend: 'anthropic-oauth' };
+}
+
+/**
+ * The default is the PERSONAL Anthropic login, not WP Engine’s Vertex project.
+ * Two reasons. The runs already in results/ were produced through a shell with
+ * CLAUDE_CODE_USE_VERTEX unset, so personal is what the existing ledger most
+ * likely measures, and matching it keeps new runs comparable with old ones.
+ * (Likely, not certain — no run archived before 2026-08-25 recorded its backend,
+ * which is the whole reason this field now exists. That inference is deliberately
+ * NOT written back into those manifests: writing a guess into a record that says
+ * it does not know is the fabrication the honest-manifest rule forbids.) Second,
+ * benchmark spend is discretionary and endlessly repeatable; it should not land
+ * on an employer’s cloud project merely because nobody chose.
+ *
+ * NOTE: ~/.zshrc on this machine exports CLAUDE_CODE_USE_VERTEX=1, so a FRESH
+ * terminal trips this gate every time. That is intended, not a bug — the refusal
+ * names the one-line fix — but expect it.
+ *
+ * Deviating is allowed and must be DECLARED, never stumbled into:
+ *   BENCH_EXPECTED_BACKEND=vertex ./run.sh
+ * There is deliberately no blanket skip flag — you name the backend you expect,
+ * and the manifest records the one that actually served.
+ */
+const EXPECTED_BACKEND = process.env.BENCH_EXPECTED_BACKEND ?? 'anthropic-oauth';
+
+/**
  * Parse `claude -p --output-format json` stdout into a promptfoo provider
  * response. Field names verified live 2026-08-25: result, total_cost_usd,
  * num_turns, duration_ms, is_error, session_id.
@@ -97,4 +164,9 @@ function parseClaudeJson(raw, columnName) {
   return { ...base, output: String(parsed.result ?? '').trim() };
 }
 
-module.exports = { MCP_ONLY_FLAGS, BENCH_ROOT, benchCwd, PF_VERSION, BENCH_MODEL, GRADER_MODEL, parseClaudeJson };
+module.exports = {
+  MCP_ONLY_FLAGS, BENCH_ROOT, benchCwd,
+  PF_VERSION, BENCH_MODEL, GRADER_MODEL,
+  resolveModelBackend, EXPECTED_BACKEND,
+  parseClaudeJson,
+};

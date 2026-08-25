@@ -41,6 +41,41 @@ if [ -d "$STALE" ] && ls "$STALE"/*capybara* >/dev/null 2>&1; then
   exit 1
 fi
 
+# ── Model backend gate ────────────────────────────────────────────────────────
+# The claude CLI serves the SAME pinned model ids from Vertex, Bedrock or
+# Anthropic direct, chosen purely by environment — and a run on the wrong one
+# does not fail. It silently succeeds and bills a different account, which is
+# worse: nothing in the output says which one served. On this machine ~/.zshrc
+# exports CLAUDE_CODE_USE_VERTEX=1, so a fresh terminal and a shell that unset
+# it disagree invisibly, and their costs are not comparable (measured: opus
+# $0.136 via Vertex vs $0.168 direct on one trivial prompt). Refuse rather than
+# guess. A deliberate deviation is DECLARED, never skipped:
+#   BENCH_EXPECTED_BACKEND=vertex ./run.sh
+# This runs before the drift gate because it is free and the drift gate is not.
+BACKEND_LINE=$(node -e "const m=require('$BENCH_DIR/providers/isolation'); const b=m.resolveModelBackend(); process.stdout.write(b.backend+'\t'+m.EXPECTED_BACKEND+'\t'+JSON.stringify(b));")
+BACKEND_ACTUAL=$(printf '%s' "$BACKEND_LINE" | cut -f1)
+BACKEND_WANTED=$(printf '%s' "$BACKEND_LINE" | cut -f2)
+BACKEND_DETAIL=$(printf '%s' "$BACKEND_LINE" | cut -f3)
+if [ "$BACKEND_ACTUAL" != "$BACKEND_WANTED" ]; then
+  echo "ERROR: model backend is '$BACKEND_ACTUAL', but this run expects '$BACKEND_WANTED'." >&2
+  echo "  Both backends serve the pinned model ids, so nothing would have failed —" >&2
+  echo "  the run would simply bill a different account and produce costs that" >&2
+  echo "  cannot be compared with the other runs already in results/." >&2
+  case "$BACKEND_WANTED:$BACKEND_ACTUAL" in
+    anthropic-oauth:vertex)
+      echo "  For the personal account:  unset CLAUDE_CODE_USE_VERTEX" >&2
+      echo "  (every fresh terminal turns Vertex ON via ~/.zshrc, so expect this)" >&2 ;;
+    vertex:anthropic-oauth)
+      echo "  For WP Engine's Vertex project:  export CLAUDE_CODE_USE_VERTEX=1" >&2 ;;
+    *)
+      echo "  Set the environment '$BACKEND_WANTED' requires before running." >&2 ;;
+  esac
+  echo "  To run deliberately on the current backend instead:" >&2
+  echo "    BENCH_EXPECTED_BACKEND=$BACKEND_ACTUAL ./run.sh $*" >&2
+  exit 1
+fi
+echo "Model backend: $BACKEND_DETAIL"
+
 # ── Drift gate ────────────────────────────────────────────────────────────────
 # keys.json is the answer key every rubric quotes. If the substrate no longer
 # matches it, grading is meaningless — correct answers score wrong (the "8 vs
