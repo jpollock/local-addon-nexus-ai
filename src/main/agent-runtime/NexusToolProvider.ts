@@ -30,12 +30,66 @@ export class NexusToolProvider implements ToolProvider {
   /** Counts how many tool calls threw — either failed or refused. */
   private _failedCallCount = 0;
 
+  /**
+   * WP-57 · every tool this run REACHED, in call order — the run's citable
+   * universe (ADR-24 P1's "trace" half).
+   *
+   * Collected past the gates, beside `reached.tool`, for the reason the
+   * `mutation` event uses the same boundary: a call refused by scope, by the
+   * Tier-3 gate or by the sequence guard OBSERVED NOTHING, and letting a
+   * finding cite it would warrant a claim with a non-event.
+   */
+  private readonly _trace: string[] = [];
+
+  /**
+   * WP-57 · this run's ledger frame. Absent on the MCP path and in tests.
+   *
+   * Structural, not the whole `AgentTaskFrame`: this class needs the id to
+   * thread and the act to note, and nothing else. Narrowing it here keeps the
+   * tool provider from acquiring an opinion about the frame's lifecycle.
+   */
+  private readonly frame?: {
+    id: string;
+    actor: { id: string; kind: 'agent' };
+    noteGatedAct(at: number): void;
+    /**
+     * WP-59 · flush the bracket for a run that was BOUND. See `refusal` below —
+     * a run stopped from acting is not a quiet run, and must be findable.
+     */
+    correlationId(): string | undefined;
+  };
+
+  /**
+   * WP-59 · this run's context was assembled FAIL-CLOSED, and why.
+   *
+   * `assemble()` refuses an autonomous actor with no policy set (ADR-7), or one
+   * whose granted procedure will not load or does not hash to the document it
+   * was granted against. The bundle says so in prose — and prose is advice a
+   * prompt-injected model can ignore, which is why the bind lives here, at the
+   * tier gate, instead.
+   *
+   * Absent for every run that assembled normally, and absent for a run whose
+   * assembly FAULTED: a fault degrades, only a refusal binds. Collapsing those
+   * two would turn fail-closed into fail-open-on-exception in one direction and
+   * into a fleet-wide agent outage in the other.
+   */
+  private readonly refusal?: { reason: string };
+
   constructor(
     registry: ToolRegistry,
     services: NexusServices,
     tools: string[] | undefined,
     events?: ToolEventContext,
+    frame?: {
+      id: string;
+      actor: { id: string; kind: 'agent' };
+      noteGatedAct(at: number): void;
+      correlationId(): string | undefined;
+    },
+    refusal?: { reason: string },
   ) {
+    this.frame = frame;
+    this.refusal = refusal;
     this.registry = registry;
     this.services = services;
     this.allowedTools = tools !== undefined ? new Set(tools) : undefined;
@@ -45,6 +99,16 @@ export class NexusToolProvider implements ToolProvider {
   /** Returns how many tool calls failed or were refused. */
   failedCallCount(): number {
     return this._failedCallCount;
+  }
+
+  /**
+   * The tools this run reached, in order. Feed to `supplyFromAgentRun`.
+   *
+   * A copy, not the live array: a caller that mutated it would be editing what
+   * the run is allowed to have cited, after the fact.
+   */
+  toolTrace(): string[] {
+    return [...this._trace];
   }
 
   /**
@@ -165,6 +229,37 @@ export class NexusToolProvider implements ToolProvider {
       );
     }
 
+    // WP-59 · the refusal BINDS. R3, and the half `agentAssembly.ts` deferred.
+    //
+    // Tier is the boundary, and it is the same one `noteGatedAct` and the
+    // durable audit write already use: Tier 1 is a read, and the refusal's own
+    // words are "run read-only diagnostics only". So a bound run keeps every
+    // read it had and loses every act — which is the behaviour the bundle
+    // describes, enforced rather than requested.
+    //
+    // AFTER the Tier-3 gate, deliberately. Tier 3 is refused for an agent
+    // permanently and for a different reason; leading with this message would
+    // tell a user that restoring the policy set makes `wpe_delete_install`
+    // work, which is false.
+    //
+    // The refusal makes the run REAL. A run that was stopped from acting is
+    // not a quiet run, and `close()`'s laziness would otherwise leave the whole
+    // episode unrecorded — the manifest carrying `fail_closed: true` drains on
+    // this flush, so "why was it bound" is on the ledger and not only in the
+    // log. `correlationId()` is the frame's own flush-and-name call; the id it
+    // returns goes into the message so the agent's report, the event log's
+    // `run=` lines and the ledger's correlation all name the same episode.
+    if (this.refusal && getToolSafety(name).tier >= 2) {
+      let task: string | undefined;
+      try { task = this.frame?.correlationId(); } catch { /* never throw into a tool call */ }
+      throw new Error(
+        `Tool "${name}" refused: this run's context was assembled fail-closed — ` +
+        `${this.refusal.reason}. Take no action that changes any site, run read-only ` +
+        `(Tier 1) diagnostics only, and report that operating policy could not be supplied` +
+        `${task ? ` (task ${task})` : ''}.`,
+      );
+    }
+
     // Enforce sandbox site scope for the freeform/overwrite tools (wp_eval, wp_search_replace):
     // restrict them to registered sandbox sites so prompt-injected code cannot target unrelated
     // sites (T-INJECTION — chat gates these behind human approval; agents have no human, so the
@@ -192,11 +287,36 @@ export class NexusToolProvider implements ToolProvider {
     // refused, which is what decides whether a `mutation` event is honest.
     reached.tool = true;
 
+    // WP-57 · the measurable end of R2's arm-to-first-write, and one of the two
+    // things that make a run REAL for the lazy frame.
+    //
+    // Tier 2 is the floor, matching `actionProducer`'s `GATED_TIER_FLOOR` and
+    // the durable audit write: a Tier-1 read is not an act. A browsing agent
+    // therefore never flushes a bracket, which is what keeps auth-probe's 720
+    // clean runs a day out of an uncompactable substrate.
+    //
+    // Placed AFTER `reached.tool`, deliberately: a call refused by scope or by
+    // the Tier-3 gate changed nothing, and making the run real on the strength
+    // of a refusal would be the same dishonesty as logging it as a mutation.
+    // WP-57 · the citable trace. EVERY reached call, not only gated ones: a
+    // read is exactly what warrants a finding ("I saw this in the plugin
+    // list"), so the citation universe is wider than the act record.
+    this._trace.push(name);
+
+    if (getToolSafety(name).tier >= 2) {
+      try { this.frame?.noteGatedAct(Date.now()); } catch { /* never throw into a tool call */ }
+    }
+
     // Call the registry with 'agent' as the access method and the run ID for audit trail joining.
     // requireConfirmation stays true as belt-and-suspenders: Tier 3 is already refused above for
     // agents, so no destructive call reaches here, but if a tool's tier ever changes this keeps
     // the registry-level gate armed rather than silently waived.
-    const result = await this.registry.call(name, args, this.services, 'agent', true, this.events?.runId);
+    const result = await this.registry.call(
+      name, args, this.services, 'agent', true, this.events?.runId,
+      // WP-57 · the run's task, so every gated act joins the run that made it.
+      // Absent when unframed — the pre-WP-57 shape, byte-identical.
+      this.frame ? { id: this.frame.id, actor: this.frame.actor } : undefined,
+    );
 
     // Audit log the invocation (mirrors McpSafetyWrapper.auditLog for the agent path)
     const duration_ms = Date.now() - startTime;

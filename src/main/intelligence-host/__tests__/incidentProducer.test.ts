@@ -27,15 +27,13 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 import { initIntelligenceCore, IntelligenceCore } from '../bootstrap';
-import { setIntelligenceCore } from '../coreRegistry';
+import { setIntelligenceCore, getIntelligenceCore } from '../coreRegistry';
 import { environmentEntityId, siteEntityId } from '../provisionalEntity';
 import type { ProcedureRun } from '../procedureCursor';
 import type { Runbook } from '../../../intelligence';
 import {
   INCIDENT_SCHEMA,
   INCIDENT_TOPIC,
-  SCAN_SCHEMA,
-  SCAN_TOPIC,
   SENTINEL_AGENT_ID,
   SEVERITY_FLOOR,
   abortForTool,
@@ -682,176 +680,164 @@ describe('the abort tap', () => {
  * anywhere describes the scan would satisfy the validator's REGEX and be a
  * fabricated join — the exact thing WP-48a refused to do with `causation`.
  */
-describe('WP-51 · the scan mints a TaskId, and the act it names is on the record', () => {
-  const scanActs = (core: IntelligenceCore) =>
-    core.ledger.query({ topicPrefix: SCAN_TOPIC, limit: 100 });
+describe('WP-57 · the scan CARRIES the run\'s correlation (WP-51\'s act, subsumed)', () => {
+  /**
+   * WP-51 minted a TaskId here and emitted `task.run.completed` for the scan.
+   * WP-57 subsumed that: a sentinel scan IS a sentinel run, and the run frame
+   * (`agentTaskFrame`) is now the sole producer of the bracket.
+   *
+   * **What moved, and where it is pinned now.** The ACT'S SHAPE — its payload,
+   * actor, source system, `observed_at`, empty entity map — is the frame's
+   * contract and lives in `agentTaskFrame.test.ts`. Re-asserting it here would
+   * be a second opinion about a fact another module owns.
+   *
+   * **What stayed, because it is still this file's behaviour**, and every one
+   * of WP-51's rules below is preserved rather than dropped:
+   *   - lazy: a scan that records nothing asks for no correlation;
+   *   - one correlation per report, shared by every finding it writes;
+   *   - an amendment carries the CLOSING scan's correlation;
+   *   - an unobtainable correlation leaves the findings uncorrelated, because
+   *     an id that names nothing is a fabricated join.
+   */
 
-  test('one act per report, and every finding it wrote carries that act as its correlation', () => {
+  /**
+   * A stand-in for the run frame: counts flushes, so laziness is observable.
+   *
+   * `null` means "the frame could not write its bracket" — NOT `undefined`.
+   * Passing `undefined` to a defaulted parameter selects the default, so a
+   * test for the unobtainable case written that way silently asserts the
+   * opposite of what it says.
+   */
+  function fakeFrame(id: string | null = 'task_01J5X8K3V9Q2M7XYZ0') {
+    const state = { calls: 0 };
+    return {
+      state,
+      correlationId: () => { state.calls++; return id ?? undefined; },
+    };
+  }
+
+  test('one correlation per report, and every finding it wrote carries it', () => {
     const core = newCore();
+    const frame = fakeFrame();
     const written = recordSentinelIncidents(
-      sweep({
-        [SITE_A]: {
-          status: 'escalated',
-          findings: [
-            { id: 'ABS-05', severity: 'critical', title: 'Known backdoor plugin detected: wp-compat' },
-            { id: 'FS-01', severity: 'critical', title: 'PHP file(s) in mu-plugins/: index.php' },
-          ],
-        },
-        [SITE_B]: {
-          status: 'escalated',
-          findings: [{ id: 'ABS-04', severity: 'high', title: 'File manager plugin(s) active' }],
-        },
-      }),
+      {
+        ...sweep({
+          [SITE_A]: {
+            status: 'escalated',
+            findings: [
+              { id: 'ABS-05', severity: 'critical', title: 'Known backdoor plugin detected: wp-compat' },
+              { id: 'FS-01', severity: 'critical', title: 'PHP file(s) in mu-plugins/: index.php' },
+            ],
+          },
+          [SITE_B]: {
+            status: 'escalated',
+            findings: [{ id: 'ABS-04', severity: 'high', title: 'File manager plugin(s) active' }],
+          },
+        }),
+        correlationId: frame.correlationId,
+      },
       { services: services() }
     );
 
-    // shape #15: assert the events exist before asserting anything about them.
     expect(written).toBe(3);
-    const acts = scanActs(core);
-    expect(acts).toHaveLength(1);
     const events = incidents(core);
     expect(events).toHaveLength(3);
-
-    // ONE act for the whole report — a scan is one act however many sites it
-    // covers, and an act per site would make the health surface count scans by
-    // fleet size.
-    const [act] = acts;
-    expect(act.correlation).toMatch(/^task_[0-9A-HJKMNP-TV-Z]{16,26}$/);
-    for (const event of events) expect(event.correlation).toBe(act.correlation);
+    // ONE correlation for the whole report — a scan is one run however many
+    // sites it covers, and one per site would make the health surface count
+    // scans by fleet size.
+    for (const event of events) expect(event.correlation).toBe('task_01J5X8K3V9Q2M7XYZ0');
   });
 
-  test('the act is stamped with the SCAN\'s time and names what the report says', () => {
+  test('A SCAN THAT RECORDS NOTHING ASKS FOR NO CORRELATION — laziness, preserved', () => {
+    // WP-51's P4 rule, and WP-57's measured reason for keeping it: auth-probe
+    // fires every two minutes, so a bracket per sweep is 1,440 events a day
+    // forever in a substrate that is never compacted. Asking for the
+    // correlation is what makes the run real, so a scan with nothing to record
+    // must not ask.
     const core = newCore();
-    recordSentinelIncidents(
-      sweep({
-        [SITE_A]: { status: 'escalated', findings: [{ id: 'FS-02', severity: 'critical', title: 'x' }] },
-        [SITE_B]: { status: 'clean', findings: [], notChecked: [] },
-      }),
-      { services: services() }
-    );
-    const [act] = scanActs(core);
-    expect(act).toBeDefined();
-    expect(act.topic).toBe(SCAN_TOPIC);
-    expect(act.schema).toBe(SCAN_SCHEMA);
-    // Rule 1 of this file, applied to the act: the scan's own completion time,
-    // never the fold's.
-    expect(act.observed_at).toBe(SCAN_AT);
-    expect(Date.parse(act.recorded_at)).toBeGreaterThan(Date.parse(act.observed_at));
-    expect(act.payload).toEqual({ agent: SENTINEL_AGENT_ID, run: 'r_scan_1', sites: 2 });
-    // A scan spans the sites in its report; stamping ONE of them would
-    // misattribute the act to that site. The FINDINGS carry the entity.
-    expect(act.entity).toEqual({});
-    expect(act.actor.id).toBe('act_security_sentinel');
-    expect(act.source).toEqual({ class: 'work', system: 'sentinel:scan', trust: 'emitted' });
-  });
+    const frame = fakeFrame();
 
-  test('a report with no run id records the act without inventing one', () => {
-    const core = newCore();
-    recordSentinelIncidents(
-      { ...sweep({ [SITE_A]: { status: 'escalated', findings: [{ id: 'FS-02', severity: 'critical', title: 'x' }] } }), runId: undefined },
-      { services: services() }
-    );
-    const [act] = scanActs(core);
-    expect(act).toBeDefined();
-    expect(act.payload).toEqual({ agent: SENTINEL_AGENT_ID, sites: 1 });
-    expect(Object.keys(act.payload)).not.toContain('run');
-  });
-
-  test('A SCAN THAT RECORDS NOTHING RECORDS NO ACT — the record takes change, not repetition', () => {
-    // P4's rule, and the reason the act is minted lazily rather than at entry:
-    // security-sentinel runs on a timer, so an act per sweep would be one row a
-    // day per fleet forever, saying nothing. The scan that finds nothing new is
-    // the overwhelmingly common case.
-    const core = newCore();
-    const clean = sweep({ [SITE_A]: { status: 'clean', findings: [], notChecked: [] } });
+    const clean = { ...sweep({ [SITE_A]: { status: 'clean', findings: [], notChecked: [] } }), correlationId: frame.correlationId };
     expect(recordSentinelIncidents(clean, { services: services() })).toBe(0);
-    expect(scanActs(core)).toHaveLength(0);
+    expect(frame.state.calls).toBe(0);
     expect(incidents(core)).toHaveLength(0);
 
-    // …and the same finding on a SECOND scan is deduped, so the second scan
-    // records neither an incident nor an act.
-    const found = sweep({
-      [SITE_A]: { status: 'escalated', findings: [{ id: 'FS-02', severity: 'critical', title: 'x' }] },
-    });
+    // …and the same finding on a SECOND scan is deduped, so it records nothing
+    // and asks for nothing.
+    const found = { ...sweep({ [SITE_A]: { status: 'escalated', findings: [{ id: 'FS-02', severity: 'critical', title: 'x' }] } }), correlationId: frame.correlationId };
     expect(recordSentinelIncidents(found, { services: services() })).toBe(1);
-    expect(scanActs(core)).toHaveLength(1);
-    expect(recordSentinelIncidents({ ...found, runId: 'r_scan_2' }, { services: services() })).toBe(0);
-    expect(scanActs(core)).toHaveLength(1);
+    const afterFirst = frame.state.calls;
+    expect(afterFirst).toBeGreaterThan(0);
+
+    const second = fakeFrame('task_01J5X8K3V9Q2M7XYZ1');
+    expect(recordSentinelIncidents({ ...found, runId: 'r_scan_2', correlationId: second.correlationId }, { services: services() })).toBe(0);
+    expect(second.state.calls).toBe(0);
   });
 
-  test('a resolution carries the CLOSING scan\'s act, not the opening one\'s', () => {
+  test('a resolution carries the CLOSING run\'s correlation, not the opening one\'s', () => {
     const core = newCore();
     recordSentinelIncidents(
-      sweep({ [SITE_A]: { status: 'escalated', findings: [{ id: 'FS-02', severity: 'critical', title: 'x' }] } }),
+      { ...sweep({ [SITE_A]: { status: 'escalated', findings: [{ id: 'FS-02', severity: 'critical', title: 'x' }] } }), correlationId: fakeFrame('task_01J5X8K3V9Q2M7PPEN0').correlationId },
       { services: services() }
     );
     recordSentinelIncidents(
-      sweep({ [SITE_A]: { status: 'clean', findings: [], notChecked: [] } }, LATER_SCAN_AT, 'r_scan_2'),
+      { ...sweep({ [SITE_A]: { status: 'clean', findings: [], notChecked: [] } }, LATER_SCAN_AT, 'r_scan_2'), correlationId: fakeFrame('task_01J5X8K3V9Q2M7CSE00').correlationId },
       { services: services() }
     );
 
-    const acts = scanActs(core);
-    expect(acts).toHaveLength(2);
     const events = incidents(core);
     expect(events).toHaveLength(2);
     const opened = events.find((e) => (e.payload as Record<string, unknown>).resolved === false)!;
     const closed = events.find((e) => (e.payload as Record<string, unknown>).resolved === true)!;
-    const firstScan = acts.find((a) => (a.payload as Record<string, unknown>).run === 'r_scan_1')!;
-    const secondScan = acts.find((a) => (a.payload as Record<string, unknown>).run === 'r_scan_2')!;
 
-    expect(opened.correlation).toBe(firstScan.correlation);
-    // The amendment is an observation OF THE SECOND SCAN. Carrying the first
-    // scan's task would say the closing was observed by the scan that opened it.
-    expect(closed.correlation).toBe(secondScan.correlation);
+    expect(opened.correlation).toBe('task_01J5X8K3V9Q2M7PPEN0');
+    // The amendment is an observation OF THE SECOND RUN. Carrying the first
+    // run's task would say the closing was observed by the run that opened it.
+    expect(closed.correlation).toBe('task_01J5X8K3V9Q2M7CSE00');
     expect(closed.correlation).not.toBe(opened.correlation);
   });
 
-  test('THE ID IS VALID BECAUSE THE ACT IS REAL — an unrecordable act leaves the findings uncorrelated', () => {
-    // The ruling's own sentence, driven. If the act cannot be written, a
-    // correlation stamped on the findings would pass the validator's regex and
-    // name NOTHING — a fabricated join, which is precisely what WP-48a refused
-    // to do rather than route around.
+  test('AN UNOBTAINABLE CORRELATION LEAVES THE FINDINGS UNCORRELATED', () => {
+    // WP-51's ruling sentence, preserved through the subsumption: the frame
+    // returns undefined when its bracket could not be written, and a
+    // correlation stamped anyway would pass the validator's regex and name
+    // NOTHING — the fabricated join WP-48a refused to make out of `causation`.
     const core = newCore();
-    const refuseTheAct = {
-      ...core,
-      emitter: {
-        emit: (draft: { topic?: string }) => {
-          if (draft.topic === SCAN_TOPIC) throw new Error('the act could not be recorded');
-          return core.emitter.emit(draft as never);
-        },
-      },
-    } as unknown as IntelligenceCore;
+    const refused = fakeFrame(null);
 
     const written = recordSentinelIncidents(
-      sweep({
-        [SITE_A]: {
-          status: 'escalated',
-          findings: [
-            { id: 'ABS-05', severity: 'critical', title: 'a' },
-            { id: 'FS-01', severity: 'critical', title: 'b' },
-          ],
-        },
-      }),
-      { services: services(), core: refuseTheAct }
+      {
+        ...sweep({
+          [SITE_A]: {
+            status: 'escalated',
+            findings: [
+              { id: 'ABS-05', severity: 'critical', title: 'a' },
+              { id: 'FS-01', severity: 'critical', title: 'b' },
+            ],
+          },
+        }),
+        correlationId: refused.correlationId,
+      },
+      { services: services() }
     );
 
     // The incidents are still recorded — the layer is non-fatal by construction
-    // and a lost act must not cost the finding.
+    // and a lost bracket must not cost the finding.
     expect(written).toBe(2);
     const events = incidents(core);
     expect(events).toHaveLength(2);
-    expect(scanActs(core)).toHaveLength(0);
     for (const event of events) expect(event.correlation).toBeUndefined();
   });
 
-  test('the return value counts INCIDENTS, not the act beside them', () => {
+  test('a caller with NO frame records incidents with no correlation', () => {
+    // The pre-WP-51 shape, still reachable: an MCP or test caller that has no
+    // run behind it. Honest absence, never an invented id.
     const core = newCore();
     const written = recordSentinelIncidents(
       sweep({ [SITE_A]: { status: 'escalated', findings: [{ id: 'FS-02', severity: 'critical', title: 'x' }] } }),
       { services: services() }
     );
     expect(written).toBe(1);
-    expect(incidents(core)).toHaveLength(1);
-    expect(scanActs(core)).toHaveLength(1);
+    expect(incidents(core)[0].correlation).toBeUndefined();
   });
 });

@@ -69,7 +69,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { initIntelligenceCore, IntelligenceCore } from '../bootstrap';
 import { setIntelligenceCore } from '../coreRegistry';
-import { INCIDENT_TOPIC, INCIDENT_SCHEMA, SCAN_TOPIC, recordSentinelIncidents } from '../incidentProducer';
+import { INCIDENT_TOPIC, INCIDENT_SCHEMA, recordSentinelIncidents } from '../incidentProducer';
 import { createSessionRegistry } from '../sessionRegistry';
 import type { NexusServices } from '../../mcp/types';
 import { taskId } from '../../../intelligence';
@@ -229,6 +229,9 @@ describe('WP-51 · a newly produced sibling set coalesces; the historical four d
         agentId: 'security-sentinel',
         runId,
         observedAt: '2026-08-20T09:00:00.000Z',
+        // WP-57 · the run frame supplies this in production; a unit test with
+        // no AgentRunner supplies it directly. One correlation per run.
+        correlationId: () => 'task_01J5X8K3V9Q2M7SCNA0',
         sites: {
           'awful-pm-test': {
             status: 'escalated',
@@ -252,7 +255,13 @@ describe('WP-51 · a newly produced sibling set coalesces; the historical four d
     const link = events[0].correlation;
     expect(link).toMatch(/^task_[0-9A-HJKMNP-TV-Z]{16,26}$/);
     expect(events.every((e) => e.correlation === link)).toBe(true);
-    expect(core.ledger.query({ topicPrefix: SCAN_TOPIC, limit: 10 })).toHaveLength(1);
+    // WP-57 · the act this link names is the RUN FRAME's `task.run.assigned`,
+    // produced by `agentTaskFrame` at the AgentRunner chokepoint — not by this
+    // producer, and so not present in a unit test that has no runner. That the
+    // frame writes it before handing the correlation out is pinned in
+    // `agentTaskFrame.test.ts` ("a gated act makes the run real, and the
+    // bracket precedes it"); what THIS test owns is that the producer stamps
+    // one link on every member, which the two assertions above check.
 
     const waiting = triageOf().waiting;
     expect(waiting).toHaveLength(1);
@@ -327,6 +336,7 @@ describe('WP-51 · a newly produced sibling set coalesces; the historical four d
         agentId: 'security-sentinel',
         runId: 'r_scan_b',
         observedAt: '2026-08-20T10:00:00.000Z',
+        correlationId: () => 'task_01J5X8K3V9Q2M7SCNB0',
         sites: {
           'other-site': {
             status: 'escalated',
@@ -402,6 +412,7 @@ describe('WP-51 · a newly produced sibling set coalesces; the historical four d
       {
         agentId: 'security-sentinel',
         runId: 'r_clean',
+        correlationId: () => 'task_01J5X8K3V9Q2M7CNN00',
         observedAt: '2026-08-20T11:00:00.000Z',
         sites: { 'awful-pm-test': { status: 'clean', findings: [], notChecked: [] } },
       },

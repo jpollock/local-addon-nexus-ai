@@ -1,3 +1,12 @@
+/**
+ * The Agent SDK's public type surface.
+ *
+ * WP-59 added the one import in this file. It is `import type` and erases at
+ * compile, so the SDK gains no runtime dependency on the intelligence layer —
+ * an agent that never reads `ctx.contextBundle` is unaffected in every way.
+ */
+import type { ContextBundle } from '../../intelligence';
+
 export interface CronTrigger {
   type: 'cron';
   expression: string;
@@ -116,6 +125,35 @@ export interface AgentContext {
   settings: Readonly<Record<string, unknown>>;
   /** True when the user explicitly requested a full (non-incremental) run from the Run Now modal. */
   fullRun: boolean;
+  /**
+   * WP-57 · this run's identity ON THE LEDGER.
+   *
+   * Distinct from the log's run id and neither replaces the other: the log id
+   * correlates LOG LINES (`grep run=<id>`), this correlates EVENTS
+   * (`WHERE correlation = <id>`). Two records, two questions.
+   *
+   * Absent when the intelligence core was unavailable. An unframed run is
+   * honest, not an error, and an agent must treat this as optional.
+   */
+  task?: { id: string; actor: { id: string; kind: 'agent' } };
+  /**
+   * WP-59 · what the intelligence layer knew about this run when it started.
+   *
+   * The same `ContextBundle` the chat surface gets, assembled for the agent as
+   * its own actor. Until this packet, `assemble()` had exactly one caller and
+   * every agent ran with nothing — the design note's §1.1 point in one field.
+   *
+   * **Nothing consumes it yet, and that is deliberate.** An agent hand-rolls
+   * its prompt in `AgentAIClient`; feeding the bundle's prose into every one
+   * of them is a real behaviour change with real token cost, and it wants
+   * evidence rather than a default. This packet is additive: the bundle is
+   * assembled, recorded, and offered. Reading it is opt-in per agent.
+   *
+   * Absent when the intelligence core was unavailable or assembly faulted —
+   * an unassembled run is honest, and an agent must treat this as optional
+   * exactly as it treats `task`.
+   */
+  contextBundle?: ContextBundle;
 }
 
 export interface AgentDefinition {
@@ -207,6 +245,19 @@ export interface AgentResult {
   reportFile?: string;
   /** Correlation id for this run — brackets every line this run produced with run.start/run.end. */
   runId?: string;
+  /**
+   * WP-57 · this run's identity ON THE LEDGER — the `correlation` every event
+   * the run produced carries, so `WHERE correlation = <taskId>` returns the
+   * assembly, every gated act, every outcome and the findings as one thread.
+   *
+   * Deliberately NOT the same value as `runId`, and neither replaces the
+   * other: `runId` correlates LOG LINES (`grep run=<id>`, a documented
+   * workflow), this correlates EVENTS. Two records, two questions.
+   *
+   * Absent when the intelligence core was unavailable — an unframed run is
+   * honest, not an error.
+   */
+  taskId?: string;
 }
 
 // ─── Domain output types ──────────────────────────────────────────────────────

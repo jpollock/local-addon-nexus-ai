@@ -10,6 +10,8 @@ import type { AgentDbManager } from './AgentDbManager';
 import { buildAgentContext } from './buildAgentContext';
 import { newRunId } from '../logging/runId';
 import { EventLog } from '../logging/eventLog';
+import { openAgentTask } from '../intelligence-host/agentTaskFrame';
+import { assembleForAgentRun } from '../intelligence-host/agentAssembly';
 
 const logger = createLogger('AgentRunner');
 const DEFAULT_TIMEOUT_MS = 300_000;
@@ -74,6 +76,16 @@ export class AgentRunner {
       event: 'run.start', fields: { trigger, fullRun: options?.fullRun ?? false },
     });
 
+    // WP-57 · the run's frame on the ledger, opened beside the log's own
+    // bracket and for the same reason: a run that cannot be found is a run
+    // nobody can answer questions about. `trigger` is the caller's stated one,
+    // already resolved above — the frame derives ADR-7's autonomy class from
+    // it rather than reading the SDK's ceremony setting.
+    //
+    // Optional by construction: `openAgentTask` returns undefined when the
+    // intelligence core is absent, and every use below is guarded.
+    const frame = openAgentTask({ agentName, trigger, startedAt, runId });
+
     let status: AgentResult['status'] = 'success';
     let error: string | undefined;
     let ctx: AgentContext | undefined;
@@ -87,6 +99,33 @@ export class AgentRunner {
     // run() outright — an unclosed run.start bracket is exactly the "why did this agent not
     // finish?" case this whole mechanism exists to answer.
     try {
+      // WP-59 · assemble this run's context, as the agent itself.
+      //
+      // `assemble()` had exactly one caller before this — the docked-panel
+      // chat — so every agent ran with nothing the layer knew. Gated on the
+      // frame because the frame is where the actor id, the task id and ADR-7's
+      // autonomy class come from; without a core there is neither, and
+      // assembling with a fabricated actor would be worse than not assembling.
+      //
+      // The site is the triggering event's, which is the only target the
+      // RUNNER knows: an agent's own `scope.siteIds` is read per tool call by
+      // the agent, not here. A cron run therefore assembles about no
+      // particular site, and that is the honest answer rather than a gap.
+      //
+      // Awaited, and that is a real cost admitted rather than hidden: the run
+      // does not start until assembly returns. It is reads only, it never
+      // throws (a fault yields `undefined`), and it is the same work the chat
+      // surface already does on every single turn.
+      const contextBundle = frame
+        ? await assembleForAgentRun({
+            agent,
+            frame,
+            trigger,
+            siteId: event?.siteId,
+            services: this.services,
+          })
+        : undefined;
+
       const built = buildAgentContext({
         agent,
         event,
@@ -100,6 +139,12 @@ export class AgentRunner {
         logFileName: options?.logFileName,
         eventLog: this.eventLog,
         runId,
+        // WP-57 · so the tool provider can thread the task and note gated acts,
+        // and so `ctx.task` exists for the agent itself.
+        ...(frame ? { frame } : {}),
+        // WP-59 · offered to the agent, consumed by none of them yet — this
+        // packet is additive by design; see `AgentContext.contextBundle`.
+        ...(contextBundle ? { contextBundle } : {}),
       });
       ctx = built.ctx;
       accFindings = built.accFindings;
@@ -250,6 +295,11 @@ export class AgentRunner {
           // true at its source.
           observedAt: result.finishedAt,
           sites: result.sites,
+          // WP-57 · the run's correlation, as a FUNCTION. Calling it is what
+          // writes `task.run.assigned`, so the producer flushes the bracket
+          // itself, immediately before the first incident it records — which
+          // is exactly when WP-51's own `scanCorrelation` used to mint one.
+          correlationId: frame ? () => frame.correlationId() : undefined,
         },
         { services: this.services },
       );
@@ -284,6 +334,45 @@ export class AgentRunner {
       });
     } catch (failureErr: any) {
       logger.error(`agent failure record failed for ${agent.name}:`, failureErr?.message);
+    }
+
+    // WP-57 · close the frame AFTER the producer taps, and the ordering is a
+    // consequence of the frame being lazy rather than a preference.
+    //
+    // `task.run.assigned` is flushed by whoever first needs the correlation —
+    // usually the incident producer, immediately before the record it writes —
+    // so the bracket already OPENS before what it explains, which is WP-51's
+    // rule. `completed` must therefore close after those records exist, or a
+    // clean scan that closes a prior incident would flush `assigned` here with
+    // no `completed` ever written: a half-bracket, which is worse than none.
+    //
+    // Its OWN try, matching the two taps above: a fault in one record must not
+    // cost another, and none of them may cost the run.
+    try {
+      frame?.close({
+        status,
+        finishedAt: result.finishedAt,
+        findings: result.findings?.length,
+        error,
+      });
+    } catch (frameErr: any) {
+      logger.error(`run frame close failed for ${agent.name}:`, frameErr?.message);
+    }
+
+    // Surface the task id ONLY if the frame actually wrote. The frame is lazy:
+    // a quiet successful run emits nothing, and recording its id in
+    // `agent_runs` would store a correlation that names no events.
+    // WP-57 · the frame is lazy, so `didEmit()` is not final until `close()`
+    // above — which is AFTER `recordRun` persisted the row. Attach the join
+    // now that it is knowable. Setting it on `result` alone left every stored
+    // row NULL: found by querying the database after a live run, and pinned by
+    // `AgentRunner.taskframe.test.ts`'s stored-row assertions.
+    if (frame?.didEmit()) {
+      result.taskId = frame.id;
+      if (runId) {
+        try { this.stateStore.attachTaskId(runId, frame.id); }
+        catch (attachErr: any) { logger.error(`task id attach failed for ${agent.name}:`, attachErr?.message); }
+      }
     }
 
     return result;

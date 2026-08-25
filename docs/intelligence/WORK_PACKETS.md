@@ -32325,3 +32325,1079 @@ instances found are independent of it, and both are fixed;
 `requireWpeInstallName` now refuses the bad value rather than dialling it,
 which converts an unexplained silent failure into an unexplained loud one.
 That is the correct interim state for a cause nobody can name.
+## WP-57 · CUT AND BASELINE (2026-08-21)
+
+**Branch `wp-57`, worktree `.worktrees/wp-57`, cut from
+`poc/nexintelligence-ux` at `655f6058`** — which is WP-56's merge acceptance,
+and therefore includes **all four** siblings the announce named: WP-51
+(`c51e713a`), WP-54 (`6dbac948`), WP-54a, and WP-56 (`239e4e32`).
+
+**One correction to the amendment:** it recorded WP-56 as "still in flight."
+It merged at `239e4e32` before this cut. It touches nothing this packet holds
+— the assessment is unchanged, only the fact was stale.
+
+**BASELINE, measured in the worktree after `npm run compile`, exit code
+captured before any pipe (protocol's `npm test | tail` warning):**
+
+```
+Test Suites: 629 passed, 629 total
+Tests:       12 skipped, 8710 passed, 8722 total
+Snapshots:   8 passed, 8 total
+Time:        176.911 s
+EXIT=0
+```
+
+**The skipped column is recorded because the protocol requires it both ways**
+(WP-04 and the WP-20c merge finding): 12 skipped here, and a delta in that
+column across the worktree/primary boundary explains a test-count change that
+would otherwise read as a regression or a phantom gain.
+
+**THE INHERITED RED IS GONE.** WP-51's announce recorded a red base — 1 suite,
+6 tests, `situationHeadlines.test.ts`, fail-closed on `RATIFIED_IDS` — and
+named WP-54/WP-55 as its owners. WP-54 has merged and the base is fully green.
+This packet's delta is therefore measured against green, with nothing to
+measure *through*.
+
+**RULING REQUEST 1 — RULED (owner, 2026-08-21): SUBSUME.** The frame is the
+sole producer of `task.run.completed`. `emitScanAct` and `SCAN_TOPIC` are
+deleted from `incidentProducer.ts`; the sentinel scan reads the run frame's
+TaskId instead of minting its own. Task 1 grows accordingly, and the merge
+report owes WP-51's semantics preserved test-for-test — including the
+improvement the subsumption buys: a scan that finds nothing gets a correlation,
+where under WP-51 alone it got none.
+
+**Ruling request 2 is NOT ruled** and the plan implements only its conservative
+half (pass the caller's task through; never mint at dispatch).
+
+**THE pwd HAZARD FIRED AGAIN, HERE, AND IS DISCLOSED RATHER THAN QUIETLY
+FIXED.** Writing this very section, the command was prefixed `cd
+.worktrees/wp-57 &&` from a shell already inside the worktree; the `cd` failed
+and the append never ran. No damage — both trees were verified clean and
+nothing reached the primary checkout — but it is another occurrence of the
+family WP-52 ruled on and WP-54 wrote the "a mechanism its author carries is
+still memory" rule about. Recorded because the rule's own evidence is a count
+of occurrences, and an undisclosed one makes that count wrong.
+
+---
+
+## WP-57 · THE SUBSUMPTION LANDED (2026-08-21) — and two defects found on the way
+
+**Ruling request 1 executed as ruled: SUBSUME.** `SCAN_TOPIC`, `SCAN_SCHEMA`
+and `emitScanAct` are **deleted** from `incidentProducer.ts`. The run frame is
+the sole producer of `task.run.completed`; the incident producer now RECEIVES
+the correlation.
+
+**WP-51's semantics are preserved, and the mechanism that preserves them is
+the same one it invented.** `SentinelReport.correlationId` is a **function**,
+not a value — calling it is what writes `task.run.assigned`, so the producer
+flushes the bracket itself, just-in-time, immediately before the first record
+that needs something to point at. That is `scanCorrelation()` generalized from
+the sentinel to every agent. Rule by rule:
+
+| WP-51's rule | after subsumption |
+|---|---|
+| one act per report | one correlation per report, shared by every finding — pinned |
+| lazy; a scan recording nothing records no act | a scan recording nothing never CALLS `correlationId` — pinned by call count |
+| an amendment carries the CLOSING scan's act | carries the closing RUN's correlation — pinned |
+| an unrecordable act leaves findings uncorrelated | frame returns `undefined`, findings uncorrelated — pinned |
+| — | **NEW:** a scan that finds nothing but closes an incident now carries a correlation, where WP-51 gave it none |
+
+**What moved rather than died.** The act's SHAPE — payload, actor, source
+system, `observed_at`, empty entity — is now the frame's contract and is pinned
+in `agentTaskFrame.test.ts`. Re-asserting it in `incidentProducer.test.ts`
+would be a second opinion about a fact another module owns. The rewritten
+block says so in its own header, and `sentinelCausation.test.ts`'s scan-act
+assertion is replaced by a comment naming where the property lives.
+
+**`sessionRegistry.ts:3239` is unaffected**, checked rather than assumed: its
+`'one scan' | 'one run'` derivation reads `source.system` off the INCIDENTS,
+which are untouched, not off the scan act.
+
+**`close()` MOVED to after the producer taps**, and it is a consequence of
+laziness rather than a preference. `assigned` is flushed by whoever first needs
+the correlation, so the bracket already opens before what it explains; if
+`close()` still ran first, a clean scan that closes a prior incident would
+flush `assigned` with **no `completed` ever written** — a half-bracket, worse
+than none.
+
+### Mutation battery — 13/13 killed, all `--no-cache`
+
+Frame (M01–M05), runner (M06–M09), the `didEmit` gate (M10), subsumption
+(M11–M13): ignore the injected frame · flush eagerly at entry · stamp a
+correlation the frame refused. **M10 exists because the gate was initially
+UNPINNED** — the stub returned true after any close, so deleting the guard
+passed. Found by mutating, not by reading.
+
+### TWO DEFECTS FOUND, one mine, one inherited
+
+**1. MINE, and it would have shipped: the actor id format.**
+`agentActorId` first returned `act_agent_<name>`. `normalizeProducerId`
+(`sessionRegistry.ts:522`) is the join deciding whether a ledger situation and
+an Inbox situation are the SAME situation — it strips `act_`, turns `_` into
+`-`, and compares against the Inbox's agent id:
+
+```
+act_security_sentinel        -> security-sentinel        matches
+act_agent_security-sentinel  -> agent-security-sentinel  matches nothing
+```
+
+Every run-frame event would have silently failed to dedup and produced a
+duplicate row per run — **the exact class WP-54's dedup work just closed.**
+Fixed to `act_<name>` with hyphens as underscores. Three consequences: the
+design note's open question 1 is settled by measurement rather than taste; the
+sentinel's RUN and its INCIDENTS now share one actor id, because
+`SENTINEL_ACTOR` is already that spelling; and the packet ends the two schemes
+instead of adding a third. Pinned with the two-copies-of-one-rule pattern
+(`localDay` / `resolveAgentCron`): a table over all five shipped agent names
+asserting the round trip, **plus a negative pin recording that the rejected
+spelling does not round-trip**, so the bug is a fact in the suite rather than a
+memory in a commit message.
+
+**2. INHERITED, filed not fixed: `recordSentinelIncidents` counts attempts, not
+emissions.**
+
+```ts
+emitIncident(core, { … });          // returns undefined on failure
+history.open.set(key, 'just-emitted');
+written++;                          // increments regardless
+```
+
+`emitIncident` swallows a throw and returns `undefined`; the return is never
+checked. Its own doc says the count exists "so the caller can log a number
+rather than a hope" — it is a hope. **Measured, not reasoned:** an invalid
+correlation made the envelope validator reject all three incidents, and the
+function returned `3` having written `0`. That is how this was found.
+
+Not fixed here, deliberately — it is WP-25/WP-51 contract and changing it
+changes a shipped return value's meaning (counts would drop where emits fail).
+**Registered for its owner.** Note the subsumption slightly raises exposure:
+the correlation now arrives from another module, so a bad one loses incidents
+while still reporting success.
+
+**A third, smaller note for the record:** two of this packet's own test
+fixtures used invalid ULIDs (`CLSE`, `CLN00` — Crockford base32 excludes
+I/L/O/U), and both were caught by a charset assertion over every `task_`
+literal rather than by reading. A fixture that fails validation makes a
+producer look broken; the check is cheap and worth copying.
+
+---
+
+## WP-57 · GATE REPORT — the agent task spine (2026-08-21)
+
+**Phase 1 of the agent-actor design note is COMPLETE**, plus ruling request 1's
+subsumption. Six commits on `wp-57`, cut from `655f6058`.
+
+### Full suite, and the delta reconciles exactly
+
+```
+BASELINE (at cut)   Test Suites: 629 passed, 629 total
+                    Tests:       12 skipped, 8710 passed, 8722 total   EXIT=0
+
+FINAL               Test Suites: 631 passed, 631 total
+                    Tests:       12 skipped, 8741 passed, 8753 total   EXIT=0
+```
+
+**+2 suites, +31 tests, skipped UNCHANGED at 12.** The skipped column is read
+per protocol (it reads both ways across the worktree/primary boundary), and it
+did not move. The +31 reconciles to the test, not approximately:
+
+| | |
+|---|---|
+| `agentTaskFrame.test.ts` (new) | +26 |
+| `AgentRunner.taskframe.test.ts` (new) | +7 |
+| `incidentProducer.test.ts` WP-51 block rewritten, 7 tests → 5 | −2 |
+| **net** | **+31** |
+
+### THE POISONED ts-jest CACHE — SIXTH OCCURRENCE, and a new form
+
+The first full run reported **2 failed suites**:
+`tests/intelligence-evals/sitting.test.ts` and `probes.test.ts` — *"Jest
+encountered an unexpected token"*, in two suites this packet never touched,
+while every targeted `--no-cache` run was green. `npx jest --clearCache` then
+re-run: **10 suites, 410 tests, all pass.**
+
+Two amendments this occurrence earns:
+
+1. **The signature is not always "exactly ONE suite".** The protocol's entry
+   says one; this was two, adjacent, in the same directory. The invariant that
+   held is the rest of it — an unedited suite failing to PARSE, reproducibly
+   with the cache and never without.
+2. **A wrapper's exit code lies in the same family as `| tail`.** The run was
+   backgrounded as `(npm test > log; echo "EXIT=$?" >> log)`, and the harness
+   reported the SUBSHELL's success (0) while the log recorded `EXIT=1`. Same
+   class as the protocol's `npm test | tail` warning, different shape: **read
+   the captured exit code out of the log, never the wrapper's.**
+
+### ABI state, disclosed
+
+Left on **system Node** — `npm test` ran, so better-sqlite3 is built for the
+shell's Node. **`npm run rebuild` is required before loading this in Local.**
+
+### Definition of done
+
+- [x] `npm run typecheck` clean
+- [x] Full suite green, delta reconciled against a green baseline
+- [x] Legacy suites for every touched file run explicitly (90 suites / 1,230
+      tests across `tests/unit/agent-runtime` + `src/main/intelligence-host`)
+- [x] Mutation witness per behavioural pin — **13/13 killed, all `--no-cache`**
+- [x] `WORK_PACKETS.md` updated; two defects recorded, one fixed one filed
+- [x] ABI state disclosed
+
+### NOT done, and owed before merge
+
+- [ ] **The live exhibit.** The DoD asks for one real agent run producing
+      `assigned → N acts → completed` under one correlation, with the
+      before/after count of uncorrelated acts. It needs `npm run rebuild`, a
+      Local restart and a real run; it is **not** produced, and the packet
+      should not merge claiming a live smoke it did not take.
+- [ ] Tasks 5–8 of the plan (`NexusToolProvider` threading + its parity proof,
+      `AgentDispatcher` actor, `ctx.task`, `agent_runs.task_id`). Phase 1's
+      spine is real; these are the remaining surface.
+
+**Ruling request 2 remains unruled** and only its conservative half is
+implemented (pass the caller's task through; never mint at dispatch).
+
+---
+
+## WP-57 · THE EXHIBIT — real ledger, and what it does NOT prove (2026-08-21)
+
+The gate report recorded the live exhibit as owed. **MCP and the CLI cannot
+produce it**, and the reason is worth writing down rather than rediscovering:
+
+- `nexus agent run` is a GraphQL mutation (`mutation AgentRun`) — it is a
+  remote control for Local's process, not an independent runner.
+- Local loads this addon by SYMLINK from the PRIMARY checkout
+  (`~/Library/Application Support/Local/addons/local-addon-nexus-ai ->
+  …/local-addon-nexus-ai`), which is on `poc/nexintelligence-ux`. So even with
+  Local running, a triggered run executes code that does not contain the frame.
+- Local was not running at the time in any case.
+
+So the constraint is WHICH CODE IS LOADED, not how the run is triggered, and no
+tool call gets around it.
+
+**What was produced instead: a real-ledger exhibit, on WP-18's Layer 6
+precedent** — `tests/e2e-intelligence/replay/wp57-exhibit.ts`, run with
+`npx ts-node -P tsconfig.test.json tests/e2e-intelligence/replay/wp57-exhibit.ts`.
+Same safety properties as `run.ts`, copied rather than reinvented: the live
+ledger is opened `readonly: true` for exactly one `VACUUM INTO`, every write
+lands on the temp copy, and the core boots with in-memory storage so no marker
+is touched.
+
+```
+BEFORE
+  total events                    11184
+  task.run.* events               0
+  agent acts with NO correlation  58
+  incidents with NO correlation   4
+
+SCENARIO A — security-sentinel, cron, two findings, site `a11ycheck` (real)
+  task.run.assigned          actor=act_security_sentinel  corr=task_01M0K1R91FPTHAD8CTQG6RQEKS  autonomy=autonomous
+  episodic.incident.recorded actor=act_security_sentinel  corr=task_01M0K1R91FPTHAD8CTQG6RQEKS
+  episodic.incident.recorded actor=act_security_sentinel  corr=task_01M0K1R91FPTHAD8CTQG6RQEKS
+  task.run.completed         actor=act_security_sentinel  corr=task_01M0K1R91FPTHAD8CTQG6RQEKS  status=success  autonomy=autonomous
+
+SCENARIO B — auth-probe, cron, clean (the every-two-minutes case)
+  events written by a quiet successful run   0
+
+AFTER
+  total events                    11188  (+4)
+  task.run.* events               2
+```
+
+Four properties, each visible in the output rather than asserted in prose:
+
+1. **One thread.** Four events, one correlation, on a real ledger with 11,184
+   events already in it.
+2. **The bracket is in order** — `assigned` first, `completed` last. This is
+   the `close()` reordering working: `assigned` was flushed by the incident
+   producer, not by `close`.
+3. **One actor, correctly spelled** — `act_security_sentinel`, the format that
+   round-trips through `normalizeProducerId`, and the same id the incidents
+   carry. Two schemes ended, visibly.
+4. **Exactly TWO `task.run.*` events, not three.** The subsumption is real: had
+   `emitScanAct` survived, this run would have emitted `task.run.completed`
+   twice.
+5. **The quiet run wrote zero.** The laziness ruling, on the agent that
+   motivated it.
+
+### WHAT THIS DOES NOT PROVE — and it must not be cited as the smoke
+
+It does not prove that a running Local constructs `AgentRunner` with an
+intelligence core available at that point, that the scheduler path reaches this
+code, or that the Electron ABI is sound. Those need `npm run rebuild`, a Local
+restart, and a run from the UI. **The live smoke is still owed.** The exhibit
+script says the same thing in its own header, so a future reader cannot take it
+for more than it is.
+
+**The existing Layer 6 replay also passes** on this branch — 11,181 events,
+6,369 twins replayed over 388 entities, deterministic — confirming this packet
+disturbs no fold (it adds none).
+
+---
+
+## WP-57 · THE LIVE SMOKE — TAKEN, and it passes (2026-08-21)
+
+The gate report recorded this as owed. It is now taken, in a **running Local
+loading this worktree's code**, and the debt is discharged.
+
+**How Local was pointed at the branch** (reversible, and the restore command is
+recorded): the addon symlink
+`~/Library/Application Support/Local/addons/local-addon-nexus-ai` was
+repointed from the primary checkout to `.worktrees/wp-57`, the worktree was
+compiled, `better-sqlite3` rebuilt for Electron 42.2.0 (ABI 146), and Local
+relaunched with `./dev-reload.sh`. Restore:
+
+```
+ln -sfn /Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai \
+  "$HOME/Library/Application Support/Local/addons/local-addon-nexus-ai"
+```
+
+### What the live ledger says
+
+```
+task.run.assigned  {"agent":"wp57-smoke","trigger":"manual","autonomy":"interactive","run_id":"r_mt3i47wd00"}
+task.run.completed {"agent":"wp57-smoke","trigger":"manual","autonomy":"interactive","status":"error",
+                    "duration_ms":5,"error":"wp57-smoke: intentional failure for the WP-57 live smoke"}
+
+actor      act_wp57_smoke      (both)
+correlation task_01M0K5X3R17VEHR26JGA2RV931   (both — one thread)
+```
+
+**Six things proved that the real-ledger exhibit could not:**
+
+1. **A running Local constructs `AgentRunner` WITH an intelligence core**, and
+   the ledger takes the write. This was the whole wiring claim.
+2. **The Electron ABI is sound** — the frame runs under Electron, not just
+   system Node.
+3. **Both brackets, one correlation**, minted in production.
+4. **The actor names the agent** — `act_wp57_smoke`, the corrected format,
+   derived live from the agent name.
+5. **`autonomy: interactive` because `trigger: manual`.** §A.2's rule, working
+   in production: the same agent on a cron would have been `autonomous`. The
+   rule is derived from the trigger, never read from a setting.
+6. **`status: error` and the real error string**, carried from the run rather
+   than recomposed.
+
+### The laziness held, on real agents, unprompted
+
+Before the synthetic run, **three real agents ran under the new code and wrote
+NOTHING**: `auth-probe` (its own `*/2` cron, clean), `web-analytics` (manual,
+clean, 3 ms) and `security-sentinel` (manual, a full 112-second fleet sweep,
+`findings=0`). Measured: `0` `task.run.*` events attributable to any of them.
+That is the ruling working on the exact population it was written for — and it
+is why the smoke needed a synthetic agent at all.
+
+### Why a synthetic agent, and where it went
+
+Every real agent on this machine currently succeeds cleanly, and a lazy frame
+writes nothing for a clean success — so no real agent could produce the
+evidence. `wp57-smoke` was a temporary agent that **called no tool and touched
+no site**, threw on purpose, and was **deleted immediately after** (verified
+absent). Its two events remain in the ledger, which is correct: the record is
+append-only, and they are honest records of a run that really happened.
+
+**The subsumption is visible here too:** exactly **one** `task.run.assigned`
+and **one** `task.run.completed`. Had `emitScanAct` survived, the sentinel
+sweep above would have added a second `task.run.completed` of its own.
+
+### Still not proved
+
+`noteGatedAct` never fired, because `NexusToolProvider` does not call it yet —
+that is Task 5. So `first_gated_act_at` is absent from the payload above, and
+the security-sentinel sweep's ten tier-2 `wpe_site_deep_refresh` calls did NOT
+flush a bracket. Correct for today's code, and the reason Tasks 5–8 remain.
+
+---
+
+## WP-57 · TASKS 4–8 — the surface, and the collapse actually closed (2026-08-21)
+
+Phase 1 of the design note is now complete end to end.
+
+| task | what landed |
+|---|---|
+| **4** | `GatedActionRecord.actor`; `actorFor` prefers a supplied actor over its surface inference |
+| **5** | `NexusToolProvider` threads the task (and the actor) into `ToolRegistry.call`; `noteGatedAct` at tier ≥ 2 |
+| **6** | `AgentDispatcher` names the CONTRIBUTING agent on chokepoint two |
+| **7** | `ctx.task` on `AgentContext`, key omitted when unframed |
+| **8** | `agent_runs.task_id` — and `run_id` finally read back |
+
+**The actor rides on the `task` object through chokepoint one.** `tool-registry.ts`
+is audit chokepoint one, so widening an object it already accepts
+(`task?: { id?, causation?, actor? }`) is a strictly smaller change than a new
+positional parameter — the design note's §D.1 reasoning, applied.
+
+### The parity proof, pasted rather than summarised
+
+The agent path used to pass `task: undefined` and now passes a real id, so
+`checkCheckpointSequence` could in principle decide differently. Driven against
+the REAL guard, not a mock:
+
+```
+tool                       | unframed   | framed
+------------------------------------------------------------------------------
+wp_plugin_list             | ALLOW      | ALLOW        SAME
+wpe_site_deep_refresh      | ALLOW      | ALLOW        SAME
+bulk_plugin_update         | ALLOW      | ALLOW        SAME
+wpe_create_backup          | REFUSE     | REFUSE       SAME
+wp_plugin_update           | ALLOW      | ALLOW        SAME
+wp_core_update             | ALLOW      | ALLOW        SAME
+local_wpe_push             | ALLOW      | ALLOW        SAME
+nexus_site_refresh         | ALLOW      | ALLOW        SAME
+------------------------------------------------------------------------------
+PARITY HOLDS — 8/8 identical decisions
+```
+
+`wpe_create_backup` is the row that earns the table: it is genuinely refused by
+`reachRefusal`, and refused **identically** either way.
+
+### Mutation battery — M14–M20, and TWO of them taught something
+
+| # | mutation | result |
+|---|---|---|
+| M14 | tier floor 2 → 1 (a browsing agent would make its run real) | killed |
+| M15 | note the act BEFORE the gates (a refusal would make the run real) | killed — **after** a false SURVIVED, below |
+| M16 | stop sending the task to the registry | killed |
+| M17 | dispatcher stops naming the contributing agent | killed |
+| M18 | `actorFor` ignores the supplied actor | **SURVIVED — a real gap**, below |
+| M19 | `task_id` written but not read back (the `run_id` defect, recreated) | killed |
+| M20 | `run_id` still dropped by the mapping | killed |
+
+**M15 was a FALSE SURVIVED**, and it is the trap the protocol already names: the
+`perl -0pi` regex silently failed to match, so the run measured unmutated code
+and reported green. Re-applied with an asserted anchor (`assert block in s`), it
+kills. **A mutation script must assert its anchor matched** — a substitution
+that quietly does nothing is indistinguishable from a surviving mutant.
+
+**M18 was a REAL GAP, and the battery is the only reason it was found.**
+Deleting `if (supplied) return supplied;` from `actorFor` left every test
+green: the dispatcher's own suite MOCKS `recordGatedAction`, so it can prove
+the actor is PASSED and can never prove it is USED. Task 4's entire purpose was
+pinned nowhere. Three tests added to `actionProducer.test.ts` — the supplied
+actor reaching the emitted event, the parity fallback to `act_agent_runtime`,
+and two agents producing two actors. M18 now kills 2.
+
+### Full suite, and the skipped column moved — explained, not celebrated
+
+```
+BASELINE   629 suites · 8710 passed · 12 skipped · 8722 total · EXIT=0
+NOW        634 suites · 8764 passed ·  2 skipped · 8766 total · EXIT=0
+```
+
+Every number reconciles exactly:
+
+- **suites +5** — five new test files.
+- **total +44** — 43 new tests (26 frame, 7 runner, 5 tool-provider, 3 state
+  store, 2 dispatcher) + 3 in `actionProducer` − 2 from rewriting WP-51's
+  seven-test block as five.
+- **skipped −10, passed +54** (= 44 + 10). **Cause: mine, and not a code
+  change.** Earlier in this packet I symlinked `models/` from the primary
+  checkout to avoid a 150 MB re-download before the live smoke. That gave the
+  worktree BOTH embedding model files where a fresh worktree has one, so ten
+  embedding tests moved from skipped to passed. This is *precisely* the
+  worktree/primary skipped-column hazard WP-20c's merge finding documents,
+  reproduced by a convenience symlink. **A reviewer comparing only the passed
+  column would read +54 and see ten tests that do not exist.**
+
+---
+
+## WP-57 · GATE REPORT (FINAL) — phase 1 complete, both smokes taken (2026-08-21)
+
+**Scope delivered:** phase 1 of `agent-actor-design-note.md` in full (tasks
+1–8), plus ruling request 1's subsumption. Twelve commits on `wp-57`, cut from
+`655f6058`.
+
+### The second smoke — the blind spot the first one left
+
+The first smoke proved a running Local writes the frame; it could not prove
+`noteGatedAct`, because no real agent had made a gated call under a framed run.
+`security-sentinel` was run again under the completed code. It found **nothing**
+— and the frame flushed anyway, because ten tier-2 `wpe_site_deep_refresh`
+calls made the run real:
+
+```
+task.run.assigned   act_security_sentinel  task_01M0K7MW42A0WP6JWG69TBHWYE  security-sentinel
+task.run.completed  act_security_sentinel  task_01M0K7MW42A0WP6JWG69TBHWYE  success
+                    first_gated_act_at = 2026-08-21T22:39:13.559Z
+
+under that one correlation:
+   task.action.executed   act_security_sentinel  x10   (all wpe_site_deep_refresh)
+   task.outcome.recorded  act_security_sentinel  x10
+   task.run.assigned                             x1
+   task.run.completed                            x1
+```
+
+**Twenty-two events, one thread, one actor.** That is the packet's whole thesis
+executing in production.
+
+### The defect stopped producing — measured, not asserted
+
+| | before | after |
+|---|---|---|
+| `task.run.*` | 2 | 4 |
+| `task.action.executed` with NO correlation | 42 | **42 — unchanged** |
+| `act_agent_runtime` (the collapse) | 79 | **79 — unchanged** |
+| `act_security_sentinel` | 4 | 26 (+10 acts, +10 outcomes, +2 frame) |
+
+Ten new gated acts were performed and **not one** was uncorrelated, and **not
+one** was attributed to `act_agent_runtime`. The historical 42 and 79 remain
+exactly as they were, which is correct: the ledger is append-only and no
+history was rewritten to make a table look better.
+
+Three properties fell out of this that the unit tests could only approximate:
+
+1. **`noteGatedAct` fires live**, and a zero-finding run still becomes real on
+   the strength of its acts. That was the named blind spot; it is closed.
+2. **`first_gated_act_at` is populated** — R2's measurable half, in production,
+   from which arm-to-first-write derives once `ctx.arm()` exists.
+3. **The acts JOIN the run.** `WHERE correlation = task_01M0K7MW…` returns the
+   assembly-free but complete thread: the bracket, every act, every outcome.
+
+### Definition of done
+
+- [x] `npm run typecheck` clean
+- [x] Full suite **634 suites / 8,764 passed / 2 skipped / EXIT=0**, delta
+      reconciled to the test against a green baseline — including the
+      skipped-column move (12 → 2), whose cause is a `models/` convenience
+      symlink and **not** a code change
+- [x] Legacy suites for every touched file run explicitly
+- [x] Mutation witnesses — **20 mutations, 20 killed**, all `--no-cache`, with
+      one false SURVIVED caught and one real gap found and closed
+- [x] Sequence-gate parity proven against the real guard, 8/8, pasted
+- [x] Real-ledger exhibit (Layer 6 precedent) — PASS
+- [x] **Live smoke × 2** — the frame, and the gated act
+- [x] `WORK_PACKETS.md` updated throughout
+- [x] ABI restored to system Node; addon symlink restored to the primary
+      checkout
+
+### Owed, and NOT claimed as done
+
+- **Ruling request 2** — is a contributed-tool dispatch its own run? Only the
+  conservative half is implemented (pass the caller's task through, never
+  mint). Unruled.
+- **The inherited `written++` defect** — `recordSentinelIncidents` counts
+  attempts, not emissions. Filed for WP-25/WP-51's owner, not fixed here.
+- **Phases 2–6** of the design note. Phase 1 is the spine; the surface,
+  authority, assembly, procedure and UX halves remain, and three of them are
+  blocked on rulings (§D.5, §D.6, §D.7, R4's sitting).
+
+---
+
+## WP-57 · THE CITATION SUPPLY — the half of phase 2 nothing blocks (2026-08-21)
+
+Phase 2's widening is held behind four rulings
+(`agent-output-disposition-design-note.md` §6). **This is the piece none of
+them gate**, and it is a precondition for all of them: every disposition
+benefits from a finding that can cite what it saw.
+
+**`supplyFromAgentRun(toolCallNames)`** — an agent run's citable universe.
+
+ADR-24 P1 fixes the universe as "the manifest and the trace, and nothing
+else". A chat turn has both. **An agent run today has only the trace** — the
+assembler does not reach the agent path until phase 4 — so its universe is its
+own tool calls. That is the honest universe, not a degraded one: a finding's
+warrant is what the run actually observed, and what it observed is what it
+called.
+
+**ONE derivation, not two (P5).** Addresses are numbered by `numberToolCalls`
+— the same function `citationDelivery` uses for chat — and resolved by
+`resolveCitations`, the same join the judge and the renderer use. This module
+contributes no matching logic of its own. A second numbering here is exactly
+the defect P5 names: the judge and the user looking at two different universes.
+
+**The trace is collected past the gates**, beside `reached.tool`, on the same
+boundary the `mutation` event uses: a call refused by scope, by the Tier-3 gate
+or by the sequence guard **observed nothing**, and letting a finding cite it
+would warrant a claim with a non-event. It records EVERY reached call, not only
+gated ones — a read is precisely what warrants a finding ("I saw this in the
+plugin list"), so the citable universe is deliberately wider than the act
+record.
+
+**Why it matters most here.** The WP-25 smoke caught security-sentinel's
+fabricated remediation checklist — model-authored prose no record supported, on
+the unattended path, where nobody is watching when the claim is made.
+`cited-but-unresolvable` is the loudest state in the contract, and this is the
+surface that most needs it to fire.
+
+### A vacuous pass, caught by asserting the reason
+
+The first draft of `a finding citing a call INDEX the run never reached is
+unresolvable` **passed immediately** — and for the wrong reason. The fixture
+used `[[cite:scan_site_files#2]]` where the convention is
+`[[cite:tool:<name>#<n>]]`, so the marker was MALFORMED and the state was
+`cited-but-unresolvable` because the platform could not read it, not because
+the universe refused it. A state assertion alone cannot tell those apart.
+
+Fixed by asserting the REASON (`not-in-supply`) rather than only the state, and
+recorded in the test itself. **Adds to the vacuous-guard catalogue:** when a
+type has several routes to the same value, assert the route, not just the
+value.
+
+### Battery — M21–M24, all killed
+
+| # | mutation | result |
+|---|---|---|
+| M21 | global call numbering instead of per-tool | killed (3) |
+| M22 | supply what the agent DECLARED, not what it called | killed (3) |
+| M23 | trace records refused calls too (cite a non-event) | killed |
+| M24 | `toolTrace()` returns the live array, editable after the fact | killed |
+
+Packet total: **24 mutations, 24 killed.**
+
+### Suite
+
+```
+635 suites · 8,774 passed · 2 skipped · EXIT=0
+```
++1 suite, +10 tests (7 supply + 3 trace) against the previous 634/8,764.
+
+### NOT done, and deliberately
+
+Nothing yet RESOLVES a finding's citations at fold time — `Finding.citation` is
+designed in the agent-actor note but not populated, because the producer that
+would populate it is the widening this is blocked behind. The supply exists and
+is proven; wiring it to findings is one small step once ruling 1 lands.
+
+And the other half is agent-side: for citations to bite, sentinel's specialists
+must EMIT spans, which is prompt work inside the agent. The platform can verify
+a citation it is given; it cannot invent one.
+
+---
+
+## WP-57 · A LIVE DEFECT IN TASK 8, FOUND BY THE OWNER'S QUESTION (2026-08-21)
+
+The gate report claimed phase 1 complete. The owner asked "is phase 1 done?"
+and the check that answers it — *does anything call this, and did it run for
+real?* — found `agent_runs.task_id` **NULL on every stored row**, including the
+two runs whose frames demonstrably emitted (`wp57-smoke`, and the
+security-sentinel run whose 22-event thread is in the smoke report above).
+
+**Cause, and it was introduced by this packet.** `close()` was moved after the
+producer taps — correct, because otherwise a clean scan that resolves an
+incident flushes `task.run.assigned` with no `completed`. The `didEmit()` check
+moved with it, past `this.stateStore.recordRun(result)` at line 211. The row
+was persisted 123 lines before `result.taskId` was assigned.
+
+**Why no test caught it.** Two tests, each correct, neither covering the join:
+
+- `AgentRunner.taskframe.test.ts` asserted `result.taskId` on the RETURNED
+  object, which is set by the time `run()` returns;
+- `AgentStateStore.taskid.test.ts` called `recordRun` with an id already
+  present, proving the store CAN persist it.
+
+Neither asked whether the runner actually hands it over. **The seam between two
+green tests is not covered by either of them** — worth adding to the
+vacuous-guard catalogue, because both tests look thorough in isolation.
+
+**The fix: `AgentStateStore.attachTaskId(runId, taskId)`.** A second, targeted
+write, and not laziness — the alternatives were both worse:
+
+- `recordRun` cannot move to the end: `pauseIfStuck` reads `getRunHistory` and
+  depends on the current run already being in it.
+- `close()` cannot move earlier: the half-bracket problem it was moved to fix.
+- Re-deriving "will it emit?" before `recordRun` would put the laziness rule in
+  two places, which is the disease this packet keeps finding.
+
+So the row is written when the run ends, and the correlation is attached when
+it becomes knowable. Never throws — a missing join must not cost run history.
+
+**Pinned by asserting the STORED row**, with a snapshot rather than a live
+reference: `recordRun: jest.fn((r) => persisted.push({ ...r }))`. Holding the
+reference would have let the assertion pass against the very bug, since `run()`
+mutates `result` afterwards. **M25** (revert to setting `taskId` on the result
+only) kills.
+
+*A second, smaller slip in the same edit: the new `describe` had no
+`beforeEach`, so a module-scoped array leaked rows from a sibling block and the
+first assertion read the wrong run. Caught immediately; its own reset added.*
+
+### Corrected status of phase 1
+
+| task | honest status |
+|---|---|
+| 1–2 frame · 3 brackets · 4 actor · 5 thread + `noteGatedAct` | done, **live-verified** |
+| 6 dispatcher actor | code + unit tests, **never exercised live** — every act in the ledger is `dispatch: registry`, zero `contributed` |
+| 7 `ctx.task` | populated, **zero consumers**. It exists FOR agent authors, so that is expected — but it is a building block, not a delivered capability, and the gate report should have said so |
+| 8 `agent_runs.task_id` | **was broken in production; fixed here** |
+
+Suite after the fix: **635 suites · 8,776 passed · 2 skipped · EXIT=0** (+2
+tests). Packet battery now **25 mutations, 25 killed**.
+
+---
+
+## WP-57 · THE WIRED-AND-RAN AUDIT (2026-08-21)
+
+After task 8's live defect, the same check was run across **everything this
+packet claims**, on two axes: *does production code call it* and *has it
+actually executed*. The second axis is the one that found the defect, and the
+one a green suite cannot answer.
+
+| deliverable | production caller | executed for real |
+|---|---|---|
+| `openAgentTask` / `close` / `didEmit` | yes | **live** |
+| `agentActorId` (frame path) | yes | **live** |
+| `noteGatedAct` → `first_gated_act_at` | yes | **live** |
+| actor on registry acts | yes | **live** (10 × `act_security_sentinel`) |
+| `attachTaskId` → `agent_runs.task_id` | yes | **live — closed by this audit** |
+| `agentActorId` (dispatcher path) | yes | **live — closed by this audit** |
+| subsumption (`correlationId` → incident) | yes | **exhibit only** — see below |
+| `ctx.task` | populated | **zero consumers**, expected: it is author-facing |
+| `supplyFromAgentRun` / `toolTrace()` | **none** | not wired, by design — its consumer is blocked |
+
+*(One false positive from my own grep: `autonomyForTrigger` looked
+caller-less because the search excluded the file that calls it. It is called
+inside `openAgentTask`.)*
+
+### Two gaps closed here, in one Local cycle
+
+**`agent_runs.task_id` now persists**, and the id names a real thread:
+
+```
+wp57-smoke2 | error | r_mt3mce9u00 | task_01M0KCNSA5D8J6ZCEBNSREFFSN
+   └─ task.run.assigned   act_wp57_smoke2
+   └─ task.run.completed  act_wp57_smoke2
+
+auth-probe  | success | r_mt3m8eiw00 | (NULL)   ← correct
+```
+
+The `auth-probe` NULLs are the **laziness rule visible in the persistence
+layer**: a clean run's frame writes nothing, so there is no id to attach.
+
+**The dispatcher actor now has a live record.** One tier-2 contributed tool
+exists (`fetch_log_window`), and `recordGatedAction` fires on both outcomes.
+Called with `confirm` omitted — the tool's own two-phase design returns a cost
+estimate and persists nothing:
+
+```
+contributed | act_log_processor | log-processor/fetch_log_window | (no task)
+```
+
+The actor is right, and **the correlation is absent, which is also right**: an
+MCP client supplies no caller task, so none was minted. That is ruling request
+2's conservative half, executing as ruled.
+
+The same query shows the before/after of the collapse in one table —
+historical `act_agent_runtime` (`wp_eval` ×25, …) beside the new
+`act_security_sentinel` ×10.
+
+### The one gap NOT closed, and why it stays open
+
+**The subsumption has never run in a live Local.** `episodic.incident.recorded`
+rows carrying a correlation: still 0. It requires security-sentinel to produce
+a finding at or above the floor, and:
+
+- the fleet is currently clean (two full sweeps, `findings=0`);
+- the four historical incidents are **durably deduped**, so re-scanning the
+  same site emits nothing;
+- producing a *new* finding means changing a real site, which is out of scope
+  for a verification step.
+
+It is covered by the **real-ledger exhibit** — real code, real entity
+resolution, a `VACUUM INTO` copy of the real ledger — which showed
+`assigned → 2 incidents → completed` on one correlation. That is strong
+evidence for the LOGIC. It is not evidence for the wiring inside Electron, and
+this record says so rather than rounding up.
+
+**Standing:** the first live sentinel finding closes this by itself. Nothing
+needs to be built; something needs to break.
+
+---
+
+## WP-59 · LOCK ANNOUNCE (2026-08-21) — assembly on the agent path
+
+**Branch `wp-59`, worktree `.worktrees/wp-59`, cut from `wp-57` at `77d98e27`
+— NOT from `poc/nexintelligence-ux`, and that is deliberate.** Phase 4 needs
+phase 1's frame: the actor, the autonomy class and the task id an assembly
+request requires are all minted by `openAgentTask`. If WP-57 changes at its
+gate, this rebases.
+
+**Governing document:
+[`agent-actor-design-note.md`](agent-actor-design-note.md) §C and §12 phase 4.**
+Unblocked because **R3 is already ruled** — fail-closed on integrity and
+absence now, staleness with the hub.
+
+### Scope
+
+1. **A host seam, `agentAssembly.ts`** — the agent-path sibling of
+   `chatAssembly.ts`. Builds an `AssembleRequest` from a run and calls the same
+   `assemble()`.
+2. **`AgentRunner` assembles before `agent.run()`**, from the frame's actor and
+   task.
+3. **`ctx.context`** — a read-only projection of the bundle for the agent.
+4. **A `task.context.assembled` manifest per run.**
+5. **Fail-closed per R3 and §6.1**, and the distinction is the packet's sharpest
+   line: a **refusal bundle binds** (missing/unloadable policy set, or a hash
+   mismatch under the grant → the run proceeds read-only and records why); an
+   **assembler fault degrades** (throw, unreadable store, absent core → the run
+   proceeds exactly as today). Collapsing these turns fail-closed into
+   fail-open-on-exception.
+
+### MEASURED AT ANNOUNCE
+
+- **36 `task.context.assembled` manifests exist. All 36 are
+  `act_chat_assembler` / `chat.docked-panel`. ZERO are from an agent.** The
+  question "what did the agent know when it acted" has no stored answer for the
+  actors that act unattended — which is §1.1's whole argument.
+
+### LOCKED
+
+| surface | why |
+|---|---|
+| `src/main/intelligence-host/agentAssembly.ts` — **NEW** | the seam |
+| `src/main/agent-runtime/AgentRunner.ts` — the assembly call only | item 2 |
+| `src/main/agent-runtime/buildAgentContext.ts` — `ctx.context` | item 3 |
+| `src/main/agent-sdk/types.ts` — `AgentContext.context` | the SDK surface |
+| `docs/intelligence/` | this record |
+
+**NOT LOCKED:** `src/intelligence/` (the core — the assembler is USED, not
+changed; no new topic, no envelope field), `chatAssembly.ts` (untouched — a
+second caller of one assembler is the design, not a fork), `src/renderer/`,
+`sessionRegistry.ts`.
+
+### THREE RULING REQUESTS, raised at announce
+
+1. **What is an agent run's `intent`?** Chat passes the user's message. An
+   agent has no utterance. Candidates: the manifest `description`, or a derived
+   `"<trigger> run of <agent>"`. It lands in the manifest and may reach prose,
+   so it is not an internal detail.
+2. **What are the `targets`?** The run's site scope — but `auth-probe` is
+   `siteScoped: false` and has none. An empty-target assembly is legitimate;
+   what it does to ADR-22's routing table needs stating rather than
+   discovering.
+3. **Does the bundle's PROSE reach the agent's model at all?** The assembler
+   renders a turn block for a chat model; an agent hand-rolls its prompt in
+   `AgentAIClient`. Options: the agent receives only structured parts and the
+   prose is manifest-only; or `AgentAIClient` prepends the ambient block. **The
+   second changes every agent's prompt** and is the larger decision.
+
+### A NEAR-MISS, RECORDED BECAUSE THE RULE IT YIELDS IS WORTH MORE
+
+This packet was very nearly cut as **WP-58**, which is an ACTIVE packet with
+three commits and uncommitted work. The number was chosen by grepping
+`## WP-` headings in `WORK_PACKETS.md` **on this branch** — and WP-58's own
+announce is committed on `wp-58`, so the base's copy does not contain it.
+
+`git worktree add` refused (the branch existed), which is the only reason
+nothing was lost. Residue, all undone or harmless: a stray nested `models/models`
+symlink (removed), a rebuild of that worktree's gitignored `lib/`, and a `cp`
+of two env files **verified byte-identical to the primary's**, so a no-op.
+Their `site-resolver.ts` change was never touched.
+
+**PROPOSED PROTOCOL AMENDMENT (owner's to accept):** *the packet registry is
+`git branch --list 'wp-*'`, never `WORK_PACKETS.md`.* The doc is per-branch and
+therefore always behind by every packet announced since your base was cut. The
+existing "a dormant branch may have already shipped" rule (WP-22) points at the
+branch list for the same reason; this is its sibling — **a branch list may
+already hold a number your doc has never heard of.**
+
+Standard discipline, all of it.
+
+---
+
+## WP-59 · BASELINE (2026-08-21)
+
+```
+Test Suites: 635 passed, 635 total
+Tests:       12 skipped, 8766 passed, 8778 total
+EXIT=0
+```
+
+**The skipped column is 12 here and was 2 in `wp-57`, and the difference is
+NOT a regression — it is the documented hazard, reproduced as a controlled
+experiment.**
+
+| worktree | `models/` contains | skipped | passed |
+|---|---|---|---|
+| `wp-57` | `all-MiniLM-L6-v2-quantized` **and** `bge-small-en-v1.5` | 2 | 8,776 |
+| `wp-59` | `bge-small-en-v1.5` only | 12 | 8,766 |
+
+**Same total (8,778), different split, exactly ten tests.** In `wp-57` a
+`models/` symlink to the primary was made deliberately (to avoid a 150 MB
+download before the live smoke), so both embedding model files were present and
+the ten embedding tests RAN. Here the symlink did not take — `models/` already
+existed, holding the one model the build downloads — so those ten `describe.skip`
+instead.
+
+This is WP-20c's merge finding turned from an explanation into a measurement:
+*read the skipped column first; a passed-column delta of ten across a worktree
+boundary is this, not a regression.* Any WP-59 delta is measured against
+**8,766 passed / 12 skipped**, not against `wp-57`'s numbers.
+
+---
+
+## WP-59 · COMPLETE (2026-08-25) — the agent assembles as itself, and a refusal binds
+
+```
+Test Suites: 638 passed, 638 total
+Tests:       12 skipped, 8807 passed, 8819 total
+EXIT=0
+```
+
+Against the baseline **8,766 passed / 12 skipped**: **+41 passed, +3 suites,
+zero failures, skipped column unchanged.** The +3 suites are
+`agentAssembly.test.ts` (slice 1, already committed),
+`AgentRunner.contextBundle.test.ts` and `NexusToolProvider.refusal.test.ts`.
+
+### What shipped, against the five scope items
+
+| # | scope | shipped |
+|---|---|---|
+| 1 | `agentAssembly.ts` | yes — one `assemble()`, two callers, no fork |
+| 2 | `AgentRunner` assembles before `agent.run()` | yes, gated on the frame |
+| 3 | `ctx.context` | shipped as **`ctx.contextBundle`** — see the deviation below |
+| 4 | `task.context.assembled` per run | yes, **deferred onto the frame's realness test** |
+| 5 | fail-closed per R3 §6.1 | yes, both halves — a fault degrades, a refusal binds |
+
+### THE NUMBER THIS PACKET EXISTED TO CHANGE
+
+Announce: **36 `task.context.assembled` manifests, all 36 the chat
+assembler's, zero from an agent.** An agent run now writes its own, attributed
+to `act_<agent>` / `kind: 'agent'` with `source.system = 'assembler:agent'`, so
+"what did the agent know when it acted" has a stored answer for the actors that
+act unattended. `AgentRunner.contextBundle.test.ts` drives a real runner, a real
+frame, the real `assemble()` and a real ledger to prove it — that suite mocks
+**nothing on the path**, because the gap it closes was never a broken call, it
+was an absent one, and a mocked assembler cannot tell those apart.
+
+### THE MANIFEST IS DEFERRED, AND THAT IS ARITHMETIC
+
+`AgentTaskFrame.onFlush(fn)` is new. Assembly runs on **every** run — it only
+reads, so it costs nothing to do — but a manifest written per run would put
+back exactly the 1,440 events/day WP-57's lazy frame was bought to remove, from
+the same two-minute diagnostic agent. So the record rides the frame's own
+realness test: `task.run.assigned` → `task.context.assembled` → the act, and
+for a quiet run, nothing at all. Registering after the flush already happened
+runs inline rather than dropping — `noteGatedAct` can beat the assembler, and
+a callback silently dropped for being late would lose the manifest on precisely
+the runs that acted fastest.
+
+`observed_at` is `manifest.assembled_at`, never the flush moment, which can be
+the whole length of the run later.
+
+### THE REFUSAL IS ENFORCED, NOT REQUESTED
+
+R3's sharpest line, built as two separate things on purpose:
+
+- **A fault degrades.** Throwing assembler, absent core, unreadable store →
+  `contextBundle` is `undefined` and the run is byte-identical to pre-packet.
+- **A refusal binds.** No policy set for an autonomous actor (ADR-7), or a
+  granted procedure that will not load or hash-mismatches → every Tier ≥ 2 call
+  is refused at `NexusToolProvider.invokeInner`, every Tier 1 read still runs.
+
+The bundle *says* "take no action that changes any site, run read-only
+diagnostics only" — but that is prose in a turn block, and **prose is advice a
+prompt-injected model can ignore.** A bind that only asks is fail-open with a
+paragraph. Four decisions inside it, each pinned by a test:
+
+- **Tier is the boundary**, the same one `noteGatedAct` and the durable audit
+  write already use. Tier 1 is a read; "read-only diagnostics only" is an
+  instruction to keep reading, so a bound run keeps every read and loses every
+  act.
+- **After the Tier-3 gate, deliberately.** Tier 3 is refused for an agent
+  permanently and for an unrelated reason. Leading with the bind would tell a
+  user that restoring the policy set makes `wpe_delete_install` work.
+- **The refusal makes the run REAL**, via `frame.correlationId()` — the frame's
+  own flush-and-name call. A run stopped from acting is not a quiet run, and
+  the laziness would otherwise leave the whole episode unrecorded. The task id
+  goes into the error text, so the agent's report, the event log's `run=` lines
+  and the ledger correlation name the same episode.
+- **`noteGatedAct` was deliberately NOT reused for it.** A refusal is not an
+  act; noting one would date R2's arm-to-first-write measurement to something
+  that never happened.
+
+**Measured before the bind was written, because the volume worry was real:** the
+test core assembles with a live policy set (`pol.ops-default+rb.bulk-plugin-update+…`,
+version `psv_1a180517646a`, 10 constraints, `asserted: full`, `failClosed = false`).
+A refusal is genuinely exceptional, so making a bound run real does not
+reintroduce the 1,440/day problem. The e2e refusal pin therefore has to force
+`core.law = undefined` to reach the path at all.
+
+### DEVIATION FROM THE ANNOUNCE — `ctx.contextBundle`, not `ctx.context`
+
+Scope item 3 and the LOCKED table both say `AgentContext.context`. It shipped as
+`contextBundle`. Reason: `ctx.context.context` is what the shorter name reads as
+at the call sites, and `ContextBundle` is what the type is actually called
+everywhere else in the layer. Recorded here rather than left as a silent
+divergence — the SDK surface is the one thing in this packet an agent author
+sees.
+
+### LOCK EXTENSION — three files not in the announce's table
+
+| file | why |
+|---|---|
+| `src/main/agent-runtime/NexusToolProvider.ts` | the bind's enforcement point |
+| `src/main/intelligence-host/agentTaskFrame.ts` | `onFlush`, the deferral the manifest rides |
+| `tests/unit/agent-runtime/*` | the pins |
+
+Checked before touching them: `git branch --list 'wp-*'` (66 branches),
+`git diff --stat wp-57...$b -- <file>` per branch, **no branch diverges on any of
+the three.** Per the announce's own protocol amendment, the branch list is the
+registry — not this document.
+
+### THE THREE ANNOUNCE RULING REQUESTS, answered in code as non-rulings
+
+1. **Intent** — the agent's own reviewed `description`, falling back to
+   `"<trigger> run of <agent>"`. Never blank: a blank intent in the manifest is
+   a stored record that says nothing about why the run happened.
+2. **Targets** — empty is first-class, not an error. Measured against the
+   assembler rather than assumed: it carries `targets: []` internally and its
+   episodic retrieval returns `[]` for a zero-target request rather than
+   throwing. `auth-probe` (`siteScoped: false`) simply has no episodic priors,
+   which is correct — there is nothing to have priors about.
+3. **Does the prose reach the model?** **No, and that is why this shipped now.**
+   Bundle and manifest only, **zero change to any agent's model call**. Feeding
+   the ambient block into every agent's prompt is a real behaviour change with
+   real token cost and deserves evidence. WP-20b's pattern; WP-20f then flipped
+   it by ruling once there was something to rule on.
+
+Consequence of (3), stated plainly: `semantic` and `wrapUntrusted` are
+deliberately absent from the assembler's dependency bag. The assembler skips
+retrieval entirely without `wrapUntrusted` — its own comment calls shipping
+attacker-authorable text into a trusted channel "the one failure this assembler
+must not have" — and until the prose reaches a model there is nothing for
+retrieval to ride on. Wiring it early would add the risk without the value.
+
+### MUTATION-VERIFIED, seven mutations, all caught
+
+Every script asserted its anchor matched before running; both files restored and
+confirmed clean afterwards.
+
+| # | mutation | caught by |
+|---|---|---|
+| M1c | bundle never reaches `ctx` (`...(false ? …)`) | both contextBundle tests |
+| M2 | manifest emitted eagerly instead of deferred | both — including the ordering assertion, since an eager manifest lands *before* `task.run.assigned` |
+| M3 | actor spoofed to `act_chat_assembler` / `system` | manifest attribution |
+| M4 | `observed_at` stamped at write time | `observed_at === payload.assembled_at` |
+| MB1 | bind floor raised to tier ≥ 3 | 4 tests, unit and e2e |
+| MB2 | `frame.id` read instead of `correlationId()` | 2 — the sharp one: same-looking id, but the run never flushes and the episode stays unrecorded |
+| MB3 | bind hoisted above the Tier-3 gate | the Tier-3 message test |
+
+**Two earlier mutations produced no signal and were replaced, not counted.** M1
+(`const contextBundle = frame ?` → `false ?`) and M1b (`→ !frame ?`) both yielded
+`Tests: 0 total` — compile errors, not survivors. Same discipline as the M15
+FALSE SURVIVED lesson: *an invalid mutation is not evidence of anything.*
+
+### A LATENT GAP THE PACKET FOUND IN ITS OWN NEIGHBOUR
+
+`AgentRunner.taskframe.test.ts`'s `jest.mock` frame stub had no `onFlush`, so
+`req.frame.onFlush(...)` threw inside `assembleForAgentRun`, was swallowed by
+that function's outer catch, and **the whole assembly path silently no-opped
+while the suite stayed green.** Non-fatality is a virtue on this seam and it is
+also a mask. Fixed by making the stub faithful, in both that file and
+`NexusToolProvider.task.test.ts` (which now stubs `correlationId` too). The rule:
+*a stub missing a method its caller now reaches for hides the reach — which is
+the opposite of what a mock is for.*
+
+### NOT DONE, and named rather than implied
+
+- **No agent consumes the bundle.** By design (see ruling 3), but it means the
+  packet's user-visible effect today is the manifest and the bind, not better
+  agent behaviour.
+- **The bind has no UI.** A bound run reports through the agent's own error
+  path and the ledger. Whether Now/Inbox should surface "this agent ran
+  read-only because policy was missing" is a disposition question, not this
+  packet's.
+- **v0 holds no capability grant** (`capability: null`), so the procedure plane
+  stays dark for agent runs and `refusalBind`'s procedure branch is reachable
+  only once phase 3 lands. It is built and unit-tested now because building it
+  later, next to a live grant, is how the two refusal causes get collapsed into
+  one message.
