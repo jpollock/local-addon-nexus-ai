@@ -8,6 +8,7 @@
 
 const { execSync } = require('child_process');
 const path = require('path');
+const { benchCwd, MCP_ONLY_FLAGS } = require('./isolation');
 
 const MODEL = process.env.BENCH_MODEL ?? 'claude-opus-5';
 const TIMEOUT_MS = 300_000;
@@ -23,6 +24,7 @@ module.exports = class NexusProvider {
       '--model', MODEL,
       '--mcp-config', MCP_CONFIG,
       '--strict-mcp-config',
+      ...MCP_ONLY_FLAGS,
       '--dangerously-skip-permissions',
       '-p', `'${escaped}'`,
     ].join(' ');
@@ -32,6 +34,7 @@ module.exports = class NexusProvider {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout: TIMEOUT_MS,
+        cwd: benchCwd('nexus'),
         env: { ...process.env },
         stdio: ['pipe', 'pipe', 'pipe'],
         input: '',

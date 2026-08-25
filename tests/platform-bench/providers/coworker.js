@@ -16,6 +16,7 @@ const { execSync, execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { benchCwd, MCP_ONLY_FLAGS } = require('./isolation');
 
 const MODEL = process.env.BENCH_MODEL ?? 'claude-opus-5';
 const TIMEOUT_MS = 300_000;
@@ -70,6 +71,7 @@ module.exports = class CoworkerProvider {
       '--model', MODEL,
       '--mcp-config', configPath,
       '--strict-mcp-config',
+      ...MCP_ONLY_FLAGS,
       '--dangerously-skip-permissions',
       '-p', `'${escaped}'`,
     ].join(' ');
@@ -79,6 +81,7 @@ module.exports = class CoworkerProvider {
       const output = execSync(cmd, {
         encoding: 'utf8',
         timeout: TIMEOUT_MS,
+        cwd: benchCwd('coworker'),
         env: { ...process.env },
         stdio: ['pipe', 'pipe', 'pipe'],
         input: '',

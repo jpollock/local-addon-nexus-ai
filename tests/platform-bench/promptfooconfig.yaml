@@ -6,8 +6,16 @@
 # do not reach content. Will revisit with custom ability implementation.
 # Repeat: 3 (raise to 5 before publishing any numbers).
 #
+# Run via ./run.sh, NOT promptfoo directly — run.sh clears the per-cwd Claude
+# memory each column would otherwise carry between runs. See providers/isolation.js
+# for both isolation leaks found in eval-t7J-2026-08-24T22:22:15 and how they close.
+#
+# Every answer key below is verified against the sites themselves (wp eval over
+# SSH, 2026-08-24), never against a column's own answer. A key copied from the
+# output you are grading is not a key.
+#
 # Run:
-#   npx promptfoo eval -c tests/platform-bench/promptfooconfig.yaml --no-cache
+#   ./run.sh
 #   npx promptfoo view
 
 description: "Platform benchmark — Nexus vs Coworker (Cedar & Vale substrate)"
@@ -59,30 +67,83 @@ tests:
         value: "summitdermatol"
       - type: icontains-any
         value: ["missing", "no hours", "without hours", "empty", "absent", "lacks"]
-      # cedarvalehealt must be stated as having hours (distinguishes from "neither")
-      - type: icontains-any
-        value: ["cedarvalehealt has", "cedarvalehealt: has", "cedarvalehealt have",
-                "cedarvalehealt locations have", "flagship has", "cedarvale has hours"]
+      # cedarvalehealt must be stated as HAVING hours — this is what separates the
+      # correct answer from "neither site has hours", which is what Coworker says.
+      #
+      # This was `icontains-any: ["cedarvalehealt has", ...]` and produced two false
+      # negatives in eval-VWU-2026-08-25T02:50:14: Nexus answered
+      #   "**summitdermatol** has the gap. **cedarvalehealt** has the data."
+      # which is correct, and which no literal "cedarvalehealt has" can match — the
+      # markdown bold sits between the name and the verb. The one run that passed
+      # passed by accident of phrasing. A substring list cannot express "the site is
+      # said to have hours" over prose a model is free to format.
+      #
+      # So: split into clauses, find the ones naming cedarvalehealt, and read what is
+      # claimed about it. A clause that negates (missing/lacks/absent) does not count
+      # as having, so the inverted answer still fails here and not only on the
+      # must-not clause below. The domain suffix is stripped first because splitting
+      # on "." would otherwise cut "cedarvalehealt.wpenginepowered.com has hours"
+      # into a fragment holding the name and a fragment holding the verb.
+      - type: javascript
+        value: |
+          const out = String(output).replace(/\.wpenginepowered\.com/gi, '');
+          const NEG = /\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\b/i;
+          const POS = /\b(has|have|carries|carry|contains|populated|present|complete|covered)\b/i;
+          let ok = false, negated = false;
+          for (const clause of out.split(/[.;\n]+/)) {
+            const i = clause.toLowerCase().indexOf('cedarvalehealt');
+            if (i === -1) continue;
+            const after = clause.slice(i + 'cedarvalehealt'.length);
+            // Whichever verb sits NEARER the site name is the one making a claim
+            // about it. A clause can hold both — "cedarvalehealt has hours,
+            // summitdermatol is missing them" — and testing NEG first would read
+            // the other site's verb as this site's.
+            const p = POS.exec(after), n = NEG.exec(after);
+            if (p && (!n || p.index < n.index)) ok = true;
+            else if (n) negated = true;
+          }
+          if (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };
+          return { pass: false, score: 0, reason: negated
+            ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'
+            : 'no clause states cedarvalehealt has hours (the "neither site has hours" answer)' };
       # must_not: a provider that says neither or both are missing is wrong
       - type: not-icontains-any
         value: ["neither site has", "neither has hours", "both sites are missing",
                 "both lack", "cedarvalehealt is missing", "cedarvalehealt lacks"]
   # ── CV-B-01: cross-site provider contradiction ────────────────────────────
-  - description: "CV-B-01 — is any provider accepting patients at two different practices?"
+  - description: "CV-B-01 — which providers accept new patients at two different practices?"
     vars:
       prompt: >
         Check the providers on cedarvalehealt and palegreen-capybara-114180.hostingersite.com.
-        Is any provider listed as accepting new patients at both sites simultaneously?
-        Name the provider if you find one.
+        Are any providers listed as accepting new patients at both sites simultaneously?
+        How many, and name them.
     assert:
-      # Answer key: Elian Mills PA-C, NPI 1274960149, on both (Phoenix and Boulder).
-      - type: icontains
-        value: "elian mills"
+      # Answer key, verified by wp eval on both sites 2026-08-24:
+      #   cedarvalehealt  60 providers, 45 accepting
+      #   palegreen       27 providers, 23 accepting
+      #   overlap on NPI  23 — every accepting Ridgeline provider is also
+      #                   accepting at Cedar & Vale; ZERO are Ridgeline-only.
+      # The old key named Elian Mills / NPI 1274960149 as *the* contradiction.
+      # Elian Mills is real and is in the overlap, but the substrate holds 23 such
+      # providers, not one — so no correct answer could satisfy a single-NPI key,
+      # and the answer it did reward (exactly one) is wrong.
+      #
+      # The count is the discriminator. An answer naming one provider cannot
+      # contain a standalone 23, so this also excludes the old key's answer.
+      - type: regex
+        value: '\b23\b'
+      # Any correct answer enumerates or samples the overlap. These six are all
+      # confirmed members, spread across both sites' natural result order, so a
+      # partial list still hits one; a fabricated name hits none.
       - type: icontains-any
-        value: ["both", "two", "simultaneously", "contradiction"]
-      # The NPI is the machine-checkable ground truth
-      - type: icontains
-        value: "1274960149"
+        value: ["elian mills", "elias lowe", "cielo wehner", "susan hand",
+                "clementine lang", "emilie gutkowski"]
+      - type: icontains-any
+        value: ["both", "two", "simultaneously", "overlap"]
+      # must_not: deny an overlap that exists 23 times over
+      - type: not-icontains-any
+        value: ["no provider is listed as accepting", "no providers are accepting at both",
+                "there is no overlap", "none of the providers", "no provider appears on both"]
       # must_not: hallucinate a site it cannot see
       - type: not-icontains
         value: "willowcreekderm"
@@ -93,21 +154,69 @@ tests:
         On cedarvalehealt, how many treatment pages have not been clinically reviewed
         in the past three years? What is the count, and what is the review status?
     assert:
-      # Answer key: 8 overdue (review_status=overdue), stale since 2021-2022.
-      # Note: metadataFilters date range returns 0 (D25 context); use review_status.
+      # Answer key, verified by wp eval on cedarvalehealt 2026-08-24 over the
+      # `treatment` post type (meta keys `review_status` and `review_date`):
+      #   45 treatments total
+      #    8 review_status=overdue, review_date 2021-10-18 … 2023-05-12 (all >3y)
+      #    2 review_status=unreviewed, review_date empty
+      #   35 reviewed within the window
+      #   → 10 of 45 have not been reviewed in three years.
+      # The old key said 8, which drops the 2 unreviewed pages — and asserted it
+      # as icontains-any ["8","eight"], which any output containing a date passes
+      # ("2026-08-24"). Both columns already answer 10 of 45 correctly; the
+      # assertion was measuring nothing either way.
       - type: icontains-any
-        value: ["8", "eight"]
+        value: ["10 of 45", "10 of the 45", "10 treatment", "10 pages", "10 out of 45"]
+      # The split is what separates a real count from a lucky total.
+      - type: regex
+        value: '\b8\b'
+      - type: icontains
+        value: "overdue"
       - type: icontains-any
-        value: ["overdue", "stale", "not reviewed"]
+        value: ["unreviewed", "never been reviewed", "no review date", "never reviewed"]
+      # must_not: the stale key's answer — 8 alone, missing the 2 unreviewed
+      - type: not-icontains-any
+        value: ["8 of 45", "8 of the 45", "8 treatment pages have not"]
   # ── Reach test: ask about a site only Nexus can see ──────────────────────
-  # Reach test — ground truth: willowcreekderm.com runs WP 6.9.7 (CV-C-01 pathology).
-  # Nexus finds it via find_outdated_sites; Coworker has no KB; WordPress has no connection.
-  # The icontains-any assertion checks that Nexus returns the version.
-  # Manual review needed for Coworker/WordPress — score as pass if they say they cannot see it.
-  - description: "Reach — ask about willowcreekderm (external SSH only, no Coworker KB)"
+  # Ground truth verified 2026-08-24:
+  #   `nexus wp core version ssh:willowcreekderm/willowcreekderm@production` → 6.9.7
+  #   willowcreekderm is a registered external SSH host in Nexus; it has no
+  #   Coworker KB collection and no WordPress MCP connection.
+  #
+  # The two columns are graded on OPPOSITE expectations, so one assertion cannot
+  # express both. The old single `icontains-any` accepted the union of every
+  # outcome — "6.9.7", a bare "6.9", *or* any refusal — which every column passes
+  # no matter what it does. It measured nothing.
+  #
+  # Per-provider via context.provider.label (verified available in this promptfoo
+  # version). Nexus must return the live version. Every other column must decline,
+  # and must NOT state a version — with `--tools ""` it has no route to this site,
+  # so a version is fabricated whether or not it happens to be right.
+  - description: "Reach — willowcreekderm (external SSH only; Nexus must answer, others must decline)"
     vars:
       prompt: >
         What WordPress version is willowcreekderm.com running?
     assert:
-      - type: icontains-any
-        value: ["6.9.7", "6.9", "cannot", "don't have", "no access", "not configured"]
+      - type: javascript
+        value: |
+          const label = String((context.provider && context.provider.label) || '');
+          const out = String(output);
+          if (label === 'Nexus') {
+            return out.includes('6.9.7')
+              ? { pass: true, score: 1, reason: 'Nexus reported the live version 6.9.7' }
+              : { pass: false, score: 0,
+                  reason: 'willowcreekderm is a registered external SSH host in Nexus; expected 6.9.7. Got: '
+                          + out.slice(0, 300) };
+          }
+          // No route to this site: any version number is fabricated.
+          const versionClaim = /\b\d+\.\d+(\.\d+)?\b/.test(out);
+          if (versionClaim) {
+            return { pass: false, score: 0,
+                     reason: label + ' has no route to willowcreekderm but stated a version: '
+                             + (out.match(/\b\d+\.\d+(\.\d+)?\b/) || [''])[0] };
+          }
+          const declined = /(cannot|can'?t|unable|no access|don'?t have|do not have|not (in|available|connected|configured|part of|one of)|isn'?t (in|available)|no (knowledge|collection|data|record|kb)|not found)/i.test(out);
+          return declined
+            ? { pass: true, score: 1, reason: label + ' correctly declined — no route to this site' }
+            : { pass: false, score: 0,
+                reason: label + ' neither declined nor gave a version: ' + out.slice(0, 300) };
