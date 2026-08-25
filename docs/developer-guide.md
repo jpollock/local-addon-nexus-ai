@@ -9,13 +9,13 @@ Nexus AI is a Local addon with three layers:
 ```
 Renderer (React)         Main Process (Node.js)         External
 ┌──────────────┐        ┌─────────────────────┐        ┌───────────┐
-│ FleetOverview│──IPC──>│ IPC Handlers        │        │ MCP Client│
-│ ChatTab      │        │ ChatService         │        │ (Claude,  │
-│ Preferences  │        │ MCP Server ─────────│──HTTP──│  Cursor)  │
+│ NexusOverview│──IPC──>│ IPC Handlers        │        │ MCP Client│
+│ DockedPanel  │        │ ChatService         │        │ (Claude,  │
+│ SettingsShell│        │ MCP Server ─────────│──HTTP──│  Cursor)  │
 └──────────────┘        │   ├─ Tool Registry   │        └───────────┘
                         │   ├─ Safety Layer    │
                         │   ├─ Audit Logger    │
-                        │   └─ Modules (9)     │
+                        │   └─ Modules (16)    │
                         │ Content Pipeline     │
                         │ Embedding Service    │
                         │ Vector Store         │
@@ -71,20 +71,17 @@ src/
 │       │   ├── server-instructions.ts
 │       │   └── resources/   # Markdown files served via nexus:// URIs
 │       └── modules/         # Tool modules (one directory per module)
-│           ├── content/
-│           ├── site-context/
-│           ├── ollama/
-│           ├── fleet/
-│           ├── site-management/
-│           ├── wp-cli/
-│           ├── wp-connector/
-│           ├── wpe/
-│           └── composite/
+│           ├── content/  site-context/  ollama/  fleet/
+│           ├── site-management/  wp-cli/  wp-connector/  wpe/
+│           ├── composite/  db-scanner/  sentinel-scan/
+│           ├── fleet-intelligence/  fleet-links/  iw/
+│           ├── ai-gateway/  test-tools/     (16 dirs — ls to verify)
+│           └── + loose registrars: telemetry, settings, search_tools
 └── renderer/
-    └── components/          # React components (class-based)
-        ├── FleetOverview.tsx
-        ├── ChatTab.tsx
-        └── NexusPreferences.tsx
+    └── components/          # React 16 class components, no JSX
+        ├── NexusOverview.tsx   # the five-tab shell (now/sites/record/agents/settings)
+        ├── DockedPanel/        # the chat surface
+        └── settings/           # SettingsShell + six section components
 ```
 
 ## Adding a New Tool
@@ -160,19 +157,18 @@ registerMyModuleTools(toolRegistry);
 If your tool modifies state, add it to `TIER_OVERRIDES` in `src/main/mcp/safety.ts`:
 
 ```typescript
-export const TIER_OVERRIDES: Record<string, TierConfig> = {
-  // ...
-  my_tool_name: { tier: 2 },
-  // For destructive tools:
-  my_dangerous_tool: {
-    tier: 3,
-    warning: 'This will permanently delete everything.',
-    preChecks: ['Verify you have a backup'],
-  },
+// src/main/mcp/safety.ts — the shape is a BARE NUMBER, not a config object
+export const TIER_OVERRIDES: Record<string, SafetyTier> = {
+  my_read_tool: 1,        // read-only — MUST be listed to get Tier 1
+  my_destructive_tool: 3, // destructive — confirmation token required
 };
 ```
 
-Tools not in `TIER_OVERRIDES` default to Tier 1 (read-only).
+**Tools not in `TIER_OVERRIDES` default to Tier 2 (modify), NOT Tier 1** —
+`safety.ts`: `TIER_OVERRIDES[toolName] ?? 2`. The safe-by-default direction:
+an unregistered tool is treated as state-modifying and audited. A read-only
+tool must be explicitly listed to skip the audit; a destructive tool must be
+explicitly listed to require confirmation.
 
 ### 5. Update server instructions
 
@@ -233,7 +229,7 @@ npm run test:integration
 
 ### E2E Tests (`tests/e2e/`)
 
-Full addon running in a real Local instance. Tests numbered `01-` through `15-` and run sequentially.
+Full addon running in a real Local instance. Tests numbered `01-` through `32-` and run sequentially.
 
 ```bash
 npm run test:e2e                  # Requires Local running with the addon

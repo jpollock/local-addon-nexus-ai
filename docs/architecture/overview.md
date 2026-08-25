@@ -52,8 +52,8 @@ Nexus AI is a Local by Flywheel addon that adds AI capabilities, usage tracking,
 │  │  └─────────────────────────────────────────────────────┘  │ │
 │  │                                                             │ │
 │  │  ┌─────────────────────────────────────────────────────┐  │ │
-│  │  │ Storage (src/main/storage/)                        │  │ │
-│  │  │  - SQLite database (graph-storage.db)              │  │ │
+│  │  │ Storage (src/main/events/GraphService.ts)          │  │ │
+│  │  │  - SQLite database (nexus-ai/graph.db)             │  │ │
 │  │  │  - Events, chunks, documents, issues                │  │ │
 │  │  └─────────────────────────────────────────────────────┘  │ │
 │  │                                                             │ │
@@ -78,9 +78,8 @@ External Integrations:
 - TypeScript
 
 **Key Components:**
-- `NexusOverview.tsx` - Main dashboard with Overview/Operations tabs
-- `FleetOverview.tsx` - Local + remote sites management
-- `ContentBrowser.tsx` - Semantic search across sites
+- `NexusOverview.tsx` - Main dashboard: five tabs — Now / Sites / Record / Agents / Settings (Sites renders `PropertiesTab`, the fleet list)
+- `DockedPanel/` - the chat surface (citations, procedure checkpoints)
 - `AIGatewayUsagePanel.tsx` - AI usage tracking table
 - `AIGatewayByCallerPanel.tsx` - Aggregated usage by plugin/theme/feature
 - `BulkOperationsPanel.tsx` - Multi-site operations
@@ -215,9 +214,9 @@ mcp/
 
 #### Storage Layer
 
-**File:** `src/main/storage/GraphStorage.ts`
+**File:** `src/main/events/GraphService.ts`
 
-**Database:** SQLite (`graph-storage.db`)
+**Database:** SQLite (`~/Library/Application Support/Local/nexus-ai/graph.db`)
 
 **Tables:**
 ```sql
@@ -412,7 +411,7 @@ Final Result
 
 ### Optimization Strategies
 
-1. **Virtual Scrolling** - Fleet Overview, usage tables
+1. **Virtual Scrolling** - the Sites table, usage tables
 2. **Parallel Execution** - Bulk operations with concurrency control
 3. **Pagination** - CAPI results, search results
 4. **Indexes** - SQLite indexes on common queries

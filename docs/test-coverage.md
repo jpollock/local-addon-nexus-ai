@@ -1,5 +1,7 @@
 # Nexus AI — Test Coverage Matrix
 
+> **Point-in-time snapshot (2026-05-21).** Counts are long superseded — the suite is ~675 suites / ~9,300 tests as of 2026-08-25 (`npm test`). Kept as a record of the coverage matrix's shape, not current numbers.
+
 Generated: 2026-05-21
 
 ## Quick Summary

@@ -2,8 +2,9 @@
 
 What to do when a credential managed by Nexus AI leaks. The hard part is that a provider key is
 **cached in several places**, and overwriting it in one place leaves the old key live elsewhere —
-so rotation must touch every location below. (An automated `nexus creds rotate` command that does
-this in one step is planned but not yet shipped — see the end.)
+so rotation must touch every location below. **`nexus creds rotate <provider>` now ships**
+(`src/cli/commands/creds.ts`) and does this in one step — run it first; the manual steps below
+remain as the fallback and as the explanation of what it touches.
 
 ## Where a leaked credential lives
 
@@ -45,11 +46,12 @@ All under `~/Library/Application Support/Local/nexus-ai/` unless noted.
 - **Tool failures are recorded** to telemetry (category-only), so an incident is less likely to be
   invisible.
 
-## Not yet automated (do these by hand for now)
+## Automation status (updated 2026-08-25)
 
-- **`nexus creds rotate <provider>`** — a single command to overwrite the vault, walk every site
-  clearing/re-syncing the `wp_option`, regenerate the webhook token, and re-push MU-plugin configs.
-  Until it ships, follow steps 2–4 manually.
+- **`nexus creds rotate <provider>` — SHIPPED.** Overwrites the vault, walks every site
+  clearing/re-syncing the `wp_option`, regenerates the webhook token, and re-pushes MU-plugin
+  configs (`--force-now` briefly starts stopped stale sites to sync them). Steps 2–4 above are
+  what it does, kept for the manual fallback.
 - **A `nexus doctor` security check** that flags when `KeyVault` fell back to **plaintext** storage
   (safeStorage unavailable). Until then, watch the main-process log for the KeyVault plaintext
   warning at startup.

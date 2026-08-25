@@ -1,5 +1,7 @@
 # Ground Truth Audit — What We Actually Built
 
+> **Point-in-time audit (2026-03-25) — do not read as current truth.** Its own counts are now stale (the fate it was written to prevent). The 2026-08-25 successor is `docs/planning/2026-08-25-docs-truth-sweep.md`.
+
 **Date:** 2026-03-25
 **Purpose:** Verify actual implementation vs documentation claims
 

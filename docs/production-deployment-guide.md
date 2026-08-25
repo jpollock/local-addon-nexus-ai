@@ -10,7 +10,7 @@ The Nexus AI addon configures WordPress sites running natively on localhost with
 
 ## Bundled Plugins
 
-The addon bundles three WordPress plugins, installed and activated by the "Setup AI" button:
+The addon bundles five WordPress plugins (`wp-plugins/`: ai, ai-provider-for-ollama, ai-provider-for-local-gateway, nexus-ai-connector, advanced-custom-fields-pro). "Setup AI" installs and activates three on a site — the AI plugin, ONE chosen provider plugin, and the connector:
 
 | Plugin | Purpose |
 |---|---|
@@ -58,7 +58,7 @@ Deactivate `ai-provider-for-ollama` on production. It is a local-only plugin and
 
 ### 1. Set up AI locally
 
-Click the "Setup AI" button in the Nexus AI addon panel for your site. This installs and activates the three plugins, enables AI experiments, syncs API keys, and enables ACF abilities.
+Click the "Setup AI" button in the Nexus AI addon panel for your site. This installs and activates the AI plugin, your chosen provider plugin, and the connector; enables AI experiments; syncs API keys; and enables ACF abilities.
 
 ### 2. Configure cloud provider API keys
 

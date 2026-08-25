@@ -1,5 +1,7 @@
 # WPE Sync Performance Optimization
 
+*Point-in-time optimization write-up (2026-03-11); numbers describe that date's tree.*
+
 ## Problem Statement
 
 Initial WPE site sync was taking **12-15 hours** for 252 sites (~3.5 minutes per site).

@@ -1,5 +1,7 @@
 # Digital Twin: Site Metadata Persistence
 
+> **Naming note (2026-08-25):** the "digital twin" here is the `SiteMetadataCache` snapshot (electron-store). The intelligence layer's **twins** (`twin_facts` in `ledger.db`, folded from events) are a different, newer mechanism — see `docs/digital-twin-data.md`. Two things share the word.
+
 **Status:** Implemented (Phase 1.1-1.4 complete, March 2026)
 **Rationale:** Solve UI responsiveness and state persistence issues across Local restarts
 

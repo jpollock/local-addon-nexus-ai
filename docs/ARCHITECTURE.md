@@ -1,5 +1,7 @@
 # Nexus AI Architecture
 
+*Last verified against the tree: 2026-08-25 — the shared-core/tier model described here still holds.*
+
 ## Core Principle: Shared Business Logic, Interface-Specific Safety
 
 MCP and CLI provide near 1:1 functionality because they both call the same tool handlers. Safety enforcement happens at the **interface layer**, not in the business logic.
