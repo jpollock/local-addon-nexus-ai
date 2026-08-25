@@ -212,10 +212,13 @@ describe('DockedPanel — state enum', () => {
     });
   });
 
-  describe('wide state', () => {
-    it('renders the panel at 620px', () => {
-      const tree = renderPanel('wide');
-      expect((tree as any).props.style.width).toBe(620);
+  describe('the retired wide state (fixes-082526)', () => {
+    it('is not part of the state union any more', () => {
+      // The union is compile-time, so the guard has to be a runtime one: no
+      // size the panel can be in renders at the retired 620px width.
+      const widths = (['closed', 'docked', 'full'] as PanelState[])
+        .map((s) => (renderPanel(s) as any).props.style.width);
+      expect(widths).not.toContain(620);
     });
   });
 
@@ -229,7 +232,7 @@ describe('DockedPanel — state enum', () => {
   });
 
   describe('invariant: no state renders neither rail nor panel', () => {
-    const allStates: PanelState[] = ['closed', 'docked', 'wide', 'full'];
+    const allStates: PanelState[] = ['closed', 'docked', 'full'];
 
     allStates.forEach((state) => {
       it(`${state} renders something`, () => {

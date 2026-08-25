@@ -2,7 +2,13 @@ import React from 'react';
 import { UI_COLORS } from '../../../common/constants';
 import { MARK_VIEWBOX, MARK_RING, MARK_DOT, RING_MIN_SIZE } from '../../utils/nexusMark';
 
-export type PanelState = 'closed' | 'docked' | 'wide' | 'full';
+/**
+ * Three sizes, deliberately. `'wide'` (620px) was retired on fixes-082526:
+ * a middle stop between a 380px sidebar and full screen made the expand
+ * control a two-press affordance whose first press landed nowhere anyone
+ * asked to be. Persisted `'wide'` migrates to `'full'` in the container.
+ */
+export type PanelState = 'closed' | 'docked' | 'full';
 export type PanelTab = 'insights' | 'chat';
 
 export interface Props {
@@ -36,7 +42,6 @@ interface DockedPanelState {
 }
 
 export const PANEL_WIDTH = 380;
-export const WIDE_WIDTH = 620;
 /**
  * The collapsed state is a floating tab, not a full-height strip. It overlays, reserves
  * nothing in Local's layout, and — because it never spans the full height — structurally
@@ -138,17 +143,6 @@ function IconCollapse({ size }: { size: number }) {
   );
 }
 
-function IconWide({ size }: { size: number }) {
-  return React.createElement(
-    'svg',
-    { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block' } },
-    React.createElement('rect', { x: 3, y: 5, width: 18, height: 14, rx: 2 }),
-    React.createElement('path', { d: 'M9 5v14' }),
-  );
-}
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-
 function iconBtnStyle(hovered: boolean, active = false) {
   return {
     background: hovered || active ? 'var(--nxai-table-hover)' : 'none',
@@ -247,7 +241,7 @@ const styles = {
     top: 0,
     right: 0,
     bottom: 0,
-    width: state === 'full' ? undefined : state === 'wide' ? WIDE_WIDTH : PANEL_WIDTH,
+    width: state === 'full' ? undefined : PANEL_WIDTH,
     left: state === 'full' ? 68 : undefined,
     background: 'var(--nxai-card-bg)',
     borderLeft: `1px solid var(--nxai-card-border)`,
@@ -361,7 +355,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
       );
     }
 
-    // Panel is open (docked, wide, or full)
+    // Panel is open (docked or full)
     const isFull = panelState === 'full';
 
     // No segmented control. Insights was dropped and Chat is all that remains, and a
@@ -405,7 +399,7 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
       React.createElement(
         'div',
         { style: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 } },
-        // #1 Sessions — docked and wide only (null in full)
+        // #1 Sessions — docked only (null in full)
         isFull ? null : React.createElement(
           'button',
           {
@@ -431,39 +425,14 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
           },
           React.createElement(IconNewChat, { size: 17 }),
         ),
-        // #3 Contract (wide only) — back to docked
-        panelState === 'wide' ? React.createElement(
-          'button',
-          {
-            style: iconBtnStyle(this.hov('contract-docked')),
-            onClick: () => onSetPanelState('docked'),
-            title: 'Back to docked',
-            'aria-label': 'Back to docked',
-            onMouseEnter: this.onEnter('contract-docked'),
-            onMouseLeave: this.onLeave(),
-          },
-          React.createElement(IconContract, { size: 17 }),
-        ) : null,
-        // #4 Expand (docked→wide, wide→full) OR Contract (full→docked)
+        // #4 Expand (docked→full) OR Contract (full→docked). One hop each way.
         panelState === 'docked'
           ? React.createElement(
               'button',
               {
                 style: iconBtnStyle(this.hov('expand')),
-                onClick: () => onSetPanelState('wide'),
-                title: 'Wide view',
-                'aria-label': 'Wide view',
-                onMouseEnter: this.onEnter('expand'),
-                onMouseLeave: this.onLeave(),
-              },
-              React.createElement(IconWide, { size: 17 }),
-            )
-          : panelState === 'wide'
-          ? React.createElement(
-              'button',
-              {
-                style: iconBtnStyle(this.hov('expand')),
                 onClick: () => onSetPanelState('full'),
+                title: 'Expand to full screen',
                 'aria-label': 'Expand to full screen',
                 onMouseEnter: this.onEnter('expand'),
                 onMouseLeave: this.onLeave(),

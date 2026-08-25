@@ -765,6 +765,37 @@ export class PanelChat extends React.Component<Props, State> {
     try { track(this.props.electron.ipcRenderer, 'nexus_panel_message_sent', { siteCount: this.props.selectedSiteIds.length }); } catch (_) {}
   }
 
+  /**
+   * Start a new chat, imperatively.
+   *
+   * fixes-082526 · issue 1. The "+" control used to work only by side effect:
+   * the container set `activeSessionId: null` and this component reset inside
+   * `componentDidUpdate` — but ONLY when the prop actually changed. Whenever
+   * the container's id was already null (the ordinary case before a session
+   * has been minted, and any path that cleared it first), null -> null was no
+   * change at all, `componentDidUpdate` never ran, and the transcript stayed
+   * on screen while the button appeared to do nothing.
+   *
+   * A reset must not depend on a value having differed. This is the whole
+   * action in one call: persist what is leaving (so it stays reachable from
+   * Sessions rather than being discarded), then clear. `componentDidUpdate`
+   * keeps its branch for genuine session SWITCHING, which is a different act.
+   */
+  async startNewChat(): Promise<void> {
+    const hadContent = this.state.messages.some((m) => m.content.trim().length > 0);
+    if (hadContent) {
+      try { await this.persistSession(); } catch { /* a failed save must not block a new chat */ }
+    }
+    this.setState({
+      messages: [],
+      activeSessionId: null,
+      streaming: false,
+      streamingId: null,
+      actionCount: 0,
+      input: '',
+    });
+  }
+
   async persistSession() {
     try {
       const { messages, activeSessionId } = this.state;

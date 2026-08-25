@@ -46,9 +46,9 @@ describe('panelReflow', () => {
     });
 
     it('wide state is always overlay', () => {
-      expect(computeReflowMode('wide', 800, true)).toBe('overlay');
-      expect(computeReflowMode('wide', 1620, true)).toBe('overlay');
-      expect(computeReflowMode('wide', 2000, true)).toBe('overlay');
+      expect(computeReflowMode('full', 800, true)).toBe('overlay');
+      expect(computeReflowMode('full', 1620, true)).toBe('overlay');
+      expect(computeReflowMode('full', 2000, true)).toBe('overlay');
     });
 
     it('full state is always overlay', () => {
@@ -61,7 +61,7 @@ describe('panelReflow', () => {
   describe('computeReservedWidth', () => {
     it('returns 0 when overlay mode', () => {
       expect(computeReservedWidth('docked', 'overlay')).toBe(0);
-      expect(computeReservedWidth('wide', 'overlay')).toBe(0);
+      expect(computeReservedWidth('full', 'overlay')).toBe(0);
       expect(computeReservedWidth('full', 'overlay')).toBe(0);
       expect(computeReservedWidth('closed', 'overlay')).toBe(0);
     });
@@ -80,12 +80,12 @@ describe('panelReflow', () => {
     });
 
     it('returns 0 for wide/full in-flow (they are never in-flow)', () => {
-      expect(computeReservedWidth('wide', 'in-flow')).toBe(0);
+      expect(computeReservedWidth('full', 'in-flow')).toBe(0);
       expect(computeReservedWidth('full', 'in-flow')).toBe(0);
     });
 
     it('docked in-flow is the only combination that reserves anything', () => {
-      const states = ['closed', 'docked', 'wide', 'full'] as const;
+      const states = ['closed', 'docked', 'full'] as const;
       const modes = ['in-flow', 'overlay'] as const;
       const reserving = states.flatMap((s) =>
         modes.filter((m) => computeReservedWidth(s, m) > 0).map((m) => `${s}/${m}`),

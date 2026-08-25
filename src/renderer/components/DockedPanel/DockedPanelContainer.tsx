@@ -156,16 +156,23 @@ function readState(): ContainerState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      // Migrate old open+size format to panelState enum
+      // Migrate old open+size format to panelState enum.
+      //
+      // `'wide'` was a real size until fixes-082526 and is still on disk for
+      // anyone who used it. It migrates to `'full'` — the size it was a stop
+      // on the way to — rather than coercing to `'docked'`, which would shrink
+      // a panel the person had deliberately made bigger.
+      const migrateSize = (v: unknown): PanelState | null =>
+        v === 'wide' ? 'full'
+          : (v === 'closed' || v === 'docked' || v === 'full') ? v
+          : null;
       let panelState: PanelState;
       if (parsed.panelState !== undefined) {
-        const valid: PanelState[] = ['closed', 'docked', 'wide', 'full'];
-        panelState = valid.includes(parsed.panelState) ? parsed.panelState : 'docked';
+        panelState = migrateSize(parsed.panelState) ?? 'docked';
       } else if (parsed.open === false) {
         panelState = 'closed';
       } else {
-        const validSizes: PanelState[] = ['docked', 'wide', 'full'];
-        panelState = validSizes.includes(parsed.size) ? parsed.size : 'docked';
+        panelState = migrateSize(parsed.size) ?? 'docked';
       }
       // Chat is the only tab now that Insights is gone; a persisted 'insights' from an
       // older build coerces to it rather than leaving the panel on a tab that no longer exists.
@@ -173,7 +180,12 @@ function readState(): ContainerState {
       return {
         panelState: 'closed', // always start collapsed — never block Local on load
         activeTab,
-        activeSessionId: parsed.activeSessionId ?? null,
+        // fixes-082526 · issue 2: a cold boot starts a NEW chat. The id is
+        // still WRITTEN on every change (so a reload mid-session is not a
+        // data loss question — the transcript is saved and reachable from
+        // Sessions); it is simply not resumed. Opening Local should offer a
+        // blank page, not the middle of last week's conversation.
+        activeSessionId: null,
         showSessions: false,
         sessionListVersion: 0,
         ...SITE_CONTEXT_DEFAULTS,
@@ -704,6 +716,14 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
   }
 
   newChat() {
+    // Imperative, not prop-diff. See PanelChat.startNewChat: relying on
+    // `activeSessionId` CHANGING meant the "+" did nothing whenever it was
+    // already null. Reach for the child directly, exactly as the persist
+    // path already does, so the reset happens whatever the id was.
+    const chat = this.chatRef.current as any;
+    if (chat && typeof chat.startNewChat === 'function') {
+      chat.startNewChat().catch(() => {});
+    }
     this.setState({ activeSessionId: null, showSessions: false, activeTab: 'chat' });
   }
 

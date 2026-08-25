@@ -43,7 +43,6 @@ const VARIANTS: Array<[string, Record<string, any>]> = [
   ['full', { panelState: 'full' }],
   ['streaming', { streamingStatus: 'Thinking…' }],
   ['sessions open', { showSessions: true, sessionsSidebar: React.createElement('div', null, 'sessions') }],
-  ['wide', { panelState: 'wide' }],
 ];
 
 describe('panel chrome — characterization', () => {
@@ -53,19 +52,20 @@ describe('panel chrome — characterization', () => {
 });
 
 describe('panel chrome — control interactions', () => {
-  it('docked expand goes to wide, not full', () => {
+  it('docked expand goes straight to full — the middle size was retired (fixes-082526)', () => {
     const onSetPanelState = jest.fn();
     const panel = makePanel({ panelState: 'docked', onSetPanelState });
     const tree = panel.render();
 
-    const expandBtn = findByLabel(tree, 'Expand to full screen') ?? findByLabel(tree, 'Wide view');
+    const expandBtn = findByLabel(tree, 'Expand to full screen');
     expect(expandBtn).toBeTruthy();
     expandBtn.props.onClick();
-    expect(onSetPanelState).toHaveBeenCalledWith('wide');
+    expect(onSetPanelState).toHaveBeenCalledWith('full');
+    expect(onSetPanelState).not.toHaveBeenCalledWith('wide');
   });
 
-  it('wide mode has sessions button', () => {
-    const panel = makePanel({ panelState: 'wide' });
+  it('docked mode has sessions button', () => {
+    const panel = makePanel({ panelState: 'docked' });
     const tree = panel.render();
 
     const sessionsBtn = findByLabel(tree, 'Sessions');

@@ -30,12 +30,10 @@
  * subtleties, and clearing it restores the stylesheet's `right: 0`.
  */
 
-export type PanelState = 'closed' | 'docked' | 'wide' | 'full';
+export type PanelState = 'closed' | 'docked' | 'full';
 
 /** 380px docked panel (from spec: available − 380 ≥ 1000) */
 export const PANEL_WIDTH = 380;
-/** 620px wide panel */
-export const WIDE_WIDTH = 620;
 /** Minimum width Local's content must retain when a panel is in-flow */
 const MIN_CONTENT_WIDTH = 1000;
 
@@ -65,7 +63,7 @@ export function computeReflowMode(
   if (panelState === 'docked') {
     return availableWidth - PANEL_WIDTH >= MIN_CONTENT_WIDTH ? 'in-flow' : 'overlay';
   }
-  // closed (floating tab), wide and full are always overlay
+  // closed (floating tab) and full are always overlay
   return 'overlay';
 }
 

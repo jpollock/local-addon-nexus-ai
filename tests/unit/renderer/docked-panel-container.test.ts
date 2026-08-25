@@ -18,7 +18,9 @@ describe('DockedPanelContainer localStorage persistence', () => {
     const { DockedPanelContainer } = require('../../../src/renderer/components/DockedPanel/DockedPanelContainer');
     const inst = new DockedPanelContainer({});
     expect(inst.state.panelState).toBe('closed'); // always collapsed on load — prevents blocking Local
-    expect(inst.state.activeSessionId).toBe('abc');
+    // fixes-082526 · issue 2: a cold boot starts a NEW chat. The id is still
+    // written on change, but never resumed — opening Local offers a blank page.
+    expect(inst.state.activeSessionId).toBeNull();
   });
 
   it('defaults to closed with no session when localStorage is empty', () => {
