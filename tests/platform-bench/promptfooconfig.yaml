@@ -65,8 +65,26 @@ tests:
       #   "cedarvalehealt is missing" — hallucination
       - type: icontains
         value: "summitdermatol"
-      - type: icontains-any
-        value: ["missing", "no hours", "without hours", "empty", "absent", "lacks"]
+      # A gap must be identified somewhere in the answer. This was
+      # icontains-any ["missing","no hours","without hours","empty","absent","lacks"]
+      # and produced a third false negative in eval-NHz-2026-08-25T12:47:28: Nexus
+      # wrote "**`summitdermatol` — no opening hours at all**", which is correct and
+      # which "no hours" does not match — one word of natural phrasing between "no"
+      # and "hours" defeats the literal. Same defect class as the clause below, in
+      # the clause next door.
+      #
+      # Deliberately NOT scoped to a summitdermatol clause: real answers use a
+      # heading-then-body shape ("### summitdermatol" / "No hours fields at all"),
+      # which puts the site name and the gap phrase in different clauses. The
+      # discrimination lives in the cedarvalehealt clause and the must-not list;
+      # this one only has to see that a gap was named at all.
+      - type: javascript
+        value: |
+          const GAP = /(missing|lacks?\b|lacking|absent|\bempty\b|\bnone\b|zero hours|without[^.;\n]{0,24}\bhours\b|\bno\b[^.;\n]{0,24}\bhours\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;
+          const m = GAP.exec(String(output));
+          return m
+            ? { pass: true, score: 1, reason: 'gap identified: "' + m[0] + '"' }
+            : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };
       # cedarvalehealt must be stated as HAVING hours — this is what separates the
       # correct answer from "neither site has hours", which is what Coworker says.
       #
@@ -90,10 +108,23 @@ tests:
           const NEG = /\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\b/i;
           const POS = /\b(has|have|carries|carry|contains|populated|present|complete|covered)\b/i;
           let ok = false, negated = false;
-          for (const clause of out.split(/[.;\n]+/)) {
+          const clauses = out.split(/[.;\n]+/);
+          for (let c = 0; c < clauses.length; c++) {
+            const clause = clauses[c];
             const i = clause.toLowerCase().indexOf('cedarvalehealt');
             if (i === -1) continue;
-            const after = clause.slice(i + 'cedarvalehealt'.length);
+            let after = clause.slice(i + 'cedarvalehealt'.length);
+            // A clause that is a bare heading ("### cedarvalehealt", "**cedarvale-
+            // healt**") names the subject and defers the claim to the body that
+            // follows. Read the next clause in that case — but only then, and only
+            // if it does not name the other site, so a clause carrying its own
+            // content is never allowed to borrow a verdict from its neighbour.
+            const residue = (clause.slice(0, i) + after)
+              .replace(/[^a-z0-9\s]/gi, ' ').trim().split(/\s+/).filter(Boolean);
+            if (residue.length <= 3 && !/\b(has|have|missing|lacks?|absent|carries|carry)\b/i.test(after)) {
+              const next = clauses[c + 1] || '';
+              if (!/summitdermatol/i.test(next)) after = after + ' ' + next;
+            }
             // Whichever verb sits NEARER the site name is the one making a claim
             // about it. A clause can hold both — "cedarvalehealt has hours,
             // summitdermatol is missing them" — and testing NEG first would read

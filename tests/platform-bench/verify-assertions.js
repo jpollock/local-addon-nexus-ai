@@ -51,6 +51,19 @@ const CASES = [
     out: "## Answer: **summitdermatol** has the gap. **cedarvalehealt** has the data.\n\n**cedarvalehealt — 25 locations, all with hours**\n\nEvery location carries a full 7-day hours repeater, indexed as sub-fields:\n\nhours_0_day: monday, hours_0_opens: 07:30\nhours: 7\n\n**summitdermatol — 2 locations, zero hours fields**\n\nNeither location has *any* `hours*` field. Not empty values — the field is entirely absent from the indexed schema for the `location` post type." },
   { t: 'CV-A-01', col: 'Nexus', want: true, name: 'correct — bolded name (real run 3, was a false negative)',
     out: "## Answer: **summitdermatol** has the gap. **cedarvalehealt** has the hours data.\n\n### Summit Dermatology Partners (`summitdermatol`) — missing opening hours\n\nBoth of its 2 `location` records have **no hours fields at all**. Not empty values — the fields don't exist. Hours are the single missing dimension.\n\n### Cedar & Vale Health (`cedarvalehealt`) — hours present on all 25 locations\n\nAll 25 locations carry a 7-day repeater." },
+  // Verbatim from eval-NHz-2026-08-25T12:47:28, a correct answer scored FAIL
+  // because the gap clause required the literal "no hours" and it wrote "no
+  // opening hours at all". One word of natural phrasing defeated the literal.
+  { t: 'CV-A-01', col: 'Nexus', want: true, name: 'correct — "no OPENING hours" (real, was a false negative)',
+    out: "## Answer: `summitdermatol` has the gap\n\n**`cedarvalehealt` — has opening hours.** All 25 location records carry a full 7-day hours repeater, indexed as `hours: 7` plus expanded sub-fields. Coverage is 25/25 on the `hours` field.\n\n**`summitdermatol` — no opening hours at all.** Its `location` post type has 2 records, and neither has an `hours` field, nor any `hours_*` sub-field." },
+  // Heading-then-body: the site name and the gap phrase land in different
+  // clauses. This is why the gap check is not scoped to a summitdermatol clause.
+  { t: 'CV-A-01', col: 'Nexus', want: true, name: 'correct — gap phrase in a separate clause from the name',
+    out: "### summitdermatol\n\nNo hours fields at all on either location.\n\n### cedarvalehealt\n\nAll 25 locations carry a 7-day hours repeater." },
+  // Names both sites and says cedarvalehealt has hours, but never identifies a
+  // gap anywhere. The gap clause is the only thing standing between this and a pass.
+  { t: 'CV-A-01', col: 'Nexus', want: false, name: 'wrong — no gap identified at all',
+    out: "cedarvalehealt has hours on all 25 locations. summitdermatol was also reviewed." },
   { t: 'CV-A-01', col: 'Nexus', want: true, name: 'correct — full domain (dots must not split the claim)',
     out: 'cedarvalehealt.wpenginepowered.com has hours on all 25 locations. summitdermatol.wpenginepowered.com is missing them.' },
   { t: 'CV-A-01', col: 'Nexus', want: false, name: 'wrong — inverted, comma-joined (no clause boundary to hide behind)',

@@ -4,8 +4,14 @@
 #
 # Usage:
 #   cd ~/development/wpengine/local-addon-nexus-ai/tests/platform-bench
-#   export COWORKER_API_KEY=wpe_...
+#   set -a; source ../../nexus.env.local; set +a     # supplies COWORKER_API_KEY
 #   ./run.sh
+#
+# Extra args pass through to `promptfoo eval`. To run one scenario:
+#   ./run.sh --filter-pattern 'CV-A-01'
+# It is --filter-pattern, matched against the test description. There is no
+# --filter-description in promptfoo 0.122.0, and passing one exits non-zero
+# AFTER the isolation preflight has already run.
 
 set -e
 
