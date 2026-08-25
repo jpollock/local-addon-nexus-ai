@@ -43,6 +43,8 @@ export interface BackfillResult {
   plugins: number;
   themes: number;
   emitted: number;
+  /** Rows whose `updated_at` could not be read — skipped, never stamped "now". */
+  skippedNoTime: number;
 }
 
 export function scheduleGraphBackfill(options: {
@@ -83,6 +85,7 @@ export function runGraphBackfill(
 ): BackfillResult {
   const gate = createChangeGate(core);
   let emitted = 0;
+  let skippedNoTime = 0;
 
   const sites = db
     .prepare(
@@ -94,6 +97,12 @@ export function runGraphBackfill(
   for (const site of sites) {
     const siteId = String(site.id ?? '');
     if (!siteId) continue;
+    const siteObservedAt = rowTimeToIso(site.updated_at);
+    if (siteObservedAt === null) {
+      // No usable time — skip, never stamp "now" on a row of unknown age.
+      skippedNoTime++;
+      continue;
+    }
     const entityId = environmentEntityId(core.entities, siteId);
     const value = {
       name: site.name == null ? undefined : String(site.name),
@@ -103,7 +112,7 @@ export function runGraphBackfill(
     };
     if (gate(entityId, 'site.core', value)) {
       core.emitter.emit({
-        observed_at: rowTimeToIso(site.updated_at),
+        observed_at: siteObservedAt,
         topic: 'state.site.observed',
         schema: 'site.observed/1',
         entity: eventEntityStamp(siteStampFor(core.entities, siteId), entityId),
@@ -131,6 +140,11 @@ export function runGraphBackfill(
     const siteId = String(plugin.site_id ?? '');
     const slug = String(plugin.slug ?? '');
     if (!siteId || !slug) continue;
+    const pluginObservedAt = rowTimeToIso(plugin.updated_at);
+    if (pluginObservedAt === null) {
+      skippedNoTime++;
+      continue;
+    }
     const entityId = environmentEntityId(core.entities, siteId);
     const value = {
       version: plugin.version == null ? undefined : String(plugin.version),
@@ -138,7 +152,7 @@ export function runGraphBackfill(
     };
     if (gate(entityId, `plugin:${slug}`, value)) {
       core.emitter.emit({
-        observed_at: rowTimeToIso(plugin.updated_at),
+        observed_at: pluginObservedAt,
         topic: 'state.plugin.observed',
         schema: 'plugin.observed/1',
         entity: eventEntityStamp(siteStampFor(core.entities, siteId), entityId),
@@ -165,6 +179,11 @@ export function runGraphBackfill(
       const siteId = String(theme.site_id ?? '');
       const slug = String(theme.slug ?? '');
       if (!siteId || !slug) continue;
+      const themeObservedAt = rowTimeToIso(theme.updated_at);
+      if (themeObservedAt === null) {
+        skippedNoTime++;
+        continue;
+      }
       const entityId = environmentEntityId(core.entities, siteId);
       const value = {
         version: theme.version == null ? undefined : String(theme.version),
@@ -172,7 +191,7 @@ export function runGraphBackfill(
       };
       if (gate(entityId, `theme:${slug}`, value)) {
         core.emitter.emit({
-          observed_at: rowTimeToIso(theme.updated_at),
+          observed_at: themeObservedAt,
           topic: 'state.theme.observed',
           schema: 'theme.observed/1',
           entity: eventEntityStamp(siteStampFor(core.entities, siteId), entityId),
@@ -191,5 +210,11 @@ export function runGraphBackfill(
   logger.info(
     `[Intelligence] backfill scanned ${sites.length} sites, ${plugins.length} plugins, ${themeCount} themes`
   );
-  return { sites: sites.length, plugins: plugins.length, themes: themeCount, emitted };
+  if (skippedNoTime > 0) {
+    logger.info(
+      `[Intelligence] backfill skipped ${skippedNoTime} row(s) with no usable updated_at — ` +
+        `absent from the ledger rather than stamped "now"`
+    );
+  }
+  return { sites: sites.length, plugins: plugins.length, themes: themeCount, emitted, skippedNoTime };
 }

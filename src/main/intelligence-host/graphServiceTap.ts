@@ -54,7 +54,7 @@ export function tapGraphService(
         };
         if (shouldEmit(entityId, `plugin:${slug}`, value)) {
           core.emitter.emit({
-            observed_at: toIso(plugin.updated_at),
+            observed_at: toIso(plugin.updated_at) ?? new Date().toISOString(), // live tap: the write is happening now
             topic: 'state.plugin.observed',
             schema: 'plugin.observed/1',
             entity: eventEntityStamp(siteStampFor(core.entities, siteId), entityId),
@@ -86,7 +86,7 @@ export function tapGraphService(
           };
           if (shouldEmit(entityId, `theme:${slug}`, value)) {
             core.emitter.emit({
-              observed_at: toIso(theme.updated_at),
+              observed_at: toIso(theme.updated_at) ?? new Date().toISOString(), // live tap: the write is happening now
               topic: 'state.theme.observed',
               schema: 'theme.observed/1',
               entity: eventEntityStamp(siteStampFor(core.entities, siteId), entityId),
@@ -119,7 +119,7 @@ export function tapGraphService(
         };
         if (shouldEmit(entityId, 'site.core', value)) {
           core.emitter.emit({
-            observed_at: toIso(site.updated_at),
+            observed_at: toIso(site.updated_at) ?? new Date().toISOString(), // live tap: the write is happening now
             topic: 'state.site.observed',
             schema: 'site.observed/1',
             entity: eventEntityStamp(siteStampFor(core.entities, siteId), entityId),

@@ -30,10 +30,19 @@ export function createChangeGate(core: IntelligenceCore): ChangeGate {
   };
 }
 
-/** Row timestamps are epoch ms (sometimes s); normalize to ISO, falling back to now. */
-export function rowTimeToIso(epoch: unknown): string {
+/**
+ * Row timestamps are epoch ms (sometimes s); normalize to ISO.
+ *
+ * Returns null — never "now" — when the value cannot be read. Stamping "now"
+ * on a row of unknown age launders staleness into freshness (the rule
+ * `incidentProducer.ts` states: no usable time → emit nothing). The one caller
+ * for whom "now" IS the honest observation time — the live tap, observing a
+ * write as it happens — supplies that fallback itself, where the reasoning is
+ * visible.
+ */
+export function rowTimeToIso(epoch: unknown): string | null {
   const n = Number(epoch);
   if (Number.isFinite(n) && n > 1e12) return new Date(n).toISOString(); // ms
   if (Number.isFinite(n) && n > 1e9) return new Date(n * 1000).toISOString(); // s
-  return new Date().toISOString();
+  return null;
 }

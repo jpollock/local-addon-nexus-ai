@@ -45,7 +45,7 @@ test('backfill seeds twins from active graph rows; soft-deleted excluded; fleet 
   const graphDb = fakeGraphDb();
 
   const result = runGraphBackfill(core, graphDb, { info: () => {}, error: () => {} });
-  expect(result).toEqual({ sites: 2, plugins: 2, themes: 1, emitted: 5 }); // removedhost excluded entirely
+  expect(result).toEqual({ sites: 2, plugins: 2, themes: 1, emitted: 5, skippedNoTime: 0 }); // removedhost excluded entirely
 
   await new Promise((r) => setTimeout(r, 700)); // debounced fold
 
