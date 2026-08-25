@@ -1,3 +1,5 @@
+> **Point-in-time analysis (pre-2026-08).** Tab names, defect statuses, and acceptance criteria here reference retired surfaces (Overview/Operations/Activity). Current behavior: `docs/digital-twin-data.md`.
+
 # Post-Implementation Usability Analysis
 
 **Date:** April 17, 2026  

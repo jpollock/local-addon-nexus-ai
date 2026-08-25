@@ -1,3 +1,5 @@
+> **Point-in-time analysis (pre-2026-08).** Tab names, defect statuses, and acceptance criteria here reference retired surfaces (Overview/Operations/Activity). Current behavior: `docs/digital-twin-data.md`.
+
 # Nexus AI — Next Roadmap
 *Starting from post-mvp-next state, April 2026*
 
