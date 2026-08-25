@@ -743,74 +743,76 @@ export class PanelChat extends React.Component<Props, State> {
 
   private renderOpeningState(): React.ReactElement {
     const opening = this.props.opening;
-    const style = { padding: '24px 0', color: 'var(--nxai-card-sub)', textAlign: 'center' as const, fontSize: 13 };
+    const stage = this.isStage();
 
-    if (!opening) {
-      // The invitation, from the ratified sheet (newChatCopy.generated.ts).
-      //
-      // NO SUGGESTIONS HERE, deliberately. The sheet's pin is that suggestions
-      // are QUESTIONS DERIVED from what is true right now; the fixture's three
-      // are specimens of that derivation, not copy to ship. With no opening
-      // queue there is nothing true to derive from, and rendering them anyway
-      // would put a fabricated "open incident, 14h" on a quiet fleet — the
-      // withhold-rather-than-guess rule, applied to an invitation. Derived
-      // asks render in the queue branch below, where they are real.
-      const stage = this.isStage();
-      return React.createElement(
-        'div',
-        {
-          style: {
-            display: 'flex',
-            flexDirection: 'column' as const,
-            alignItems: stage ? 'center' : 'flex-start',
-            gap: 9,
-            textAlign: stage ? ('center' as const) : ('left' as const),
-          },
-          'data-panel-opening': 'invitation',
-        },
-        // The headline is DISPLAY type. At body size the invitation reads as a
-        // status line, and the 30px-against-13.5px contrast is the entire
-        // hierarchy of this screen — flatten it and the subject becomes a
-        // paragraph.
-        React.createElement(
-          'div',
-          {
-            key: 'headline',
-            style: {
-              fontSize: stage ? 30 : 22,
-              lineHeight: stage ? '36px' : '28px',
-              fontWeight: 600,
-              letterSpacing: '-0.6px',
-              color: 'var(--nxai-card-text)',
-              margin: 0,
-            },
-          },
-          NEW_CHAT_HEADLINE,
-        ),
-        React.createElement(
-          'div',
-          { key: 'promise', style: { fontSize: 13.5, lineHeight: 1.55, color: 'var(--nxai-card-sub)' } },
-          // The companion drops the promise's SECOND clause rather than
-          // shrinking it — a refusal states its own reason when it happens.
-          stage ? NEW_CHAT_PROMISE : NEW_CHAT_PROMISE_SHORT,
-        ),
-      );
-    }
-
+    // ONE invitation, whatever the queue holds. The old queue branch put the
+    // situation verdict ("10 things need you…") where the headline belongs,
+    // which made the new chat a report you cannot act from — the defect the
+    // ruling names: the count may render, but never as the subject. It is now
+    // the AMBIENT line, header weight, above the invitation, and the
+    // invitation itself is identical whether the fleet is quiet or not.
     return React.createElement(
       'div',
-      { style: { ...style, textAlign: 'left' as const, padding: '18px 14px' }, 'data-panel-opening': 'queue' },
-      ...(opening.verdict
+      {
+        style: {
+          display: 'flex',
+          flexDirection: 'column' as const,
+          alignItems: stage ? 'center' : 'flex-start',
+          gap: 9,
+          textAlign: stage ? ('center' as const) : ('left' as const),
+        },
+        'data-panel-opening': opening ? 'queue' : 'invitation',
+      },
+      // The verdict at ambient weight — one line, no action, never the
+      // subject. Kept above the display headline so the count stays
+      // reachable without displacing the invitation.
+      ...(opening?.verdict
         ? [React.createElement(
             'div',
-            { key: 'verdict', style: { color: 'var(--nxai-card-text)', fontSize: 13, lineHeight: 1.45 }, 'data-opening-verdict': 'true' },
+            {
+              key: 'verdict',
+              'data-opening-verdict': 'true',
+              style: { fontSize: 12, lineHeight: 1.45, color: 'var(--nxai-card-sub)' },
+            },
             opening.verdict,
+          ),
+          // WP-49's ratified invitation line rides WITH the verdict, at the
+          // same ambient weight — "Ask about any of them" is a sentence about
+          // the count, so it belongs beside the count, not where the display
+          // headline now stands. Two ratified sheets meet here: the Now
+          // screen's line keeps its presence, the new-chat sheet keeps the
+          // subject.
+          React.createElement(
+            'div',
+            { key: 'queue-invitation', style: { fontSize: 12, lineHeight: 1.45, color: 'var(--nxai-card-sub)' } },
+            opening.invitation,
           )]
         : []),
-      React.createElement('div', { key: 'invitation', style: { marginTop: 4, fontSize: 12 } }, opening.invitation),
-      // The asks used to render here as full-width bars. They are now pills
-      // BELOW the composer (renderComposerBlock) — same asks, same handler,
-      // the treatment the sheet specifies.
+      // The headline is DISPLAY type. At body size the invitation reads as a
+      // status line, and the 30px-against-13.5px contrast is the entire
+      // hierarchy of this screen.
+      React.createElement(
+        'div',
+        {
+          key: 'headline',
+          style: {
+            fontSize: stage ? 30 : 22,
+            lineHeight: stage ? '36px' : '28px',
+            fontWeight: 600,
+            letterSpacing: '-0.6px',
+            color: 'var(--nxai-card-text)',
+            margin: 0,
+          },
+        },
+        NEW_CHAT_HEADLINE,
+      ),
+      React.createElement(
+        'div',
+        { key: 'promise', style: { fontSize: 13.5, lineHeight: 1.55, color: 'var(--nxai-card-sub)' } },
+        // The companion drops the promise's SECOND clause rather than
+        // shrinking it — a refusal states its own reason when it happens.
+        stage ? NEW_CHAT_PROMISE : NEW_CHAT_PROMISE_SHORT,
+      ),
     );
   }
 
