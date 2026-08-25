@@ -213,6 +213,27 @@ sequenceDiagram
 
 ## Storage Architecture
 
+### The Intelligence Layer (`src/intelligence/`)
+
+An event-sourced spine beside the caches: every fleet observation becomes a
+provenance-stamped envelope in an append-only SQLite ledger
+(`nexus-ai/ledger.db` — `events`, `entities`, `entity_aliases`,
+`entity_links`, `twin_facts`). Key properties:
+
+- **`observed_at` ≠ `recorded_at`** — freshness computes from when a fact was
+  true at its source, never from when it was written. Unparseable source
+  times are skipped, not stamped "now".
+- **Twins are folded views** — rebuildable from the ledger, never
+  authoritative; readers disclose staleness and offer live re-checks.
+- **The extraction seam is enforced by lint** — nothing under
+  `src/intelligence/` imports Electron, React, or `src/main`; host access
+  goes through ports.
+- **Emission by construction** — gated tool calls emit `task.action.executed`
+  / `task.outcome.recorded` at both dispatch chokepoints; every chat turn and
+  agent run writes a context-assembly manifest.
+
+Design record: ADRs 1–24 in the repo's `docs/intelligence/architecture.md`.
+
 ### sqlite-vec (Vector Database)
 
 ```

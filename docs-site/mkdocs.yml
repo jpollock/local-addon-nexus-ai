@@ -159,6 +159,10 @@ nav:
     - WPE Account: integrations/wpe-account.md
 
   - Features:
+    - Docked Panel & Citations: features/docked-panel.md
+    - Agents: features/agents.md
+    - Procedures & Grants: features/procedures.md
+    - External SSH Hosts: features/external-hosts.md
     - Semantic Search: features/semantic-search.md
     - Content Extraction: features/content-extraction.md
     - WP-CLI Integration: features/wp-cli-integration.md
@@ -176,6 +180,7 @@ nav:
     - Troubleshooting: ai-context/troubleshooting.md
 
   - Reference:
+    - What's New (Aug 2026): reference/whats-new-august-2026.md
     - CLI Commands: reference/cli-command-reference.md
     - Permissions & Access Control: reference/permissions-access-control-v2.md
     - Model Catalog: reference/model-catalog.md

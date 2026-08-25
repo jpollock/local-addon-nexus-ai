@@ -1,5 +1,14 @@
 # Docs Truth Sweep — plan of record
 
+**STATUS (2026-08-25 ~12:45):** Phases 1–5 EXECUTED and committed
+(`93845f2a` CLAUDE.md · `f0733831` repo docs · `f6d43cba` archive ·
+`6eeaddf8` retirements · `b8dfd866` sweeps + ui-quick-start rewrite,
+pulled forward from Phase 6). All Phase 4–5 gates green, incl.
+`mkdocs build --strict`. **The pre-push gate is satisfied.** Remaining:
+Phase 6 rewrites (index, cli-command-reference regen, first-scan,
+first-ai-query, ai-context/features, architecture/overview,
+preferences, wpe-management) and Phase 7 net-new pages.
+
 *2026-08-25 · branch `poc/nexintelligence-data` (= local `main` at plan time) ·
 Author: the 2026-08-25 review session. Every finding below was verified by
 direct command against the tree on this date; the evidence column names the

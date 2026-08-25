@@ -1,1953 +1,262 @@
 ---
 title: CLI Command Reference
-description: Complete reference for all Nexus AI CLI commands
-keywords: [cli, commands, reference, nexus, wordpress, local, wpe]
+description: Every nexus CLI command, generated from the CLI source (2026-08-25)
+keywords: [cli, commands, reference, nexus]
 ---
 
 # CLI Command Reference
 
-Complete reference for all Nexus AI CLI commands.
+The complete `nexus` command surface — **22 top-level commands**, regenerated
+from `src/cli/` on 2026-08-25. Run any command with `--help` for its flags;
+most support `--json` for scripting.
 
-## Global Options
+```bash
+nexus --help          # top-level list
+nexus <cmd> --help    # subcommands and flags
+```
 
-Available on all commands:
+**Target syntax** used throughout: local sites by name (`mysite`), WP Engine
+installs as `wpe:<account>/<install>@<environment>` (or a bare install name),
+external SSH hosts as `ssh:<alias>/<site>@<environment>`. A bare name that
+exists in more than one source is declined with the disambiguated forms —
+copy one back in.
 
-| Option | Alias | Description |
-|--------|-------|-------------|
-| `--help` | `-h` | Show help for command |
-| `--version` | `-v` | Show version number |
-| `--debug` | | Enable debug logging |
-| `--quiet` | `-q` | Suppress non-essential output |
-| `--json` | | Output results as JSON |
+---
 
-## Core Commands
+## Health & setup
 
 ### `nexus doctor`
 
-System health check and first-run orientation.
+Check system health and show setup status. **Run this first** — every ⚠️/❌
+prints the exact command that fixes it.
 
-```bash
-nexus doctor [options]
-```
+### `nexus troubleshoot`
 
-**Options:**
+Diagnose and recover from common Nexus AI issues.
 
-| Option | Description |
-|--------|-------------|
-| `--json` | Output results as JSON (for scripting or CI) |
+### `nexus update`
 
-**What it checks:**
+Update the CLI to the latest version.
 
-| Check | Notes |
-|-------|-------|
-| Local app | Installed and running |
-| Nexus AI addon | Active and version-matched to CLI |
-| GraphQL server | Connected |
-| MCP server | Running and tool count |
-| AI agent config | Claude Code, Claude Desktop, Cursor, Windsurf detected |
-| AI provider | Configured and API key present |
-| Local Gateway | Enabled or disabled |
-| Sites with AI | N / total configured · X running |
+### `nexus mcp` — MCP server management
 
-Every `⚠️` or `❌` result includes the exact command to fix it. Run this first when anything is broken.
+| Subcommand | What it does |
+|---|---|
+| `status` | Show MCP server status and connection info |
+| `setup` | Generate or write MCP config for your AI agent |
 
-**Example output:**
+### `nexus skills`
 
-```
-Nexus AI — System Health
-──────────────────────────────────────────────────
-  ✅  Local app           Installed
-  ✅  Local running       Running
-  ✅  Nexus AI addon      Active
-  ✅  GraphQL server      Connected (port 4000)
-  ✅  MCP server          Running · ~190 tools
-  ✅  AI agent config     Claude Desktop
-  ✅  AI provider         Anthropic (Claude)
-  ✅  Local Gateway       Enabled
-  ✅  Sites with AI       4 / 32 sites configured · 0 running
-──────────────────────────────────────────────────
-
-  Everything looks good. 🎉
-```
-
-**Exit codes:** `0` if all checks pass or warn, `1` if any check returns an error.
+| Subcommand | What it does |
+|---|---|
+| `setup` | Install Nexus CLI skills into `~/.claude/skills/` |
+| `list` | List installed Nexus skills |
 
 ---
 
-### `nexus mcp`
+## Sites
 
-Command group for MCP server management and agent configuration.
+### `nexus sites` — Local and WPE sites
 
-```bash
-nexus mcp <subcommand> [options]
-```
+| Subcommand | What it does |
+|---|---|
+| `list` | List all sites (local + WPE) |
+| `get <site>` | Detailed information about a site |
+| `create` / `delete` | Create / delete a local site |
+| `start` / `stop` / `restart` | Lifecycle for a local site |
+| `clone` / `rename` | Clone or rename a site |
+| `export` / `import` | Archive round-trip |
+| `logs <site>` | View site logs |
+| `config-php` | Change PHP version |
+| `config-ssl` | Trust the SSL certificate |
+| `config-xdebug` | Toggle Xdebug |
+| `status <site>` | What cached data exists for a site and how fresh it is |
+| `refresh <site>` | Refresh the site's cached data (digital twin) |
 
-**Subcommands:**
+### `nexus host` — external SSH hosts
 
-| Subcommand | Description |
-|-----------|-------------|
-| `status` | Show MCP server status |
-| `setup` | Generate or write agent config |
+Sites that are neither Local nor WP Engine, reached via a `~/.ssh/config`
+alias. Nexus stores no key material and never writes to your server.
 
-!!! note "Works without Local running"
-    `nexus mcp status` and `nexus mcp setup` skip the Local bootstrap and work regardless of whether Local is open.
+| Subcommand | What it does |
+|---|---|
+| `test <alias>` | Check an SSH host without registering it |
+| `add <alias>` | Probe a host, list its WordPress installs, register the ones you pick |
+| `list` | List registered external hosts |
+| `remove <alias>` | Forget a host (soft-delete) |
+| `remove-site` | Forget one site under a connection, keep the rest |
+| `refresh <alias>` | Collect WordPress metadata now (read-only) |
+| `index <alias>` | Content-index the host now, for semantic search (read-only) |
 
----
+### `nexus sync` — content between local and WPE
 
-#### `nexus mcp status`
-
-Show the current MCP server status (port, tool count, live connectivity check).
-
-```bash
-nexus mcp status
-```
-
-**Output:**
-
-```
-MCP server: running
-Port:       50123
-Tools:      88
-```
-
----
-
-#### `nexus mcp setup`
-
-Generate or write the correct MCP configuration for a supported AI agent.
-
-```bash
-nexus mcp setup [--agent <name>] [--write]
-```
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--agent <name>` | Target agent | Interactive prompt |
-| `--write` | Write config to disk (or register with CLI) | `false` (print only) |
-
-**Supported agents:**
-
-| Agent | `--agent` value | `--write` behavior |
-|-------|----------------|-------------------|
-| Claude Code | `claude-code` | Runs `claude mcp add` |
-| Claude Desktop | `claude-desktop` | Writes to `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Cursor | `cursor` | Writes to `~/.cursor/mcp.json` |
-| Windsurf | `windsurf` | Writes to `~/.codeium/windsurf/mcp_config.json` |
-| Cline (VS Code) | `cline` | Writes to `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
-| Gemini CLI | `gemini` | Writes to `~/.gemini/settings.json` |
-
-**Usage:**
-
-```bash
-# Print config for Claude Desktop (no changes made)
-nexus mcp setup --agent claude-desktop
-
-# Write config for Cursor automatically
-nexus mcp setup --agent cursor --write
-
-# Register with Claude Code CLI
-nexus mcp setup --agent claude-code --write
-```
-
-**All agents use the stdio bridge** (`bin/mcp-stdio.js`), not an HTTP URL. The generated config always uses `"command": "node"` with the absolute path to the bridge.
-
-**Environment Variables:**
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NEXUS_DEBUG` | Enable debug logging | `false` |
-| `NEXUS_DB_PATH` | Custom database path | `~/.nexus/nexus.db` |
-| `NEXUS_TELEMETRY` | Enable telemetry | `true` |
+| Subcommand | What it does |
+|---|---|
+| `pull` | Pull from WPE to local |
+| `push` | Push from local to WPE (confirmation required) |
+| `history <site>` | View sync history |
 
 ---
 
-### `nexus scan`
+## WordPress operations
 
-Scan WordPress sites and index content into vector database.
+### `nexus wp` — WP-CLI on any target
 
-```bash
-nexus scan [site] [options]
-```
+Works on local sites, WPE installs, and (for 18 of the 22 subcommands)
+external SSH hosts. Writes are refused on production environments by default —
+grant them in Settings → WPE Access / Operation Permissions.
 
-**Arguments:**
+| Group | Subcommands |
+|---|---|
+| `plugin` | `list` · `install` · `activate` · `deactivate` · `update` |
+| `theme` | `list` · `activate` |
+| `core` | `version` · `update` |
+| `db` | `export` · `import` · `search-replace` · `scan` · `clean` (dry-run by default) · `report` — scan/clean/report are **local-only** |
+| `post` | `create` · `update` · `delete` |
+| (direct) | `user-list` · `option-get` · `health` · `users` (graph DB; local-only) |
 
-| Argument | Description |
-|----------|-------------|
-| `[site]` | Site ID or name (optional, scans all if omitted) |
+### `nexus content` — indexing and search
 
-**Options:**
+| Subcommand | What it does |
+|---|---|
+| `index <site>` | Index a site's content (posts, pages, products) for semantic search |
+| `search <site> <query>` | Search within one site |
+| `search-all <query>` | Search across all indexed sites |
+| `structure <site>` | Site file structure |
+| `index-status <site>` | Indexing status |
+| `list-indexed` | All indexed sites |
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--force` | Force re-scan even if recently scanned | `false` |
-| `--local-only` | Scan local sites only | `false` |
-| `--wpe-only` | Scan WP Engine sites only | `false` |
-| `--parallel <n>` | Number of parallel scans | `10` |
+### `nexus audit`
 
-**Usage:**
-
-```bash
-# Scan all sites
-nexus scan
-
-# Scan specific site
-nexus scan mysite
-
-# Scan all local sites
-nexus scan --local-only
-
-# Force re-scan with custom parallelization
-nexus scan --force --parallel 5
-```
-
-**Output:**
-
-```
-Scanning 25 sites...
-
-✓ mysite (5,432 posts) - 12.3s
-✓ blog (1,234 posts) - 4.2s
-✓ shop (8,901 products) - 18.7s
-...
-
-Completed 25 sites in 2m 34s
-Total indexed: 45,678 documents (123MB)
-```
-
-**What Gets Indexed:**
-
-- ✅ Posts & pages (title, content, excerpt, meta)
-- ✅ WooCommerce products (price, SKU, stock, attributes)
-- ✅ ACF fields (text, textarea, repeater, group, flexible)
-- ✅ Media attachments (alt text, captions)
-- ✅ Themes & plugins (name, version, description)
-- ✅ Users (username, roles — no PII)
-- ✅ Site configuration (WP version, PHP version, permalink structure)
-
-**Performance:**
-
-| Site Size | Scan Time | Index Size |
-|-----------|-----------|------------|
-| Small (100 posts) | ~2 seconds | ~500KB |
-| Medium (1,000 posts) | ~5 seconds | ~5MB |
-| Large (10,000 posts) | ~20 seconds | ~50MB |
-| E-commerce (5,000 products) | ~15 seconds | ~25MB |
+| Subcommand | What it does |
+|---|---|
+| `site <site>` | Comprehensive audit of one WordPress site |
+| `plugins` | Fleet-wide plugin audit across running sites |
 
 ---
 
-### `nexus search`
+## Fleet
 
-Search indexed content using semantic vector search.
+### `nexus fleet` — fleet intelligence
 
-```bash
-nexus search <query> [options]
-```
+| Subcommand | What it does |
+|---|---|
+| `properties` | The fleet at the property grain: places, knowledge rungs, ceilings, checked ages |
+| `summary` | Fleet-wide summary from the twin cache |
+| `health` / `site-health <site>` | Fleet and per-site health |
+| `search <q>` / `filter` | Find sites by content or criteria |
+| `php <version>` / `wp <version>` | Sites on a specific PHP / WP version |
+| `plugins` | Aggregate plugin presence |
+| `refresh` | Refresh cached twin data for all sites |
+| `compare <a> <b>` | Compare two sites |
+| `list` / `create` / `add` / `remove` / `delete` | Site groups |
+| `reindex` / `plugin-update` / `health-check` | Bulk operations |
 
-**Arguments:**
+### `nexus pipeline`
 
-| Argument | Description |
-|----------|-------------|
-| `<query>` | Search query (required) |
+| Subcommand | What it does |
+|---|---|
+| `status` | L2/L3 pipeline coverage per source, latest failures with reasons, 24h history |
 
-**Options:**
+### `nexus system`
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--site <site>` | Limit to specific site | - |
-| `--type <type>` | Filter by content type | `all` |
-| `--limit <n>` | Max results to return | `10` |
-| `--threshold <n>` | Similarity threshold (0-1) | `0.7` |
-
-**Content Types:**
-
-- `post` — Blog posts
-- `page` — Pages
-- `product` — WooCommerce products
-- `attachment` — Media files
-- `all` — All content types
-
-**Usage:**
-
-```bash
-# Basic search
-nexus search "how to optimize images"
-
-# Search specific site
-nexus search "shipping options" --site shop
-
-# Search products only
-nexus search "blue widgets" --type product
-
-# Get top 20 results with lower threshold
-nexus search "performance tips" --limit 20 --threshold 0.6
-```
-
-**Output:**
-
-```json
-{
-  "query": "how to optimize images",
-  "results": [
-    {
-      "site": "blog",
-      "type": "post",
-      "title": "WordPress Image Optimization Guide",
-      "url": "https://blog.local/optimize-images",
-      "excerpt": "Learn how to compress and lazy-load images...",
-      "score": 0.92,
-      "post_id": 123
-    },
-    {
-      "site": "blog",
-      "type": "post",
-      "title": "WebP Conversion for WordPress",
-      "url": "https://blog.local/webp-images",
-      "excerpt": "Converting images to WebP format reduces...",
-      "score": 0.88,
-      "post_id": 456
-    }
-  ],
-  "total": 2,
-  "time_ms": 42
-}
-```
-
-**Semantic Search vs Keyword Search:**
-
-| Query | Keyword Search | Semantic Search |
-|-------|----------------|-----------------|
-| "optimize images" | Exact phrase match | Image compression, lazy loading, WebP, CDN |
-| "speed up site" | "speed" or "site" | Performance, caching, optimization, minification |
-| "sell products" | "sell" or "products" | E-commerce, WooCommerce, payment gateways, checkout |
+| Subcommand | What it does |
+|---|---|
+| `status` | Content index + metadata cache state for all local sites |
 
 ---
 
-### `nexus list`
-
-List WordPress sites (local and WP Engine).
-
-```bash
-nexus list [options]
-```
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--local` | Show local sites only | `false` |
-| `--wpe` | Show WP Engine sites only | `false` |
-| `--running` | Show running sites only | `false` |
-| `--halted` | Show halted sites only | `false` |
-| `--format <fmt>` | Output format (`table`, `json`, `csv`) | `table` |
-
-**Usage:**
-
-```bash
-# List all sites
-nexus list
-
-# List only running local sites
-nexus list --local --running
-
-# Export to JSON
-nexus list --format json > sites.json
-
-# Export to CSV
-nexus list --format csv > sites.csv
-```
-
-**Output (table format):**
-
-```
-Local Sites (15)
-┌─────────────┬────────────────────────┬──────────┬────────────┬──────────┐
-│ Name        │ Domain                 │ Status   │ WP Version │ Host     │
-├─────────────┼────────────────────────┼──────────┼────────────┼──────────┤
-│ mysite      │ mysite.local           │ running  │ 6.4.3      │ wpe      │
-│ blog        │ blog.local             │ running  │ 6.4.2      │ -        │
-│ shop        │ shop.local             │ halted   │ 6.3.1      │ flywheel │
-└─────────────┴────────────────────────┴──────────┴────────────┴──────────┘
-
-WP Engine Sites (8)
-┌─────────────┬─────────────┬─────────────────────────────┬──────────┐
-│ Name        │ Environment │ Domain                      │ Status   │
-├─────────────┼─────────────┼─────────────────────────────┼──────────┤
-│ mysite      │ production  │ mysite.wpengine.com         │ active   │
-│ mysite      │ staging     │ mysite.wpenginepowered.com  │ active   │
-│ blog        │ production  │ blog.com                    │ active   │
-└─────────────┴─────────────┴─────────────────────────────┴──────────┘
-```
-
-**Output (JSON format):**
-
-```json
-{
-  "local": [
-    {
-      "id": "abc123",
-      "name": "mysite",
-      "domain": "mysite.local",
-      "status": "running",
-      "wp_version": "6.4.3",
-      "host": "wpe",
-      "path": "/Users/me/Local Sites/mysite"
-    }
-  ],
-  "wpe": [
-    {
-      "name": "mysite",
-      "environment": "production",
-      "domain": "mysite.wpengine.com",
-      "status": "active",
-      "install_id": "abc123xyz"
-    }
-  ]
-}
-```
-
----
-
-### `nexus plugin`
-
-Manage WordPress plugins on local and remote sites.
-
-```bash
-nexus plugin <action> [options]
-```
-
-**Actions:**
-
-| Action | Description |
-|--------|-------------|
-| `list` | List installed plugins |
-| `activate` | Activate a plugin |
-| `deactivate` | Deactivate a plugin |
-| `install` | Install a plugin |
-| `update` | Update plugins |
-| `search` | Search WordPress.org plugins |
-
-#### `nexus plugin list`
-
-List installed plugins.
-
-```bash
-nexus plugin list <site> [options]
-```
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--status <status>` | Filter by status (`active`, `inactive`, `all`) | `all` |
-| `--updates` | Show only plugins with updates | `false` |
-
-**Usage:**
-
-```bash
-# List all plugins
-nexus plugin list mysite
-
-# List active plugins only
-nexus plugin list mysite --status active
-
-# List plugins with updates
-nexus plugin list mysite --updates
-```
-
-**Output:**
-
-```
-Plugins on mysite (15 total, 12 active)
-
-Active Plugins:
-✓ Akismet Anti-Spam 5.3 (update available: 5.3.1)
-✓ Yoast SEO 21.9
-✓ WooCommerce 8.5.2
-...
-
-Inactive Plugins:
-○ Classic Editor 1.6.3
-○ Hello Dolly 1.7.2
-...
-
-3 updates available (use --updates to see details)
-```
-
-#### `nexus plugin activate`
-
-Activate a plugin.
-
-```bash
-nexus plugin activate <site> <plugin>
-```
-
-**Usage:**
-
-```bash
-# Activate by slug
-nexus plugin activate mysite akismet
-
-# Activate by path
-nexus plugin activate mysite akismet/akismet.php
-```
-
-**Output:**
-
-```
-✓ Activated akismet on mysite
-```
-
-#### `nexus plugin deactivate`
-
-Deactivate a plugin.
-
-```bash
-nexus plugin deactivate <site> <plugin>
-```
-
-**Usage:**
-
-```bash
-# Deactivate plugin
-nexus plugin deactivate mysite akismet
-```
-
-**Output:**
-
-```
-✓ Deactivated akismet on mysite
-```
-
-#### `nexus plugin install`
-
-Install a plugin from WordPress.org.
-
-```bash
-nexus plugin install <site> <plugin> [options]
-```
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--activate` | Activate after install | `false` |
-| `--version <ver>` | Install specific version | `latest` |
-
-**Usage:**
-
-```bash
-# Install plugin
-nexus plugin install mysite akismet
-
-# Install and activate
-nexus plugin install mysite akismet --activate
-
-# Install specific version
-nexus plugin install mysite akismet --version 5.3
-```
-
-**Output:**
-
-```
-Downloading akismet 5.3.1...
-Installing...
-✓ Installed akismet 5.3.1 on mysite
-```
-
-#### `nexus plugin update`
-
-Update plugins.
-
-```bash
-nexus plugin update <site> [plugin] [options]
-```
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--all` | Update all plugins | `false` |
-| `--dry-run` | Show what would be updated | `false` |
-
-**Usage:**
-
-```bash
-# Update specific plugin
-nexus plugin update mysite akismet
-
-# Update all plugins
-nexus plugin update mysite --all
-
-# Dry run (check for updates)
-nexus plugin update mysite --all --dry-run
-```
-
-**Output:**
-
-```
-Updating plugins on mysite...
-
-✓ akismet 5.3 → 5.3.1
-✓ yoast-seo 21.8 → 21.9
-○ woocommerce (already latest)
-
-Updated 2 plugins, 1 already latest
-```
-
----
-
-### `nexus wp`
-
-Execute WP-CLI commands on local or remote sites.
-
-```bash
-nexus wp <site> <command> [args...]
-```
-
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `<site>` | Site ID or install name |
-| `<command>` | WP-CLI command |
-| `[args...]` | Command arguments |
-
-**Usage:**
-
-```bash
-# Get WordPress version
-nexus wp mysite core version
-
-# List users
-nexus wp mysite user list
-
-# Get option value
-nexus wp mysite option get siteurl
-
-# Export database
-nexus wp mysite db export
-
-# Run custom command
-nexus wp mysite eval "echo wp_get_theme()->get('Version');"
-```
-
-**Remote Sites (WP Engine):**
-
-```bash
-# Works the same on WPE installs
-nexus wp mysite-production core version
-
-# SSH connection is automatic
-nexus wp mysite-staging plugin list
-```
-
-**Output:**
-
-```bash
-$ nexus wp mysite core version
-6.4.3
-
-$ nexus wp mysite user list --format=table
-+----+----------+------------------+
-| ID | user_login | user_email     |
-+----+----------+------------------+
-| 1  | admin    | admin@mysite.local |
-+----+----------+------------------+
-```
-
-**Blocked Commands (remote only):**
-
-For security, these commands are blocked on remote WP Engine sites:
-
-- `db query`
-- `eval`
-- `eval-file`
-- `shell`
-
----
-
-### `nexus wp db`
-
-Scan and clean WordPress site databases. These are subcommands of `nexus wp` focused on database health.
-
-```bash
-nexus wp db <subcommand> <site> [options]
-```
-
-#### `nexus wp db scan`
-
-Scan a site's database and print a health report.
-
-```bash
-nexus wp db scan <site>
-```
-
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `<site>` | Site ID or name |
-
-**Usage:**
-
-```bash
-# Scan a single site
-nexus wp db scan mysite
-
-# Output as JSON
-nexus wp db scan mysite --json
-```
-
-**Output:**
-
-```
-Database Health — mysite
-─────────────────────────────────────────────
-  Post revisions:       1,204 rows  (~18 MB)
-  Expired transients:     892 rows  (~4 MB)
-  Orphaned postmeta:      341 rows  (~1 MB)
-  Spam/trash comments:    120 rows
-  Auto-draft posts:        14 rows
-
-WooCommerce:
-  Stale sessions:         567 rows  (~6 MB)
-  Orphaned order meta:    203 rows
-
-Estimated savings: ~29 MB
-Run 'nexus wp db clean mysite --dry-run' for a cleanup preview.
-```
-
----
-
-#### `nexus wp db clean`
-
-Clean database bloat on a site. **Defaults to `--dry-run`** — no changes are made until you remove that flag.
-
-```bash
-nexus wp db clean <site> [options]
-```
-
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `<site>` | Site ID or name |
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--dry-run` | Preview changes without deleting | `true` |
-| `--items <list>` | Comma-separated categories to clean | all detected |
-
-**Valid categories for `--items`:**
-
-| Category | What Gets Deleted |
-|----------|-------------------|
-| `revisions` | Excess post revisions |
-| `transients` | Expired transients from `wp_options` |
-| `orphaned_postmeta` | Post meta for deleted posts |
-| `spam_comments` | Spam and trashed comments |
-| `auto_drafts` | Abandoned autosave drafts |
-| `orphaned_termmeta` | Term meta for deleted terms |
-| `woo_sessions` | Stale WooCommerce cart sessions |
-| `woo_order_meta` | Orphaned meta for deleted orders |
-| `woo_variation_meta` | Meta for removed product variations |
-
-**Usage:**
-
-```bash
-# Preview everything (default dry-run)
-nexus wp db clean mysite --dry-run
-
-# Clean specific categories (still dry-run by default)
-nexus wp db clean mysite --items revisions,transients --dry-run
-
-# Apply cleanup after reviewing
-nexus wp db clean mysite --items revisions,transients
-
-# Clean all detected items
-nexus wp db clean mysite
-```
-
-**Output (dry run):**
-
-```
-Cleanup Preview — mysite (DRY RUN)
-
-  revisions:    1,204 rows would be deleted (~18 MB)
-  transients:     892 rows would be deleted (~4 MB)
-
-Total: 2,096 rows, ~22 MB savings
-Run without --dry-run to apply.
-```
-
-**Output (live):**
-
-```
-Cleanup complete — mysite
-
-  revisions:    1,204 rows deleted (~18 MB freed)
-  transients:     892 rows deleted (~4 MB freed)
-
-Total: 2,096 rows deleted, ~22 MB freed
-```
-
----
-
-#### `nexus wp db report`
-
-Print the saved health report from the most recent scan of a site.
-
-```bash
-nexus wp db report <site>
-```
-
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `<site>` | Site ID or name |
-
-**Usage:**
-
-```bash
-nexus wp db report mysite
-```
-
-**Output:** Same format as `nexus wp db scan`. If no scan has been run yet, you are prompted to run one.
-
----
+## WP Engine
 
 ### `nexus wpe`
 
-Manage WP Engine sites and environments.
-
-```bash
-nexus wpe <action> [options]
-```
-
-**Actions:**
-
-| Action | Description |
-|--------|-------------|
-| `status` | Check WPE authentication status |
-| `accounts` | List WPE accounts |
-| `installs` | List WPE installs |
-| `diagnose` | Diagnose site health |
-| `diff` | Compare environments |
-| `backup` | Create backup |
-| `promote` | Promote staging to production |
-| `usage` | Show bandwidth/storage/visitor metrics for an install |
-| `account-usage` | Show bandwidth/storage/visitor metrics for an account |
-
-#### `nexus wpe status`
-
-Check WP Engine authentication status.
-
-```bash
-nexus wpe status
-```
-
-**Output (authenticated):**
-
-```
-WP Engine: authenticated
-User:      you@example.com
-```
-
-**Output (not authenticated):**
-
-```
-WP Engine: not authenticated
-Run 'nexus wpe login' to authenticate.
-```
-
-#### `nexus wpe accounts`
-
-List WP Engine accounts.
-
-```bash
-nexus wpe accounts [options]
-```
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--format <fmt>` | Output format (`table`, `json`) | `table` |
-
-**Usage:**
-
-```bash
-# List accounts
-nexus wpe accounts
-
-# JSON output
-nexus wpe accounts --format json
-```
-
-**Output:**
-
-```
-WP Engine Accounts (3)
-┌─────────────┬────────────┬────────┬────────────────┐
-│ Account     │ Plan       │ Installs │ Bandwidth/mo  │
-├─────────────┼────────────┼────────┼────────────────┤
-│ my-agency   │ Growth     │ 12     │ 200GB / 400GB │
-│ client-one  │ Startup    │ 3      │ 45GB / 50GB   │
-│ client-two  │ Professional │ 8    │ 120GB / 200GB │
-└─────────────┴────────────┴────────┴────────────────┘
-```
-
-#### `nexus wpe installs`
-
-List WP Engine installs.
-
-```bash
-nexus wpe installs [account] [options]
-```
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--environment <env>` | Filter by environment | `all` |
-| `--format <fmt>` | Output format | `table` |
-
-**Usage:**
-
-```bash
-# List all installs
-nexus wpe installs
-
-# List installs for account
-nexus wpe installs my-agency
-
-# List production only
-nexus wpe installs --environment production
-```
-
-**Output:**
-
-```
-WP Engine Installs (8)
-┌─────────────┬─────────────┬─────────────────────────────┬──────────┐
-│ Name        │ Environment │ Domain                      │ Status   │
-├─────────────┼─────────────┼─────────────────────────────┼──────────┤
-│ mysite      │ production  │ mysite.wpengine.com         │ active   │
-│ mysite      │ staging     │ mysite.wpenginepowered.com  │ active   │
-│ blog        │ production  │ blog.com                    │ active   │
-└─────────────┴─────────────┴─────────────────────────────┴──────────┘
-```
-
-#### `nexus wpe diagnose`
-
-Run comprehensive site health check.
-
-```bash
-nexus wpe diagnose <install>
-```
-
-**Usage:**
-
-```bash
-nexus wpe diagnose mysite-production
-```
-
-**Output:**
-
-```
-Diagnosing mysite-production...
-
-✓ SSL Certificate
-  - Valid until: 2026-12-31
-  - Issuer: Let's Encrypt
-  - Grade: A+
-
-✓ Backups
-  - Last backup: 2 hours ago
-  - Retention: 30 days
-  - Next backup: in 22 hours
-
-✓ Performance
-  - Cache hit rate: 94.2%
-  - Avg response time: 142ms
-  - PHP version: 8.2
-
-✓ Bandwidth
-  - Used: 45GB / 200GB (22.5%)
-  - Overage: No
-
-⚠ Disk Usage
-  - Used: 1.8GB / 2.0GB (90%)
-  - Warning: Approaching limit
-
-✓ PHP Errors
-  - No recent errors
-
-Overall: 1 warning, 0 errors
-```
-
-#### `nexus wpe diff`
-
-Compare staging and production environments.
-
-```bash
-nexus wpe diff <site>
-```
-
-**Usage:**
-
-```bash
-nexus wpe diff mysite
-```
-
-**Output:**
-
-```
-Comparing mysite-staging → mysite-production
-
-WordPress Core:
-  staging:    6.4.3
-  production: 6.4.2
-  → Update available
-
-Themes:
-  ✓ twentytwentyfour: 1.0 (same)
-
-Plugins:
-  ⚠ akismet: 5.3.1 → 5.3 (staging ahead)
-  ⚠ yoast-seo: 21.9 → 21.8 (staging ahead)
-  ✓ woocommerce: 8.5.2 (same)
-
-Database:
-  staging:    125 posts, 8 pages
-  production: 120 posts, 8 pages
-  → 5 new posts on staging
-
-Files:
-  staging:    1,245 files (850MB)
-  production: 1,240 files (845MB)
-  → 5 new files on staging
-
-Safe to promote: YES (no conflicts detected)
-```
-
-#### `nexus wpe backup`
-
-Create backup of WP Engine install.
-
-```bash
-nexus wpe backup <install> [options]
-```
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--description <desc>` | Backup description | - |
-| `--notification-emails <emails>` | Comma-separated emails | - |
-
-**Usage:**
-
-```bash
-# Create backup
-nexus wpe backup mysite-production
-
-# With description
-nexus wpe backup mysite-production --description "Pre-deployment backup"
-
-# With email notification
-nexus wpe backup mysite-production --notification-emails admin@mysite.com
-```
-
-**Output:**
-
-```
-Creating backup of mysite-production...
-
-✓ Backup created
-  ID: backup_abc123
-  Description: Pre-deployment backup
-  Size: 1.2GB
-  Created: 2026-03-20 10:30 PST
-
-Backup will be available in ~5-10 minutes.
-```
-
-#### `nexus wpe promote`
-
-Promote staging to production (with safety checks).
-
-```bash
-nexus wpe promote <site> [options]
-```
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--skip-backup` | Skip pre-promotion backup | `false` |
-| `--force` | Skip safety checks | `false` |
-
-**Usage:**
-
-```bash
-# Promote with safety checks
-nexus wpe promote mysite
-
-# Skip pre-promotion backup
-nexus wpe promote mysite --skip-backup
-
-# Force promotion (skip checks)
-nexus wpe promote mysite --force
-```
-
-**Output:**
-
-```
-Promoting mysite-staging → mysite-production
-
-Pre-flight checks:
-✓ Staging is active
-✓ Production is active
-✓ No ongoing maintenance
-✓ Backup retention: 30 days
-✓ Differences detected: 5 new posts, 2 plugin updates
-
-Creating pre-promotion backup...
-✓ Backup created (backup_xyz789)
-
-Promoting environment...
-✓ Files copied
-✓ Database synced
-✓ Cache cleared
-
-Promotion complete!
-  - Production is now running staging code
-  - Rollback available: nexus wpe rollback mysite backup_xyz789
-```
-
-#### `nexus wpe usage`
-
-Show bandwidth, storage, and visitor metrics for a WP Engine install.
-
-```bash
-nexus wpe usage <installId> [options]
-```
-
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `<installId>` | WP Engine install ID or name |
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--month-offset <n>` | Months back from current (`0` = this month, `1` = last month) | `0` |
-| `--json` | Output as JSON | `false` |
-
-**Usage:**
-
-```bash
-# Current month usage
-nexus wpe usage mysite-production
-
-# Last month usage
-nexus wpe usage mysite-production --month-offset 1
-
-# JSON output
-nexus wpe usage mysite-production --json
-```
-
-**Output:**
-
-```
-Usage — mysite-production (March 2026)
-
-  Bandwidth:  12.4 GB
-  Storage:    1.8 GB
-  Visitors:   24,531
-```
-
-**Caching:** Current month is cached for 1 hour; past months are cached for 24 hours.
+**Accounts, installs, and the platform.**
+
+Authentication: `status` · `login` · `logout`
+
+| Area | Subcommands |
+|---|---|
+| Accounts | `accounts` · `account <id>` · `limits` · `account-usage` · `portfolio` |
+| Installs | `installs` · `install <id>` · `create-install` · `update-install` · `delete-install` · `usage` |
+| Sites | `sites` · `site <id>` · `create-site` |
+| Users | `users` · `user` · `user-add` · `user-update` · `user-remove` · `user-audit` |
+| Domains | `domains` · `domain-add` · `domain-remove` · `domain-check` |
+| SSL | `ssl` · `ssl-request` |
+| SSH keys | `ssh-keys` · `ssh-key-add` · `ssh-key-remove` |
+| Backups | `backup` · `backup-status` · `backup-verify` |
+| Ops | `cache` (purge) · `promote` · `diagnose` · `go-live-check` · `fleet-health` · `plugin-diff` · `link` · `changes` |
 
 ---
 
-#### `nexus wpe account-usage`
-
-Show bandwidth, storage, and visitor metrics aggregated for a WP Engine account.
-
-```bash
-nexus wpe account-usage <accountId> [options]
-```
-
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `<accountId>` | WP Engine account ID |
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--month-offset <n>` | Months back from current (`0` = this month, `1` = last month) | `0` |
-| `--json` | Output as JSON | `false` |
-
-**Usage:**
-
-```bash
-# Current month account usage
-nexus wpe account-usage my-agency
-
-# Last month as JSON
-nexus wpe account-usage my-agency --month-offset 1 --json
-```
-
-**Output:**
-
-```
-Account Usage — my-agency (March 2026)
-
-  Bandwidth:  84.7 GB
-  Storage:    14.2 GB
-  Visitors:   182,045
-```
-
----
-
-### `nexus telemetry`
-
-Manage telemetry and analytics.
-
-```bash
-nexus telemetry <action>
-```
-
-**Actions:**
-
-| Action | Description |
-|--------|-------------|
-| `status` | Show telemetry status |
-| `enable` | Enable telemetry |
-| `disable` | Disable telemetry |
-| `clear` | Clear all telemetry data |
-| `reset` | Reset installation ID |
-
-#### `nexus telemetry status`
-
-Show current telemetry status.
-
-```bash
-nexus telemetry status
-```
-
-**Output:**
-
-```
-Telemetry Status:
-  Enabled: Yes
-  Installation ID: 12345678-1234-1234-1234-123456789abc
-  Events collected: 1,234
-  Last sync: 2 hours ago
-
-What's collected:
-  ✓ Tool usage counts
-  ✓ Success/error rates
-  ✓ System info (OS, Node version)
-
-What's NOT collected:
-  ✗ User identities
-  ✗ Site names or domains
-  ✗ WordPress content
-  ✗ Command arguments
-```
-
-#### `nexus telemetry disable`
-
-Disable telemetry collection.
-
-```bash
-nexus telemetry disable
-```
-
-**Output:**
-
-```
-✓ Telemetry disabled
-
-  No more data will be collected.
-  Existing data remains on device until cleared.
-```
-
-#### `nexus telemetry enable`
-
-Enable telemetry collection.
-
-```bash
-nexus telemetry enable
-```
-
-**Output:**
-
-```
-✓ Telemetry enabled
-
-  Anonymous usage data will be collected to improve Nexus AI.
-  View what's collected: nexus telemetry status
-```
-
-#### `nexus telemetry clear`
-
-Clear all collected telemetry data.
-
-```bash
-nexus telemetry clear
-```
-
-**Output:**
-
-```
-✓ Cleared 1,234 telemetry events
-
-  All local telemetry data has been deleted.
-  Installation ID preserved.
-```
-
-#### `nexus telemetry reset`
-
-Reset installation ID (generates new anonymous ID).
-
-```bash
-nexus telemetry reset
-```
-
-**Output:**
-
-```
-✓ Installation ID reset
-
-  Old ID: 12345678-1234-1234-1234-123456789abc
-  New ID: 87654321-4321-4321-4321-cba987654321
-
-  All telemetry events cleared.
-```
-
----
-
-## Bulk Operations
-
-### `nexus bulk`
-
-Execute operations across multiple sites in parallel.
-
-```bash
-nexus bulk <operation> [sites] [options]
-```
-
-**Operations:**
-
-| Operation | Description |
-|-----------|-------------|
-| `scan` | Scan multiple sites |
-| `update-plugins` | Update plugins on multiple sites |
-| `update-core` | Update WordPress core |
-| `activate-plugin` | Activate plugin on multiple sites |
-| `deactivate-plugin` | Deactivate plugin on multiple sites |
-
-**Site Targeting:**
-
-| Option | Description |
-|--------|-------------|
-| `--all` | All sites |
-| `--local` | All local sites |
-| `--wpe` | All WP Engine sites |
-| `--sites <list>` | Comma-separated site list |
-| `--running` | Running sites only |
-
-**Usage:**
-
-```bash
-# Update plugins on all running local sites
-nexus bulk update-plugins --local --running
-
-# Activate plugin on specific sites
-nexus bulk activate-plugin --sites mysite,blog,shop -- akismet
-
-# Update WordPress core on all sites
-nexus bulk update-core --all
-
-# Scan all WPE sites with custom parallelization
-nexus bulk scan --wpe --parallel 5
-```
-
-**Output:**
-
-```
-Bulk operation: update-plugins
-Sites: 15 local running sites
-Parallelism: 10
-
-Progress:
-✓ mysite (3 updates)
-✓ blog (1 update)
-⚠ shop (2 updates, 1 failed)
-...
-
-Completed 15 sites in 1m 23s
-Success: 14 sites
-Failed: 1 site (shop: woocommerce update failed)
-```
-
----
+## AI
 
 ### `nexus ai`
 
-AI provider configuration and WordPress AI connector management.
+| Subcommand | What it does |
+|---|---|
+| `config` | View or configure AI provider settings |
+| `models` | List available Ollama models |
+| `setup <site>` | Set up AI on a WordPress site |
+| `sync-credentials <site>` | Sync AI keys to a site |
+| `site-config <site>` / `switch-provider` | Per-site provider |
+| `abilities <site>` / `run` | WordPress Abilities API |
+| `status` | AI connector status |
+
+### `nexus agent` — autonomous agents
+
+| Subcommand | What it does |
+|---|---|
+| `list` / `status` | Registered agents and last-run status |
+| `run <name>` | Trigger an agent now |
+| `logs <name>` | Agent log output |
+| `create` / `validate` / `build` | Author a TypeScript agent |
+| `install <pkg>` | Install a published agent from npm |
+| `emit` | Publish a synthetic event to the agent bus |
+| `invoke` | Invoke an agent-contributed tool |
+| `push` | Push a remediated sentinel sandbox to WPE production (approval-gated) |
+
+### `nexus gateway`
+
+| Subcommand | What it does |
+|---|---|
+| `usage` | AI gateway spend by site and model |
+
+### `nexus creds`
+
+| Subcommand | What it does |
+|---|---|
+| `rotate <provider>` | Rotate a stored provider credential |
 
 ---
 
-#### `nexus ai config`
+## Configuration
 
-View or configure the global AI provider used by Nexus AI's Nexus AI features, e.g. Site Finder.
+### `nexus settings`
 
-```bash
-nexus ai config [options]
-```
+| Subcommand | What it does |
+|---|---|
+| `get [key]` | Read settings (dotted paths work: `wpeOperationPermissions.wpcli.production`) |
+| `set <key> <value>` | Update a setting — takes effect immediately, no restart |
+| `patch <json>` | Update several settings at once |
+| `reset` | Revert all settings to defaults (confirmation required) |
 
-**Options:**
+### `nexus blueprints`
 
-| Option | Description |
-|--------|-------------|
-| `--gateway <on\|off>` | Enable or disable Local AI Gateway globally |
+| Subcommand | What it does |
+|---|---|
+| `list` | Available Local blueprints |
+| `save <site>` | Save a site as a blueprint |
 
-**Interactive mode** (no flags): prompts to select provider, enter API key, and pick a model.
+### `nexus reset`
 
-**Examples:**
-
-```bash
-# Interactive provider setup
-nexus ai config
-
-# Enable Local AI Gateway
-nexus ai config --gateway on
-
-# Disable Local AI Gateway
-nexus ai config --gateway off
-```
+Factory reset — wipe all Nexus AI data as if the addon was just installed.
+Confirmation required.
 
 ---
 
-#### `nexus ai setup`
-
-Set up AI on a WordPress site. Installs the AI plugin, configures the chosen provider, and syncs credentials.
-
-```bash
-nexus ai setup <site> [options]
-```
-
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `site` | Site target (e.g. `mysite@local`) |
-
-**Options:**
-
-| Option | Description |
-|--------|-------------|
-| `--provider <id>` | Provider to configure (`anthropic`, `openai`, `google`, `ollama`). Skips interactive prompt. |
-| `--force` | Force re-setup even if already configured |
-
-**Examples:**
-
-```bash
-# Interactive — prompts for provider
-nexus ai setup mysite@local
-
-# Non-interactive
-nexus ai setup mysite@local --provider anthropic
-
-# Force re-setup with gateway enabled (set in Preferences first)
-nexus ai setup mysite@local --force
-```
-
----
-
-#### `nexus ai switch-provider`
-
-Switch the AI provider on an already-configured site. Deactivates the old provider plugin, installs and activates the new one, and syncs the appropriate credentials.
-
-```bash
-nexus ai switch-provider <site>
-```
-
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `site` | Site target (e.g. `mysite@local`) |
-
-**Example:**
-
-```bash
-nexus ai switch-provider mysite@local
-# Prompts: Current: Anthropic. Switch to: 1. OpenAI  2. Google  3. Ollama
-```
-
----
-
-#### `nexus ai site-config`
-
-Show the current AI provider configuration for a site.
-
-```bash
-nexus ai site-config <site>
-```
-
-**Example output:**
-
-```
-mysite@local — AI Configuration
-─────────────────────────────────────────────
-  Provider:  Anthropic (Claude)
-  Model:     claude-sonnet-4-6
-  Set up:    3/27/2026
-```
-
----
-
-#### `nexus ai sync-credentials`
-
-Manually sync AI credentials to a WordPress site. Normally this happens automatically on site start.
-
-```bash
-nexus ai sync-credentials <site>
-```
-
----
-
-#### `nexus ai models`
-
-List available Ollama models.
-
-```bash
-nexus ai models [--json]
-```
-
----
-
-#### `nexus ai status`
-
-Show AI connector status on a WordPress site.
-
-```bash
-nexus ai status <target>
-```
-
----
-
-#### `nexus ai ask`
-
-Ask Ollama a question directly.
-
-```bash
-nexus ai ask <query> [--model <model>]
-```
-
----
-
-## Advanced Commands
-
-### `nexus config`
-
-Manage Nexus AI configuration.
-
-```bash
-nexus config <action> [key] [value]
-```
-
-**Actions:**
-
-| Action | Description |
-|--------|-------------|
-| `get` | Get config value |
-| `set` | Set config value |
-| `list` | List all config |
-| `reset` | Reset to defaults |
-
-**Configuration Keys:**
-
-| Key | Description | Default |
-|-----|-------------|---------|
-| `db.path` | Database file path | `~/.nexus/nexus.db` |
-| `ai.provider` | AI provider for embeddings | `ollama` |
-| `ai.model` | Embedding model | `nomic-embed-text` |
-| `telemetry.enabled` | Enable telemetry | `true` |
-| `scan.parallel` | Parallel scan limit | `10` |
-| `wpe.ssh.control_master` | SSH ControlMaster | `true` |
-
-**Usage:**
-
-```bash
-# Get config value
-nexus config get ai.provider
-
-# Set config value
-nexus config set scan.parallel 5
-
-# List all config
-nexus config list
-
-# Reset to defaults
-nexus config reset
-```
-
----
-
-### `nexus db`
-
-Manage local vector database.
-
-```bash
-nexus db <action> [options]
-```
-
-**Actions:**
-
-| Action | Description |
-|--------|-------------|
-| `info` | Show database info |
-| `optimize` | Optimize database |
-| `export` | Export database |
-| `import` | Import database |
-| `reset` | Reset database |
-
-#### `nexus db info`
-
-Show database information.
-
-```bash
-nexus db info
-```
-
-**Output:**
-
-```
-Database: /Users/me/.nexus/nexus.db
-Size: 245MB
-Documents: 45,678
-Vectors: 123,456
-Tables:
-  - documents (45,678 rows)
-  - embeddings (123,456 rows)
-  - sites (25 rows)
-  - scans (157 rows)
-Last optimized: 3 days ago
-```
-
-#### `nexus db optimize`
-
-Optimize database (VACUUM, rebuild indices).
-
-```bash
-nexus db optimize
-```
-
-**Output:**
-
-```
-Optimizing database...
-✓ VACUUM completed (freed 12MB)
-✓ Rebuilt indices
-✓ Analyzed query plans
-
-Before: 245MB
-After: 233MB
-Saved: 12MB (4.9%)
-```
-
-#### `nexus db export`
-
-Export database to portable format.
-
-```bash
-nexus db export <file> [options]
-```
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--compress` | Compress with gzip | `false` |
-
-**Usage:**
-
-```bash
-# Export database
-nexus db export nexus-backup.db
-
-# Export and compress
-nexus db export nexus-backup.db.gz --compress
-```
-
-**Output:**
-
-```
-Exporting database to nexus-backup.db.gz...
-✓ Exported 45,678 documents
-✓ Compressed 233MB → 45MB (80.6% reduction)
-
-Backup saved: nexus-backup.db.gz
-```
-
-#### `nexus db import`
-
-Import database from backup.
-
-```bash
-nexus db import <file>
-```
-
-**Usage:**
-
-```bash
-# Import database
-nexus db import nexus-backup.db
-
-# Import compressed backup
-nexus db import nexus-backup.db.gz
-```
-
-**Output:**
-
-```
-Importing database from nexus-backup.db.gz...
-⚠ This will overwrite existing database
-
-Proceed? (y/N): y
-
-✓ Decompressed 45MB → 233MB
-✓ Imported 45,678 documents
-✓ Verified integrity
-
-Database restored successfully
-```
-
-#### `nexus db reset`
-
-Reset database (delete all data).
-
-```bash
-nexus db reset [options]
-```
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--yes` | Skip confirmation | `false` |
-
-**Usage:**
-
-```bash
-# Reset database
-nexus db reset
-
-# Skip confirmation
-nexus db reset --yes
-```
-
-**Output:**
-
-```
-⚠ WARNING: This will delete ALL indexed data!
-
-Sites: 25
-Documents: 45,678
-Size: 233MB
-
-This action CANNOT be undone.
-
-Type 'DELETE' to confirm: DELETE
-
-Resetting database...
-✓ Deleted all documents
-✓ Dropped all tables
-✓ Recreated schema
-
-Database reset complete.
-Run 'nexus scan' to re-index sites.
-```
-
----
-
-## Exit Codes
-
-Nexus AI uses standard exit codes:
-
-| Code | Meaning |
-|------|---------|
-| `0` | Success |
-| `1` | General error |
-| `2` | Invalid arguments |
-| `3` | Site not found |
-| `4` | WP-CLI error |
-| `5` | Network error |
-| `6` | Authentication required |
-| `7` | Permission denied |
-| `8` | Database error |
-
-**Usage in scripts:**
-
-```bash
-#!/bin/bash
-
-nexus scan mysite
-if [ $? -eq 0 ]; then
-  echo "Scan successful"
-else
-  echo "Scan failed"
-  exit 1
-fi
-```
-
----
-
-## Shell Completion
-
-Enable shell completion for faster command entry.
-
-### Bash
-
-```bash
-# Add to ~/.bashrc
-eval "$(nexus completion bash)"
-```
-
-### Zsh
-
-```bash
-# Add to ~/.zshrc
-eval "$(nexus completion zsh)"
-```
-
-### Fish
-
-```bash
-# Add to ~/.config/fish/config.fish
-nexus completion fish | source
-```
-
-**Features:**
-
-- Command completion
-- Option completion
-- Site name completion
-- Plugin slug completion
-
----
-
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NEXUS_DEBUG` | Enable debug logging | `false` |
-| `NEXUS_DB_PATH` | Custom database path | `~/.nexus/nexus.db` |
-| `NEXUS_TELEMETRY` | Enable telemetry | `true` |
-| `NEXUS_AI_PROVIDER` | AI provider | `ollama` |
-| `NEXUS_AI_MODEL` | Embedding model | `nomic-embed-text` |
-| `NEXUS_PARALLEL` | Parallel operation limit | `10` |
-| `NO_COLOR` | Disable color output | `false` |
-
-**Usage:**
-
-```bash
-# Disable telemetry
-NEXUS_TELEMETRY=false nexus scan
-
-# Custom database path
-NEXUS_DB_PATH=/tmp/nexus.db nexus mcp
-
-# Debug mode
-NEXUS_DEBUG=true nexus scan mysite
-```
-
----
-
-## Examples
-
-### Daily Site Maintenance
-
-```bash
-#!/bin/bash
-# daily-maintenance.sh
-
-# Scan all sites
-nexus scan --force
-
-# Update plugins on all running sites
-nexus bulk update-plugins --local --running
-
-# Check for WP core updates
-nexus bulk update-core --all --dry-run
-
-# Generate report
-nexus list --format json > sites-report.json
-```
-
-### Pre-Deployment Checklist
-
-```bash
-#!/bin/bash
-# pre-deploy.sh
-
-SITE=$1
-
-# Create backup
-nexus wpe backup ${SITE}-production
-
-# Compare environments
-nexus wpe diff $SITE
-
-# Run diagnostics
-nexus wpe diagnose ${SITE}-staging
-
-# If all clear, promote
-read -p "Promote to production? (y/N): " confirm
-if [ "$confirm" = "y" ]; then
-  nexus wpe promote $SITE
-fi
-```
-
-### Fleet Health Check
-
-```bash
-#!/bin/bash
-# health-check.sh
-
-# Check all sites
-for site in $(nexus list --format json | jq -r '.local[].name'); do
-  echo "Checking $site..."
-  nexus wp $site core verify-checksums
-  nexus wp $site plugin verify-checksums --all
-done
-
-# Generate summary
-echo "Health check complete"
-```
-
----
-
-## Next Steps
-
-- [CLI Examples](../cli/examples.md) - Real-world usage patterns
-- [MCP Setup](../cli/mcp-setup.md) - Connect to AI assistants
-- [Tool Reference](../mcp-tools/index.md) - The MCP tool catalog
-- Error Codes - Troubleshooting guide
+## See also
+
+- [CLI Quick Start](../getting-started/cli-quick-start.md)
+- [Tool Schemas](../mcp-tools/tool-schemas.md) — the MCP tool surface
+- [Permissions & Access Control](permissions-access-control-v2.md) — why a
+  write was refused, and how to grant it

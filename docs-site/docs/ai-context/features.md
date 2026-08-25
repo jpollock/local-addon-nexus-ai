@@ -6,9 +6,57 @@ keywords: [features, capabilities, what works, verified]
 
 # Verified Features
 
-**Last Verified:** 2026-07-08
+**Last Verified:** 2026-08-25
 
 This document lists **only features that actually exist** in the current implementation.
+
+## ✅ The UI
+
+**Status:** ✅ Five tabs + a chat panel
+
+- **Now** — needs-you items (approvals, findings), session re-entry
+- **Sites** — the Properties view: one list for local + WP Engine + external
+  SSH sites; typed search becomes removable filter clauses; bulk bar acts on
+  ticked rows only
+- **Record** — event stats + timeline over the append-only ledger
+- **Agents** — consoles, run history, and settings for the shipped agents
+- **Settings** — schedules, WPE access permissions, advanced actions
+- **Docked Panel** — the chat surface, available alongside every tab
+
+## ✅ Intelligence Layer
+
+**Status:** ✅ Implemented (local-only; nothing leaves the machine)
+
+- Append-only event ledger (`ledger.db`) — every observation is
+  provenance-stamped (`observed_at` vs `recorded_at`, source trust class)
+- Twins folded from the ledger — rebuildable views, never authoritative
+- Answers disclose data age and staleness, and offer live re-checks
+- Entity graph: Sites, environments, working copies; bare-name collisions are
+  declined with disambiguated forms, never guessed
+- Every chat turn writes an auditable context-assembly manifest; replies cite
+  the ledger events and tool calls that supplied them
+
+## ✅ Agents
+
+**Status:** ✅ Four shipped agents
+
+- `security-sentinel` — daily 03:00 fleet security sweep (two tiers; LLM
+  sandbox analysis on escalation)
+- `log-processor` — nightly WPE access-log ingestion and aggregates
+- `web-analytics` — GA4 property analytics (weekly)
+- `seo-insights` — weekly SEO checks
+- Agent runs are bracketed by `task.run.assigned`/`task.run.completed` ledger
+  events; agent tool calls carry run/task ids into the audit log
+
+## ✅ Procedures & Capability Grants
+
+**Status:** ✅ Implemented
+
+- 7 reviewed runbooks in `law/runbooks/` (strict runbooks enforce checkpoint
+  order with attestation; guided runbooks advise)
+- Capability grants are deny-by-default: production-scoped capabilities
+  (promotion, incident remediation) require an explicit grant
+- Refusals name the exact permission and environment to change
 
 ## ✅ Core Features
 
@@ -347,80 +395,35 @@ Setup AI on 10 sites:
 
 ---
 
-## ❌ Features NOT Implemented
+## ❌ / Changed — read before assuming
 
 ### AI Chat UI
 
-**Status:** ❌ Removed from UI
-
-**Reality:**
-- Code exists (ChatTab.tsx) but not rendered
-- Not visible in any UI panel
-- Removed from navigation
-
-**What works instead:**
-- MCP tools via external clients (Claude Desktop, Cursor)
-- CLI commands for terminal workflows
-
----
-
-### Site Groups
-
-**Status:** ❌ Not implemented in UI
-
-**Reality:**
-- Code exists (SiteGroupsPanel.tsx) but not rendered
-- Not visible in the Sites tab
-- Site grouping is a core Local feature, not ours
-
-**What works instead:**
-- Filter sites via MCP tools or CLI
-- Use Local's built-in site grouping
-
----
+**Status:** ✅ Implemented — as the **Docked Panel**, not a tab. (Earlier
+versions of this page said chat was removed; that was true of the old ChatTab,
+which is superseded.)
 
 ### Smart Filters
 
-**Status:** ❌ Not implemented in UI
+**Status:** ✅ Implemented — typing in the Sites tab's search box produces
+removable filter clauses. There is no separate filters panel.
 
-**Reality:**
-- Code exists (SmartFiltersPanel.tsx) but not rendered
-- Not visible in the Sites tab
-- Advanced filtering not exposed in UI
+### Site Groups
 
-**What works instead:**
-- Search via SidebarSearchPanel
-- Filter via MCP tools or CLI
-
----
+**Status:** ⚠️ CLI only — `nexus fleet list/create/add/remove/delete` manage
+site groups; there is no dedicated groups UI.
 
 ## Summary
 
-| Category | Implemented | Not Implemented |
-|----------|-------------|-----------------|
-| **Search** | Semantic search, cross-site search | Advanced filter UI |
-| **Sites** | Local CRUD, WPE sync, remote WP-CLI | Site groups UI |
-| **Fleet** | Analytics, drift, health monitoring | Smart filters UI |
-| **AI** | MCP tools, Ollama, AI Gateway | Chat UI tab |
-| **UI** | 7 active panels, sidebar search | Chat, groups, filters tabs |
-| **Safety** | 3-tier system, audit logs, validation | N/A |
-
-**Active UI Panels (7):**
-1. AIGatewayUsagePanel
-2. AIGatewayByCallerPanel
-3. TopIssuesPanel
-4. StorageHealthPanel
-5. BulkOperationsPanel
-6. EventStatsCards
-7. EventTimeline
-
-**Not Rendered (6):**
-1. ChatTab
-2. SiteGroupsPanel
-3. SmartFiltersPanel
-4. SavedQueriesPanel
-5. AISiteFinderPanel
-6. UnifiedSearchPanel
+| Category | Implemented | Notes |
+|----------|-------------|-------|
+| **Search** | Semantic + cross-site + FTS hybrid | sqlite-vec, local |
+| **Sites** | One fleet list (local/WPE/SSH), bulk actions | Properties view |
+| **Intelligence** | Ledger, twins, provenance, citations | local-only |
+| **Agents** | 4 shipped, scheduled, audited | agents tab |
+| **Procedures** | 7 runbooks, deny-by-default grants | law/ |
+| **AI** | MCP (~190 tools), Docked Panel chat, Ollama, gateway | |
+| **Safety** | Tier system + permission gates + audit logs | |
 
 ## Next Steps
 
