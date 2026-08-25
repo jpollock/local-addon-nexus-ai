@@ -60,15 +60,33 @@ else
   echo "Drift gate: substrate matches keys.json."
 fi
 
+# Pinned promptfoo — the previous floating-tag invocation broke once already
+# (--filter-description ceased to exist between versions). The pin lives in providers/isolation.js.
+PF_VERSION=$(node -p "require('$BENCH_DIR/providers/isolation.js').PF_VERSION")
+
 # promptfoo itself runs from /tmp so its sqlite does not conflict with the addon's
 # Electron-compiled better-sqlite3. The claude subprocesses do NOT inherit this
 # cwd — each provider sets its own.
 cd /tmp
 
+OUT_JSON="$(mktemp -t nexus-bench-out)"
 echo "Running benchmark from /tmp (avoids Electron ABI conflict)..."
 
-# Pinned promptfoo — the previous floating-tag invocation broke once already
-# (--filter-description ceased to exist between versions). The pin lives in providers/isolation.js.
-PF_VERSION=$(node -p "require('$BENCH_DIR/providers/isolation.js').PF_VERSION")
+# promptfoo exits non-zero when any cell fails an assertion. That is a result,
+# not an error — the archive step below must run either way (never lose a run),
+# so the exit code is captured and re-raised at the end.
+EVAL_EXIT=0
+npx "promptfoo@$PF_VERSION" eval -c "$CONFIG" --no-cache -o "$OUT_JSON" "$@" || EVAL_EXIT=$?
 
-npx "promptfoo@$PF_VERSION" eval -c "$CONFIG" --no-cache "$@"
+# ── Archive ───────────────────────────────────────────────────────────────────
+EVAL_ID=$(node -p "(require('$OUT_JSON').evalId) || ''")
+if [ -z "$EVAL_ID" ]; then
+  echo "WARNING: no evalId in promptfoo output — run NOT archived (promptfoo exit $EVAL_EXIT)." >&2
+  exit "$EVAL_EXIT"
+fi
+RUN_DIR="$BENCH_DIR/results/$EVAL_ID"
+mkdir -p "$RUN_DIR"
+cp "$OUT_JSON" "$RUN_DIR/results.json"
+node "$BENCH_DIR/manifest.js" "$EVAL_ID" "$RUN_DIR" "$GT_SNAPSHOT"
+echo "Archived: $RUN_DIR (results.json + manifest.json)"
+exit "$EVAL_EXIT"
