@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/palette.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/semantic.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/typography.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/layout.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/base.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/tokens/fig-typography.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/components/local/fig-assets.css">
+<link rel="stylesheet" href="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/styles.css">
+<script src="_ds/local-next-design-system-d4887293-fd84-495e-a34d-04a96245819f/_ds_bundle.js"></script>
+<script src="fixtures/scenario-new-chat.js"></script>
+<style>
+body { margin: 0; background: rgb(238,240,241); font-family: Inter, system-ui, sans-serif; }
+a { color: rgb(0,107,214); text-decoration: none; }
+a:hover { color: rgb(0,86,171); text-decoration: underline; }
+* { box-sizing: border-box; }
+</style>
+</helmet>
+
+<section style="padding: 28px 28px 80px; display: flex; flex-direction: column; gap: 24px; width: max-content;">
+
+  <div style="display: flex; flex-direction: column; gap: 9px; max-width: 1040px;">
+    <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
+      <span style="font-size: 13px; font-weight: 600; color: rgb(32,32,32);">The new chat</span>
+      <span style="font-size: 12px; font-weight: 500; color: rgb(60,42,120); background: rgb(245,242,255); border-radius: 9999px; padding: 3px 10px;">an empty session, both densities</span>
+    </div>
+    <div style="font-size: 14.5px; line-height: 1.5; color: rgb(31,36,38); text-wrap: pretty;">On an empty session the composer is the centre of gravity, not the bottom edge. It moves down on the first turn — because only then is there a transcript for it to sit under.</div>
+    <div style="font-size: 13px; line-height: 1.6; color: rgb(115,133,140); text-wrap: pretty;">The shipped screen made three separate mistakes that compounded: it put a <em>situation report</em> where an invitation belongs, floated it in the top third of an empty canvas, and pinned the composer 700px below it. So the one thing you came to do was the furthest thing from what you were reading, and the thing you were reading was Now's job.</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px;">
+    <div style="display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;">
+      <span style="font-size: 12px; font-weight: 600; color: rgb(255,255,255); background: rgb(31,36,38); border-radius: 5px; padding: 2px 7px;">A</span>
+      <span style="font-size: 14.5px; font-weight: 600; color: rgb(32,32,32);">Stage density · empty</span>
+      <span style="font-size: 13px; color: rgb(115,133,140);">one column, vertically centred</span>
+    </div>
+
+    <div style="width: 1040px; height: 700px; border-radius: 14px; background: rgb(255,255,255); box-shadow: 0 0 0 1px rgb(226,230,232); overflow: hidden; display: flex; flex-direction: column;">
+
+      <div style="flex-shrink: 0; padding: 16px 22px 14px; border-bottom: 1px solid rgb(226,230,232); display: flex; align-items: center; gap: 12px;">
+        <span style="width: 26px; height: 26px; flex-shrink: 0; border-radius: 9999px; background: radial-gradient(circle at 30% 25%, rgb(14,202,212), rgb(3,155,92)); display: flex; align-items: center; justify-content: center; color: rgb(255,255,255);">
+          <!-- assets/nexus-mark.svg, verbatim. Source of record; the file paints with currentColor, so it is inlined rather than mounted, and every copy must stay byte-identical to it. -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" style="display: block;"><ellipse cx="12" cy="12" rx="10.4" ry="4.7" transform="rotate(-32 12 12)" fill="none" stroke="currentColor" stroke-width="1.9"></ellipse><circle cx="12" cy="12" r="2.9" fill="currentColor"></circle></svg>
+        </span>
+        <span style="font-family: Geist, Inter, sans-serif; font-size: 15px; font-weight: 600; color: rgb(32,32,32); flex: 1;">Nexus AI</span>
+        <span style="display: flex; align-items: center; gap: 7px;">
+          <span style="font-size: 12.5px; color: rgb(115,133,140);">{{ ambient.line }}</span>
+          <span style="font-size: 12.5px; font-weight: 500; color: rgb(0,107,214); cursor: pointer;">{{ ambient.door }}</span>
+        </span>
+      </div>
+
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 22px; gap: 18px;">
+        <div style="width: 560px; display: flex; flex-direction: column; align-items: center; gap: 9px;">
+          <h1 style="font-family: Geist, Inter, sans-serif; font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.6px; color: rgb(32,32,32); margin: 0; text-align: center;">{{ headline }}</h1>
+          <span style="font-size: 13.5px; line-height: 1.55; color: rgb(115,133,140); text-align: center; text-wrap: pretty;">{{ promise }}</span>
+        </div>
+
+        <div style="width: 560px; display: flex; flex-direction: column; gap: 11px;">
+          <div style="border-radius: 12px; background: rgb(255,255,255); box-shadow: 0 2px 2px rgba(0,0,0,0.05), 0 0 0 2px rgb(0,107,214); padding: 12px 14px; display: flex; align-items: center; gap: 12px;">
+            <span style="font-family: Geist, Inter, sans-serif; font-size: 15px; color: rgb(115,133,140); flex: 1;">{{ placeholder }}</span>
+            <span style="width: 30px; height: 30px; border-radius: 9999px; background: rgb(0,107,214); color: rgb(255,255,255); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <x-import component-from-global-scope="LocalNextDesignSystem_d48872.ArrowsArrowUp24" hint-size="14px,16px"></x-import>
+            </span>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;">
+            <sc-for list="{{ suggestions }}" as="s" hint-placeholder-count="3">
+              <span style="display: flex; cursor: pointer;">
+                <x-import component-from-global-scope="LocalNextDesignSystem_d48872.Button" size="sm" type="outline" label="{{ s.text }}" hint-size="auto,32px"></x-import>
+              </span>
+            </sc-for>
+          </div>
+
+          <span style="font-size: 12px; line-height: 1.5; color: rgb(115,133,140); text-align: center;">{{ footnote }}</span>
+        </div>
+      </div>
+
+      <div style="flex-shrink: 0; padding: 11px 22px; border-top: 1px solid rgb(226,230,232); display: flex; align-items: center; gap: 10px;">
+        <span style="width: 6px; height: 6px; border-radius: 50%; background: rgb(198,205,208); flex-shrink: 0;"></span>
+        <span style="font-size: 12.5px; color: rgb(46,53,56); flex: 1;">{{ scope.label }}</span>
+        <x-import component-from-global-scope="LocalNextDesignSystem_d48872.Button" size="sm" type="outline" label="{{ scope.action }}" hint-size="auto,32px"></x-import>
+      </div>
+    </div>
+
+    <div style="max-width: 1040px; font-size: 12.5px; line-height: 1.6; color: rgb(115,133,140); text-wrap: pretty;">The headline is the design system's own composer prompt promoted to an invitation — four words that are the product's whole posture — so the field beneath it says what kind of thing to type rather than repeating it. The sentence under it is the one thing this product differs on, said once: answers are dated, linked, and refused rather than guessed. The needs-you count stays available as a door at ambient weight in the header, where it cannot be mistaken for the subject.</div>
+  </div>
+
+  <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+    <div style="display: flex; flex-direction: column; gap: 11px;">
+      <div style="display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;">
+        <span style="font-size: 12px; font-weight: 600; color: rgb(255,255,255); background: rgb(31,36,38); border-radius: 5px; padding: 2px 7px;">B</span>
+        <span style="font-size: 14.5px; font-weight: 600; color: rgb(32,32,32);">Companion · empty</span>
+        <span style="font-size: 13px; color: rgb(115,133,140);">380px</span>
+      </div>
+
+      <div style="width: 380px; height: 620px; border-radius: 14px; background: rgb(255,255,255); box-shadow: 0 0 0 1px rgb(226,230,232); overflow: hidden; display: flex; flex-direction: column;">
+        <div style="flex-shrink: 0; padding: 13px 16px; border-bottom: 1px solid rgb(226,230,232); display: flex; align-items: center; gap: 10px;">
+          <span style="width: 22px; height: 22px; flex-shrink: 0; border-radius: 9999px; background: radial-gradient(circle at 30% 25%, rgb(14,202,212), rgb(3,155,92)); display: flex; align-items: center; justify-content: center; color: rgb(255,255,255);">
+            <!-- assets/nexus-mark.svg, verbatim. Source of record; the file paints with currentColor, so it is inlined rather than mounted, and every copy must stay byte-identical to it. -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" style="display: block;"><ellipse cx="12" cy="12" rx="10.4" ry="4.7" transform="rotate(-32 12 12)" fill="none" stroke="currentColor" stroke-width="1.9"></ellipse><circle cx="12" cy="12" r="2.9" fill="currentColor"></circle></svg>
+          </span>
+          <span style="font-family: Geist, Inter, sans-serif; font-size: 13.5px; font-weight: 600; color: rgb(32,32,32); flex: 1;">Nexus AI</span>
+          <span style="font-size: 12px; font-weight: 500; color: rgb(0,107,214); cursor: pointer;">{{ ambient.door }}</span>
+        </div>
+
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; padding: 18px 16px; gap: 14px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <h2 style="font-family: Geist, Inter, sans-serif; font-size: 21px; line-height: 27px; font-weight: 600; letter-spacing: -0.4px; color: rgb(32,32,32); margin: 0;">{{ headline }}</h2>
+            <span style="font-size: 12.5px; line-height: 1.5; color: rgb(115,133,140); text-wrap: pretty;">{{ promiseShort }}</span>
+          </div>
+
+          <div style="border-radius: 10px; background: rgb(255,255,255); box-shadow: 0 2px 2px rgba(0,0,0,0.05), 0 0 0 2px rgb(0,107,214); padding: 10px 12px; display: flex; align-items: center; gap: 10px;">
+            <span style="font-family: Geist, Inter, sans-serif; font-size: 13.5px; color: rgb(115,133,140); flex: 1;">{{ placeholderShort }}</span>
+            <span style="width: 26px; height: 26px; border-radius: 9999px; background: rgb(0,107,214); color: rgb(255,255,255); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <x-import component-from-global-scope="LocalNextDesignSystem_d48872.ArrowsArrowUp24" hint-size="12px,14px"></x-import>
+            </span>
+          </div>
+
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 7px;">
+            <sc-for list="{{ suggestions }}" as="s" hint-placeholder-count="3">
+              <span style="display: flex; cursor: pointer;">
+                <x-import component-from-global-scope="LocalNextDesignSystem_d48872.Button" size="sm" type="outline" label="{{ s.text }}" hint-size="auto,32px"></x-import>
+              </span>
+            </sc-for>
+          </div>
+
+          <span style="font-size: 11.5px; line-height: 1.5; color: rgb(115,133,140); text-wrap: pretty;">{{ footnote }}</span>
+        </div>
+
+        <div style="flex-shrink: 0; padding: 10px 16px; border-top: 1px solid rgb(226,230,232); display: flex; align-items: center; gap: 9px;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: rgb(198,205,208); flex-shrink: 0;"></span>
+          <span style="font-size: 12px; color: rgb(46,53,56); flex: 1;">{{ scope.label }}</span>
+          <span style="font-size: 12px; font-weight: 500; color: rgb(0,107,214); cursor: pointer;">{{ scope.action }}</span>
+        </div>
+      </div>
+
+      <div style="width: 380px; font-size: 12.5px; line-height: 1.6; color: rgb(115,133,140); text-wrap: pretty;">Left-aligned rather than centred, because a 380px column has no width to centre in — centring at this size reads as an error. The composer still sits in the vertical middle, which is the rule that matters, and the promise loses its second clause rather than being shrunk.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 11px;">
+      <div style="display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;">
+        <span style="font-size: 12px; font-weight: 600; color: rgb(255,255,255); background: rgb(31,36,38); border-radius: 5px; padding: 2px 7px;">C</span>
+        <span style="font-size: 14.5px; font-weight: 600; color: rgb(32,32,32);">The first turn</span>
+        <span style="font-size: 13px; color: rgb(115,133,140);">the composer takes its place at the bottom</span>
+      </div>
+
+      <div style="width: 600px; height: 620px; border-radius: 14px; background: rgb(255,255,255); box-shadow: 0 0 0 1px rgb(226,230,232); overflow: hidden; display: flex; flex-direction: column;">
+        <div style="flex-shrink: 0; padding: 13px 18px; border-bottom: 1px solid rgb(226,230,232); display: flex; align-items: center; gap: 10px;">
+          <span style="width: 22px; height: 22px; flex-shrink: 0; border-radius: 9999px; background: radial-gradient(circle at 30% 25%, rgb(14,202,212), rgb(3,155,92)); display: flex; align-items: center; justify-content: center; color: rgb(255,255,255);">
+            <!-- assets/nexus-mark.svg, verbatim. Source of record; the file paints with currentColor, so it is inlined rather than mounted, and every copy must stay byte-identical to it. -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" style="display: block;"><ellipse cx="12" cy="12" rx="10.4" ry="4.7" transform="rotate(-32 12 12)" fill="none" stroke="currentColor" stroke-width="1.9"></ellipse><circle cx="12" cy="12" r="2.9" fill="currentColor"></circle></svg>
+          </span>
+          <span style="font-family: Geist, Inter, sans-serif; font-size: 13.5px; font-weight: 600; color: rgb(32,32,32); flex: 1;">Why is checkout failing on Charlie?</span>
+        </div>
+
+        <div style="flex: 1; min-width: 0; overflow: hidden; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="align-self: flex-end; max-width: 80%; padding: 10px 14px; border-radius: 14px 14px 4px 14px; background: rgba(14,202,212,0.08); box-shadow: inset 0 0 0 1px rgba(14,202,212,0.2); font-size: 13.5px; line-height: 1.55; color: rgb(31,36,38);">Why is checkout failing on Charlie?</div>
+          <div style="align-self: flex-start; max-width: 82%; padding: 11px 15px; border-radius: 14px 14px 14px 4px; background: rgb(248,249,250); box-shadow: inset 0 0 0 1px rgb(226,230,232); display: flex; flex-direction: column; gap: 7px;">
+            <span style="font-size: 13.5px; line-height: 1.55; color: rgb(31,36,38); text-wrap: pretty;">Checkout has been returning 500s since 02:14 this morning.</span>
+            <span style="align-self: flex-start; display: flex; align-items: center; gap: 7px;">
+              <x-import component-from-global-scope="LocalNextDesignSystem_d48872.Chip" variant="solid" size="xs" style2="strong" color="neutral" label="evt_9c41" hint-size="auto,20px"></x-import>
+              <span style="font-size: 11.5px; color: rgb(115,133,140);">ledger event · incident.opened</span>
+            </span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; padding-top: 2px;">
+            <span style="font-size: 12px; color: rgb(115,133,140);">Thinking, stand by…</span>
+          </div>
+        </div>
+
+        <div style="flex-shrink: 0; padding: 11px 18px 14px; display: flex; flex-direction: column; gap: 9px;">
+          <div style="border-radius: 10px; background: rgb(255,255,255); box-shadow: 0 2px 2px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.08); padding: 10px 13px; display: flex; align-items: center; gap: 11px;">
+            <span style="font-family: Geist, Inter, sans-serif; font-size: 14px; color: rgb(115,133,140); flex: 1;">{{ headline }}</span>
+            <span style="width: 28px; height: 28px; border-radius: 9999px; background: rgb(0,107,214); color: rgb(255,255,255); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <x-import component-from-global-scope="LocalNextDesignSystem_d48872.ArrowsArrowUp24" hint-size="13px,15px"></x-import>
+            </span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 9px;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: rgb(198,205,208); flex-shrink: 0;"></span>
+            <span style="font-size: 12px; color: rgb(46,53,56); flex: 1;">Asking about Charlie</span>
+            <span style="font-size: 12px; font-weight: 500; color: rgb(0,107,214); cursor: pointer;">Change</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="width: 600px; font-size: 12.5px; line-height: 1.6; color: rgb(115,133,140); text-wrap: pretty;">The invitation is spent, so it goes — and the composer takes the place it earned. The placeholder becomes the four words the invitation was, which is the only line that survives the transition. The scope row narrowed itself from the whole fleet to Charlie, because the question said which site.</div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 11px;">
+    <div style="display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;">
+      <span style="font-size: 12px; font-weight: 600; color: rgb(255,255,255); background: rgb(221,18,67); border-radius: 5px; padding: 2px 7px;">D</span>
+      <span style="font-size: 14.5px; font-weight: 600; color: rgb(32,32,32);">The list beside it</span>
+      <span style="font-size: 13px; color: rgb(115,133,140);">nine sessions, one title</span>
+    </div>
+
+    <div style="width: 1040px; display: flex; gap: 16px; align-items: flex-start;">
+      <div style="flex: 1; min-width: 0; border-radius: 12px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); overflow: hidden;">
+        <div style="padding: 11px 16px; border-bottom: 1px solid rgb(226,230,232); background: rgb(252,253,253);">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: rgb(115,133,140);">Titled by what was typed</span>
+        </div>
+        <sc-for list="{{ list.broken }}" as="b" hint-placeholder-count="5">
+          <div style="padding: 10px 16px; border-bottom: 1px solid rgb(240,242,243); display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-size: 13px; color: rgb(31,36,38);">{{ b.title }}</span>
+            <span style="font-size: 11.5px; color: rgb(115,133,140);">{{ b.when }}</span>
+          </div>
+        </sc-for>
+        <div style="padding: 11px 16px;">
+          <span style="font-size: 12px; line-height: 1.5; color: rgb(180,72,20); text-wrap: pretty;">Five sessions, three titles, and no way to tell which one halted. The first message is what a person meant to do, not what happened.</span>
+        </div>
+      </div>
+
+      <div style="flex: 1; min-width: 0; border-radius: 12px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); overflow: hidden;">
+        <div style="padding: 11px 16px; border-bottom: 1px solid rgb(226,230,232); background: rgb(252,253,253);">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: rgb(115,133,140);">Titled by what it did</span>
+        </div>
+        <sc-for list="{{ list.fixed }}" as="f" hint-placeholder-count="5">
+          <div style="padding: 10px 16px; border-bottom: 1px solid rgb(240,242,243); display: flex; flex-direction: column; gap: 1px;">
+            <span style="font-size: 13px; color: rgb(31,36,38); text-wrap: pretty;">{{ f.title }}</span>
+            <div style="display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;">
+              <span style="font-family: 'Roboto Mono', monospace; font-size: 10.5px; color: rgb(115,133,140);">{{ f.meta }}</span>
+              <span style="font-size: 11.5px; color: rgb(115,133,140);">{{ f.when }}</span>
+            </div>
+          </div>
+        </sc-for>
+        <div style="padding: 11px 16px;">
+          <span style="font-size: 12px; line-height: 1.5; color: rgb(46,53,56); text-wrap: pretty;">Derived from the session's own outcome: the runbook it armed, what it verified, and the one that was refused. A session that armed nothing says so.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+    <div style="width: 640px; padding: 16px 18px; border-radius: 12px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); display: flex; flex-direction: column; gap: 11px;">
+      <span style="font-size: 12.5px; font-weight: 600; color: rgb(31,36,38);">The pins this specifies</span>
+      <sc-for list="{{ pins }}" as="p" hint-placeholder-count="9">
+        <div style="display: flex; gap: 10px; align-items: flex-start;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: rgb(4,186,110); flex-shrink: 0; margin-top: 7px;"></span>
+          <span style="flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.55; color: rgb(46,53,56); text-wrap: pretty;">{{ p }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div style="width: 380px; padding: 16px 18px; border-radius: 12px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); display: flex; flex-direction: column; gap: 11px;">
+      <span style="font-size: 12.5px; font-weight: 600; color: rgb(31,36,38);">Absent on purpose</span>
+      <sc-for list="{{ absences }}" as="a" hint-placeholder-count="6">
+        <div style="display: flex; gap: 10px; align-items: flex-start;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: rgb(221,18,67); flex-shrink: 0; margin-top: 7px;"></span>
+          <span style="flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.55; color: rgb(46,53,56); text-wrap: pretty;">{{ a }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="width: 1040px; padding: 16px 18px; border-radius: 12px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); display: flex; flex-direction: column; gap: 11px;">
+    <span style="font-size: 12.5px; font-weight: 600; color: rgb(31,36,38);">Design-system notes</span>
+    <sc-for list="{{ dsNotes }}" as="n" hint-placeholder-count="4">
+      <div style="display: flex; gap: 10px; align-items: flex-start;">
+        <span style="width: 6px; height: 6px; border-radius: 50%; background: rgb(122,69,229); flex-shrink: 0; margin-top: 7px;"></span>
+        <span style="flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.55; color: rgb(46,53,56); text-wrap: pretty;">{{ n }}</span>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="width: 1040px; padding: 16px 18px; border-radius: 12px; background: rgb(255,255,255); box-shadow: inset 0 0 0 1px rgb(226,230,232); display: flex; flex-direction: column; gap: 10px;">
+    <span style="font-size: 12.5px; font-weight: 600; color: rgb(31,36,38);">What I took from Walt, and where Nexus has to differ</span>
+    <sc-for list="{{ walt }}" as="w" hint-placeholder-count="4">
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 12.5px; font-weight: 600; color: rgb(31,36,38);">{{ w.head }}</span>
+        <span style="font-size: 12.5px; line-height: 1.55; color: rgb(46,53,56); text-wrap: pretty;">{{ w.body }}</span>
+      </div>
+    </sc-for>
+  </div>
+
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:1000}}">
+const N = window.NEXUS_NEWCHAT;
+
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      headline: N.headline,
+      promise: N.promise,
+      // At 380px the promise loses its second clause rather than being shrunk — the
+      // clause about refusal is the one a companion has room to drop, because a refusal
+      // states its own reason when it happens.
+      promiseShort: N.promise.split('. Where it cannot')[0] + '.',
+      placeholder: N.placeholder,
+      placeholderShort: 'Ask about a site',
+      suggestions: N.suggestions,
+      footnote: N.footnote,
+      scope: N.scope,
+      ambient: N.ambient,
+      list: N.list,
+
+      pins: [
+        'On an empty session the composer is the centre of gravity, vertically centred with the invitation directly above it. It moves to the bottom on the first turn, because only then is there a transcript for it to sit under.',
+        'The headline INVITES; it does not report. A situation verdict here would be a second home for Now\u2019s own sentence, which is the defect the Now collapse removed.',
+        'The needs-you count stays reachable as a door at ambient weight, in the header. One line, no action, never the subject.',
+        'The invitation is the design system\u2019s ratified composer prompt promoted to a headline, so the field beneath says what kind of thing to type instead of repeating it. On the first turn the four words become the placeholder \u2014 the one line that survives the transition.',
+        'One sentence says what the product differs on: answers are dated, linked to the record that supplied them, and refused rather than guessed. It is stated once, where a person decides whether to trust what follows.',
+        'Suggestions are QUESTIONS derived from what is true right now, phrased in the user\u2019s own words. Never actions \u2014 an offer to ask is not a decision to make, which is what keeps this surface off Now\u2019s turf.',
+        'At most three suggestions, sized to their content and never full-width. A full-width grey rectangle reads as a disabled field, not an offer.',
+        'The scope row states what the question is about and narrows itself when the question names a site. It is a fact about the ask, so it survives the first turn.',
+        'A session\u2019s title is derived from what it DID \u2014 the runbook it armed, what it verified, whether it was refused. The first message is what a person meant to do, and nine sessions that meant the same thing are indistinguishable by it.',
+      ],
+      absences: [
+        'No situation report as the headline. That sentence belongs to Now, and it already has a door here.',
+        'No composer pinned to the bottom of an empty column. The distance between what you read and what you type was the whole defect.',
+        'No full-width suggestion rectangles. They read as disabled inputs, and two of them filling the width implied there were only two things to ask.',
+        'No model identifier in the footer. \u201canthropic/claude-sonnet-5\u201d is a fact about our supply chain, not about the answer, and it sat in the same line as three things that do matter.',
+        'No empty-state illustration, and no greeting by name. The design system ships neither, and both would fill the space the composer now occupies.',
+        'No action on any suggestion. The moment a suggestion can approve something, this becomes a second Now.',
+      ],
+      dsNotes: [
+        'The Nexus mark is a verbatim transcription of assets/nexus-mark.svg, not a drawing \u2014 three copies, one per board header. It is inlined rather than mounted because the file paints with currentColor, and an external <img> or mask has no element to inherit from: an earlier attempt to mask it collapsed to a solid block. That file is the source of record and every copy must stay byte-identical to it. All three copies here render white, so a concrete-colour asset would also serve if the repo ever ships one \u2014 at which point these should become <img>.',
+        'The composer, the suggestion pills and the send glyph are the bundle\u2019s: Button at size=sm type=outline for the pills, ArrowsArrowUp24 for the send arrow, Chip at size=xs style2=strong for the citation marker on board C. Chip renders strong everywhere because the subtle fill pins its border overlay at a fixed 48px and truncates longer labels.',
+        'The composer\u2019s own box is authored, and deliberately: TextInput renders a fixed 320\u00d740 at every size variant, so it cannot fill a 560px column or a 380px panel. Same constraint recorded on the search sheet \u2014 the right component, unusable at any width but its own.',
+        'The focused state on the empty composer is a 2px ring in action blue, which is the design system\u2019s focus treatment. It is there because an empty session should open with the field already focused.',
+      ],
+      walt: [
+        {
+          head: 'Taken: the composer is the centre of an empty session',
+          body: 'Walt puts the field immediately under the invitation, in the vertical middle, focused. That single move fixes most of what was wrong \u2014 our version had 700px of nothing between the two.',
+        },
+        {
+          head: 'Taken: say what the thing answers from, in one sentence',
+          body: 'Walt\u2019s \u201canswers from live data \u2014 run as you, cited to source\u201d is the corroboration doctrine written as a promise. We had that doctrine ratified and were not saying it anywhere a person could read it before asking.',
+        },
+        {
+          head: 'Taken: suggestions as content-sized pills, below the field, and a line about what is kept',
+          body: 'Walt\u2019s three pills wrap to their content and its footnote says answers are sourced and saved. Ours were two full-width grey bars above the field, and nothing said what a session leaves behind.',
+        },
+        {
+          head: 'Differs: our suggestions are derived, and our sessions have consequence',
+          body: 'Walt\u2019s prompts are generic because its subject is a data set. Ours can name what is actually wrong right now \u2014 which is better, and dangerous in exactly one way: a suggestion that could ACT would make this a second Now. So they stay questions, and the footnote points at Record rather than at a document library.',
+        },
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>
