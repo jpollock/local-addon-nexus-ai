@@ -1,0 +1,1328 @@
+{
+  "evalId": "eval-he2-2026-08-25T12:55:34",
+  "results": {
+    "version": 3,
+    "timestamp": "2026-08-25T12:55:34.792Z",
+    "prompts": [
+      {
+        "id": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "raw": "{{prompt}}",
+        "label": "{{prompt}}",
+        "provider": "Nexus",
+        "metrics": {
+          "score": 3,
+          "testPassCount": 3,
+          "testFailCount": 0,
+          "testErrorCount": 0,
+          "assertPassCount": 15,
+          "assertFailCount": 0,
+          "totalLatencyMs": 179938,
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 3,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          },
+          "namedScores": {},
+          "namedScoresCount": {},
+          "namedScoreWeights": {},
+          "cost": 0
+        }
+      },
+      {
+        "id": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "raw": "{{prompt}}",
+        "label": "{{prompt}}",
+        "provider": "Coworker",
+        "metrics": {
+          "score": 2,
+          "testPassCount": 0,
+          "testFailCount": 3,
+          "testErrorCount": 0,
+          "assertPassCount": 10,
+          "assertFailCount": 5,
+          "totalLatencyMs": 175309,
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 3,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          },
+          "namedScores": {},
+          "namedScoresCount": {},
+          "namedScoreWeights": {},
+          "cost": 0
+        }
+      }
+    ],
+    "results": [
+      {
+        "cost": 0,
+        "error": "cedarvalehealt stated as MISSING hours — the gap is summitdermatol",
+        "gradingResult": {
+          "pass": false,
+          "score": 0.6,
+          "reason": "cedarvalehealt stated as MISSING hours — the gap is summitdermatol",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "latency",
+                "threshold": 600000
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains",
+                "value": "summitdermatol"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "gap identified: \"missing\"",
+              "assertion": {
+                "type": "javascript",
+                "value": "const GAP = /(missing|lacks?\\b|lacking|absent|\\bempty\\b|\\bnone\\b|zero hours|without[^.;\\n]{0,24}\\bhours\\b|\\bno\\b[^.;\\n]{0,24}\\bhours\\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;\nconst m = GAP.exec(String(output));\nreturn m\n  ? { pass: true, score: 1, reason: 'gap identified: \"' + m[0] + '\"' }\n  : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };\n"
+              }
+            },
+            {
+              "pass": false,
+              "score": 0,
+              "reason": "cedarvalehealt stated as MISSING hours — the gap is summitdermatol",
+              "assertion": {
+                "type": "javascript",
+                "value": "const out = String(output).replace(/\\.wpenginepowered\\.com/gi, '');\nconst NEG = /\\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\\b/i;\nconst POS = /\\b(has|have|carries|carry|contains|populated|present|complete|covered)\\b/i;\nlet ok = false, negated = false;\nconst clauses = out.split(/[.;\\n]+/);\nfor (let c = 0; c < clauses.length; c++) {\n  const clause = clauses[c];\n  const i = clause.toLowerCase().indexOf('cedarvalehealt');\n  if (i === -1) continue;\n  let after = clause.slice(i + 'cedarvalehealt'.length);\n  // A clause that is a bare heading (\"### cedarvalehealt\", \"**cedarvale-\n  // healt**\") names the subject and defers the claim to the body that\n  // follows. Read the next clause in that case — but only then, and only\n  // if it does not name the other site, so a clause carrying its own\n  // content is never allowed to borrow a verdict from its neighbour.\n  const residue = (clause.slice(0, i) + after)\n    .replace(/[^a-z0-9\\s]/gi, ' ').trim().split(/\\s+/).filter(Boolean);\n  if (residue.length <= 3 && !/\\b(has|have|missing|lacks?|absent|carries|carry)\\b/i.test(after)) {\n    const next = clauses[c + 1] || '';\n    if (!/summitdermatol/i.test(next)) after = after + ' ' + next;\n  }\n  // Whichever verb sits NEARER the site name is the one making a claim\n  // about it. A clause can hold both — \"cedarvalehealt has hours,\n  // summitdermatol is missing them\" — and testing NEG first would read\n  // the other site's verb as this site's.\n  const p = POS.exec(after), n = NEG.exec(after);\n  if (p && (!n || p.index < n.index)) ok = true;\n  else if (n) negated = true;\n}\nif (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };\nreturn { pass: false, score: 0, reason: negated\n  ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'\n  : 'no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)' };\n"
+              }
+            },
+            {
+              "pass": false,
+              "score": 0,
+              "reason": "Expected output to not contain one of \"neither site has, neither has hours, both sites are missing, both lack, cedarvalehealt is missing, cedarvalehealt lacks\"",
+              "assertion": {
+                "type": "not-icontains-any",
+                "value": [
+                  "neither site has",
+                  "neither has hours",
+                  "both sites are missing",
+                  "both lack",
+                  "cedarvalehealt is missing",
+                  "cedarvalehealt lacks"
+                ]
+              }
+            }
+          ]
+        },
+        "id": "64b40ee1-c078-46eb-bea3-4b9b36ebd86b",
+        "latencyMs": 58520,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 1,
+        "provider": {
+          "id": "coworker-mcp",
+          "label": "Coworker"
+        },
+        "response": {
+          "output": "## Answer: neither site has opening hours — the premise doesn't hold\n\nI checked every `location` record on both sites. **Both are missing opening hours**, but they're missing it in two different ways:\n\n**cedarvalehealt.wpenginepowered.com — 25 locations, field doesn't exist**\n- A terms aggregation on `metadata.acf_hours` across all 25 location records returned **zero buckets** — the field is absent entirely, not just blank.\n- Spot-checked 5 records directly (Tempe 85281, Denver 80202, Bellevue 98007, Seattle 98101, Durham 27701). Every one has `acf_phone`, `acf_parking`, `acf_accessibility`, `acf_geo_lat/lng`, `acf_accepting_new_patients` — and **no `acf_hours` key at all**.\n\n**summitdermatol.wpenginepowered.com — 2 locations, field exists but empty**\n- Both Denver records (80202, 80206) **do** have `acf_hours` defined, but the value is an empty string `\"\"` on both. The aggregation confirms it: one bucket, key `\"\"`, doc_count 2.\n\nSo if you were expecting one site to be the clean reference, there isn't one. Summit is marginally closer — the ACF field is at least registered and attached to the post type, so populating it is a data-entry job. On Cedar Vale, the field isn't on the location post type at all, so it's a field-group change first, then 25 records to fill.\n\nTwo related things worth flagging:\n\n1. **Cedar Vale's Contact page makes a promise the data can't keep.** It tells patients: *\"find your nearest clinic on the Locations page — each listing carries its direct phone number, opening hours and whether it is currently accepting new patients.\"* Phone and new-patient status are there; opening hours are not. That's a live inaccuracy on the flagship site.\n\n2. **Summit's two locations look like duplicates of Cedar Vale's.** Summit's Denver 80202 and 80206 share the same titles, street addresses, phone numbers, and even `acf_place_id` values (`cv-...-denver-80202-001`, `cv-...-denver-80206-005`) as Cedar Vale's `location_5` and `location_9`. If Summit is meant to be a separate practice, that's worth a look independently of the hours gap.",
+          "metadata": {
+            "durationMs": 58515
+          }
+        },
+        "score": 0.6,
+        "success": false,
+        "testCase": {
+          "description": "CV-A-01 — which clinic sites are missing opening hours?",
+          "vars": {
+            "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+          },
+          "assert": [
+            {
+              "type": "latency",
+              "threshold": 600000
+            },
+            {
+              "type": "icontains",
+              "value": "summitdermatol"
+            },
+            {
+              "type": "javascript",
+              "value": "const GAP = /(missing|lacks?\\b|lacking|absent|\\bempty\\b|\\bnone\\b|zero hours|without[^.;\\n]{0,24}\\bhours\\b|\\bno\\b[^.;\\n]{0,24}\\bhours\\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;\nconst m = GAP.exec(String(output));\nreturn m\n  ? { pass: true, score: 1, reason: 'gap identified: \"' + m[0] + '\"' }\n  : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };\n"
+            },
+            {
+              "type": "javascript",
+              "value": "const out = String(output).replace(/\\.wpenginepowered\\.com/gi, '');\nconst NEG = /\\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\\b/i;\nconst POS = /\\b(has|have|carries|carry|contains|populated|present|complete|covered)\\b/i;\nlet ok = false, negated = false;\nconst clauses = out.split(/[.;\\n]+/);\nfor (let c = 0; c < clauses.length; c++) {\n  const clause = clauses[c];\n  const i = clause.toLowerCase().indexOf('cedarvalehealt');\n  if (i === -1) continue;\n  let after = clause.slice(i + 'cedarvalehealt'.length);\n  // A clause that is a bare heading (\"### cedarvalehealt\", \"**cedarvale-\n  // healt**\") names the subject and defers the claim to the body that\n  // follows. Read the next clause in that case — but only then, and only\n  // if it does not name the other site, so a clause carrying its own\n  // content is never allowed to borrow a verdict from its neighbour.\n  const residue = (clause.slice(0, i) + after)\n    .replace(/[^a-z0-9\\s]/gi, ' ').trim().split(/\\s+/).filter(Boolean);\n  if (residue.length <= 3 && !/\\b(has|have|missing|lacks?|absent|carries|carry)\\b/i.test(after)) {\n    const next = clauses[c + 1] || '';\n    if (!/summitdermatol/i.test(next)) after = after + ' ' + next;\n  }\n  // Whichever verb sits NEARER the site name is the one making a claim\n  // about it. A clause can hold both — \"cedarvalehealt has hours,\n  // summitdermatol is missing them\" — and testing NEG first would read\n  // the other site's verb as this site's.\n  const p = POS.exec(after), n = NEG.exec(after);\n  if (p && (!n || p.index < n.index)) ok = true;\n  else if (n) negated = true;\n}\nif (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };\nreturn { pass: false, score: 0, reason: negated\n  ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'\n  : 'no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)' };\n"
+            },
+            {
+              "type": "not-icontains-any",
+              "value": [
+                "neither site has",
+                "neither has hours",
+                "both sites are missing",
+                "both lack",
+                "cedarvalehealt is missing",
+                "cedarvalehealt lacks"
+              ]
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 0,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+        },
+        "metadata": {
+          "durationMs": 58515,
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 1
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "latency",
+                "threshold": 600000
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains",
+                "value": "summitdermatol"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "gap identified: \"missing\"",
+              "assertion": {
+                "type": "javascript",
+                "value": "const GAP = /(missing|lacks?\\b|lacking|absent|\\bempty\\b|\\bnone\\b|zero hours|without[^.;\\n]{0,24}\\bhours\\b|\\bno\\b[^.;\\n]{0,24}\\bhours\\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;\nconst m = GAP.exec(String(output));\nreturn m\n  ? { pass: true, score: 1, reason: 'gap identified: \"' + m[0] + '\"' }\n  : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };\n"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "cedarvalehealt stated as having hours",
+              "assertion": {
+                "type": "javascript",
+                "value": "const out = String(output).replace(/\\.wpenginepowered\\.com/gi, '');\nconst NEG = /\\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\\b/i;\nconst POS = /\\b(has|have|carries|carry|contains|populated|present|complete|covered)\\b/i;\nlet ok = false, negated = false;\nconst clauses = out.split(/[.;\\n]+/);\nfor (let c = 0; c < clauses.length; c++) {\n  const clause = clauses[c];\n  const i = clause.toLowerCase().indexOf('cedarvalehealt');\n  if (i === -1) continue;\n  let after = clause.slice(i + 'cedarvalehealt'.length);\n  // A clause that is a bare heading (\"### cedarvalehealt\", \"**cedarvale-\n  // healt**\") names the subject and defers the claim to the body that\n  // follows. Read the next clause in that case — but only then, and only\n  // if it does not name the other site, so a clause carrying its own\n  // content is never allowed to borrow a verdict from its neighbour.\n  const residue = (clause.slice(0, i) + after)\n    .replace(/[^a-z0-9\\s]/gi, ' ').trim().split(/\\s+/).filter(Boolean);\n  if (residue.length <= 3 && !/\\b(has|have|missing|lacks?|absent|carries|carry)\\b/i.test(after)) {\n    const next = clauses[c + 1] || '';\n    if (!/summitdermatol/i.test(next)) after = after + ' ' + next;\n  }\n  // Whichever verb sits NEARER the site name is the one making a claim\n  // about it. A clause can hold both — \"cedarvalehealt has hours,\n  // summitdermatol is missing them\" — and testing NEG first would read\n  // the other site's verb as this site's.\n  const p = POS.exec(after), n = NEG.exec(after);\n  if (p && (!n || p.index < n.index)) ok = true;\n  else if (n) negated = true;\n}\nif (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };\nreturn { pass: false, score: 0, reason: negated\n  ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'\n  : 'no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)' };\n"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "not-icontains-any",
+                "value": [
+                  "neither site has",
+                  "neither has hours",
+                  "both sites are missing",
+                  "both lack",
+                  "cedarvalehealt is missing",
+                  "cedarvalehealt lacks"
+                ]
+              }
+            }
+          ]
+        },
+        "id": "ac235b8f-6538-48cd-91f2-3071cbee384b",
+        "latencyMs": 99127,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "nexus-mcp",
+          "label": "Nexus"
+        },
+        "response": {
+          "output": "**summitdermatol (Summit Dermatology Partners) is the site with the gap. cedarvalehealt has the hours data.**\n\n## The finding\n\n| | cedarvalehealt | summitdermatol |\n|---|---|---|\n| Location posts | 25 | 2 |\n| Locations with `hours_*` fields | 25 / 25 | **0 / 2** |\n\n**cedarvalehealt** stores opening hours as a 7-row repeater on every location — `hours_0_day` … `hours_6_day`, each with `hours_N_opens` / `hours_N_closes`. Coverage is 25/25 with no exceptions. Example (Denver 80202):\n\n```\nhours_0_day: monday    opens 07:30  closes 16:30\n…\nhours_4_day: friday    opens 07:30  closes 16:30\nhours_5_day: saturday  (no opens/closes — closed)\nhours_6_day: sunday    (no opens/closes — closed)\n```\n\nThe weekend rows carry a day name but no times, which reads as an intentional \"closed\" marker, not missing data — Sunday is closed at all 25, and a few sites (Bellevue 98007, Boulder 80301, Seattle 98101) do carry real Saturday hours of 09:00–13:00.\n\n**summitdermatol's** two locations have no `hours` field of any kind — not empty values, the key is absent from the field index entirely. Every *other* location field is fully populated on both records: metro, street, city, state, zip, lat/lng, phone, `accepting_new_patients`, `place_id`, `opened_date`, parking, accessibility. Hours is the single field that didn't come across.\n\n## Worth flagging\n\nsummitdermatol's two locations are not Summit's own clinics — they're duplicates of cedarvalehealt's Denver records. Same `place_id` values (`cv-cedar-vale-dermatology-denver-80202-001` and `…-80206-005`, note the `cv-` prefix), same addresses, same phone numbers, same geo coordinates, same `opened_date`. The titles even still read \"Cedar & Vale Dermatology — Denver.\" So the gap looks like a partial copy of Cedar & Vale's location data into Summit, where the hours repeater was dropped in transfer — and the records arguably shouldn't be branded Cedar & Vale on Summit's site either.\n\n## On confidence\n\nThe initial read was against an index flagged stale by 2 days. Because the whole answer rests on an absence, I re-synced summitdermatol's content from the live install over SSH and re-queried — the hours fields are still absent post-refresh, so this is a real data gap, not an indexing artifact. The cedarvalehealt side is still read from the 2-day-old index; that one is a positive finding (fields present with plausible values), so staleness is a much weaker concern there.\n\nOne limit: I verified via the content index rather than reading `wp_postmeta` directly, since `wp_eval` is blocked against remote WPE installs by policy. If you want a definitive database-level confirmation before acting, that would need to run from a local copy or through the WP admin.",
+          "metadata": {
+            "durationMs": 99123
+          }
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "CV-A-01 — which clinic sites are missing opening hours?",
+          "vars": {
+            "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+          },
+          "assert": [
+            {
+              "type": "latency",
+              "threshold": 600000
+            },
+            {
+              "type": "icontains",
+              "value": "summitdermatol"
+            },
+            {
+              "type": "javascript",
+              "value": "const GAP = /(missing|lacks?\\b|lacking|absent|\\bempty\\b|\\bnone\\b|zero hours|without[^.;\\n]{0,24}\\bhours\\b|\\bno\\b[^.;\\n]{0,24}\\bhours\\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;\nconst m = GAP.exec(String(output));\nreturn m\n  ? { pass: true, score: 1, reason: 'gap identified: \"' + m[0] + '\"' }\n  : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };\n"
+            },
+            {
+              "type": "javascript",
+              "value": "const out = String(output).replace(/\\.wpenginepowered\\.com/gi, '');\nconst NEG = /\\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\\b/i;\nconst POS = /\\b(has|have|carries|carry|contains|populated|present|complete|covered)\\b/i;\nlet ok = false, negated = false;\nconst clauses = out.split(/[.;\\n]+/);\nfor (let c = 0; c < clauses.length; c++) {\n  const clause = clauses[c];\n  const i = clause.toLowerCase().indexOf('cedarvalehealt');\n  if (i === -1) continue;\n  let after = clause.slice(i + 'cedarvalehealt'.length);\n  // A clause that is a bare heading (\"### cedarvalehealt\", \"**cedarvale-\n  // healt**\") names the subject and defers the claim to the body that\n  // follows. Read the next clause in that case — but only then, and only\n  // if it does not name the other site, so a clause carrying its own\n  // content is never allowed to borrow a verdict from its neighbour.\n  const residue = (clause.slice(0, i) + after)\n    .replace(/[^a-z0-9\\s]/gi, ' ').trim().split(/\\s+/).filter(Boolean);\n  if (residue.length <= 3 && !/\\b(has|have|missing|lacks?|absent|carries|carry)\\b/i.test(after)) {\n    const next = clauses[c + 1] || '';\n    if (!/summitdermatol/i.test(next)) after = after + ' ' + next;\n  }\n  // Whichever verb sits NEARER the site name is the one making a claim\n  // about it. A clause can hold both — \"cedarvalehealt has hours,\n  // summitdermatol is missing them\" — and testing NEG first would read\n  // the other site's verb as this site's.\n  const p = POS.exec(after), n = NEG.exec(after);\n  if (p && (!n || p.index < n.index)) ok = true;\n  else if (n) negated = true;\n}\nif (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };\nreturn { pass: false, score: 0, reason: negated\n  ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'\n  : 'no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)' };\n"
+            },
+            {
+              "type": "not-icontains-any",
+              "value": [
+                "neither site has",
+                "neither has hours",
+                "both sites are missing",
+                "both lack",
+                "cedarvalehealt is missing",
+                "cedarvalehealt lacks"
+              ]
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 0,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+        },
+        "metadata": {
+          "durationMs": 99123,
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "error": "no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)",
+        "gradingResult": {
+          "pass": false,
+          "score": 0.6,
+          "reason": "no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "latency",
+                "threshold": 600000
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains",
+                "value": "summitdermatol"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "gap identified: \"missing\"",
+              "assertion": {
+                "type": "javascript",
+                "value": "const GAP = /(missing|lacks?\\b|lacking|absent|\\bempty\\b|\\bnone\\b|zero hours|without[^.;\\n]{0,24}\\bhours\\b|\\bno\\b[^.;\\n]{0,24}\\bhours\\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;\nconst m = GAP.exec(String(output));\nreturn m\n  ? { pass: true, score: 1, reason: 'gap identified: \"' + m[0] + '\"' }\n  : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };\n"
+              }
+            },
+            {
+              "pass": false,
+              "score": 0,
+              "reason": "no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)",
+              "assertion": {
+                "type": "javascript",
+                "value": "const out = String(output).replace(/\\.wpenginepowered\\.com/gi, '');\nconst NEG = /\\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\\b/i;\nconst POS = /\\b(has|have|carries|carry|contains|populated|present|complete|covered)\\b/i;\nlet ok = false, negated = false;\nconst clauses = out.split(/[.;\\n]+/);\nfor (let c = 0; c < clauses.length; c++) {\n  const clause = clauses[c];\n  const i = clause.toLowerCase().indexOf('cedarvalehealt');\n  if (i === -1) continue;\n  let after = clause.slice(i + 'cedarvalehealt'.length);\n  // A clause that is a bare heading (\"### cedarvalehealt\", \"**cedarvale-\n  // healt**\") names the subject and defers the claim to the body that\n  // follows. Read the next clause in that case — but only then, and only\n  // if it does not name the other site, so a clause carrying its own\n  // content is never allowed to borrow a verdict from its neighbour.\n  const residue = (clause.slice(0, i) + after)\n    .replace(/[^a-z0-9\\s]/gi, ' ').trim().split(/\\s+/).filter(Boolean);\n  if (residue.length <= 3 && !/\\b(has|have|missing|lacks?|absent|carries|carry)\\b/i.test(after)) {\n    const next = clauses[c + 1] || '';\n    if (!/summitdermatol/i.test(next)) after = after + ' ' + next;\n  }\n  // Whichever verb sits NEARER the site name is the one making a claim\n  // about it. A clause can hold both — \"cedarvalehealt has hours,\n  // summitdermatol is missing them\" — and testing NEG first would read\n  // the other site's verb as this site's.\n  const p = POS.exec(after), n = NEG.exec(after);\n  if (p && (!n || p.index < n.index)) ok = true;\n  else if (n) negated = true;\n}\nif (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };\nreturn { pass: false, score: 0, reason: negated\n  ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'\n  : 'no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)' };\n"
+              }
+            },
+            {
+              "pass": false,
+              "score": 0,
+              "reason": "Expected output to not contain one of \"neither site has, neither has hours, both sites are missing, both lack, cedarvalehealt is missing, cedarvalehealt lacks\"",
+              "assertion": {
+                "type": "not-icontains-any",
+                "value": [
+                  "neither site has",
+                  "neither has hours",
+                  "both sites are missing",
+                  "both lack",
+                  "cedarvalehealt is missing",
+                  "cedarvalehealt lacks"
+                ]
+              }
+            }
+          ]
+        },
+        "id": "e7fc48a1-e17f-4ffc-9c2e-567a288d96f8",
+        "latencyMs": 58660,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 1,
+        "provider": {
+          "id": "coworker-mcp",
+          "label": "Coworker"
+        },
+        "response": {
+          "output": "## Neither site has usable opening hours — the premise doesn't hold\n\nI checked every indexed `location` record on both sites. Neither has an actual opening-hours value; the difference is only in *how* they're missing.\n\n**cedarvalehealt.wpenginepowered.com — 25 locations, no `acf_hours` field at all**\n\nThe field isn't present in a single location record. A terms aggregation on `metadata.acf_hours` across all 25 locations returned zero buckets, and spot-checks (Tempe 85281, Denver 80202, Bellevue 98007) confirm the metadata set stops at `acf_accepting_new_patients`, `acf_accessibility`, address parts, `acf_geo_lat/lng`, `acf_metro`, `acf_opened_date`, `acf_parking`, `acf_phone`, `acf_place_id`. No hours key, and the post body is a single address sentence.\n\n**summitdermatol.wpenginepowered.com — 2 locations, `acf_hours` defined but empty**\n\nBoth Denver records (80202, 80206) carry `acf_hours`, and both hold `\"\"`. The aggregation returns exactly one bucket — key `\"\"`, doc_count 2. So the field is wired up on this site; nobody has filled it in.\n\nSo if you want a \"which one is closer to having it,\" Summit Dermatology has the schema and Cedar Vale doesn't — but zero locations on either site would render hours to a patient.\n\n**One thing worth flagging:** Cedar Vale's Contact page (`/contact/`) tells patients \"find your nearest clinic on the Locations page — each listing carries its direct phone number, opening hours and whether it is currently accepting new patients.\" Phone and accepting-new-patients are populated; opening hours are not. That's a live promise the location data can't keep across all 25 clinics.\n\nTwo caveats on scope: this reflects what's in the search index, so if hours live in a plugin table, a theme template, or a non-indexed field, they wouldn't show here. And the ACF field group could exist in the WordPress admin on Cedar Vale while being excluded from indexing because it's empty — the safe reading is \"no hours values on either site,\" with the field-definition difference being what I can see from the index. I can dig into either site's actual ACF configuration if you want that confirmed at the source.",
+          "metadata": {
+            "durationMs": 58657
+          }
+        },
+        "score": 0.6,
+        "success": false,
+        "testCase": {
+          "description": "CV-A-01 — which clinic sites are missing opening hours?",
+          "vars": {
+            "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+          },
+          "assert": [
+            {
+              "type": "latency",
+              "threshold": 600000
+            },
+            {
+              "type": "icontains",
+              "value": "summitdermatol"
+            },
+            {
+              "type": "javascript",
+              "value": "const GAP = /(missing|lacks?\\b|lacking|absent|\\bempty\\b|\\bnone\\b|zero hours|without[^.;\\n]{0,24}\\bhours\\b|\\bno\\b[^.;\\n]{0,24}\\bhours\\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;\nconst m = GAP.exec(String(output));\nreturn m\n  ? { pass: true, score: 1, reason: 'gap identified: \"' + m[0] + '\"' }\n  : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };\n"
+            },
+            {
+              "type": "javascript",
+              "value": "const out = String(output).replace(/\\.wpenginepowered\\.com/gi, '');\nconst NEG = /\\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\\b/i;\nconst POS = /\\b(has|have|carries|carry|contains|populated|present|complete|covered)\\b/i;\nlet ok = false, negated = false;\nconst clauses = out.split(/[.;\\n]+/);\nfor (let c = 0; c < clauses.length; c++) {\n  const clause = clauses[c];\n  const i = clause.toLowerCase().indexOf('cedarvalehealt');\n  if (i === -1) continue;\n  let after = clause.slice(i + 'cedarvalehealt'.length);\n  // A clause that is a bare heading (\"### cedarvalehealt\", \"**cedarvale-\n  // healt**\") names the subject and defers the claim to the body that\n  // follows. Read the next clause in that case — but only then, and only\n  // if it does not name the other site, so a clause carrying its own\n  // content is never allowed to borrow a verdict from its neighbour.\n  const residue = (clause.slice(0, i) + after)\n    .replace(/[^a-z0-9\\s]/gi, ' ').trim().split(/\\s+/).filter(Boolean);\n  if (residue.length <= 3 && !/\\b(has|have|missing|lacks?|absent|carries|carry)\\b/i.test(after)) {\n    const next = clauses[c + 1] || '';\n    if (!/summitdermatol/i.test(next)) after = after + ' ' + next;\n  }\n  // Whichever verb sits NEARER the site name is the one making a claim\n  // about it. A clause can hold both — \"cedarvalehealt has hours,\n  // summitdermatol is missing them\" — and testing NEG first would read\n  // the other site's verb as this site's.\n  const p = POS.exec(after), n = NEG.exec(after);\n  if (p && (!n || p.index < n.index)) ok = true;\n  else if (n) negated = true;\n}\nif (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };\nreturn { pass: false, score: 0, reason: negated\n  ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'\n  : 'no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)' };\n"
+            },
+            {
+              "type": "not-icontains-any",
+              "value": [
+                "neither site has",
+                "neither has hours",
+                "both sites are missing",
+                "both lack",
+                "cedarvalehealt is missing",
+                "cedarvalehealt lacks"
+              ]
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 1,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+        },
+        "metadata": {
+          "durationMs": 58657,
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 1
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "latency",
+                "threshold": 600000
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains",
+                "value": "summitdermatol"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "gap identified: \"missing\"",
+              "assertion": {
+                "type": "javascript",
+                "value": "const GAP = /(missing|lacks?\\b|lacking|absent|\\bempty\\b|\\bnone\\b|zero hours|without[^.;\\n]{0,24}\\bhours\\b|\\bno\\b[^.;\\n]{0,24}\\bhours\\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;\nconst m = GAP.exec(String(output));\nreturn m\n  ? { pass: true, score: 1, reason: 'gap identified: \"' + m[0] + '\"' }\n  : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };\n"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "cedarvalehealt stated as having hours",
+              "assertion": {
+                "type": "javascript",
+                "value": "const out = String(output).replace(/\\.wpenginepowered\\.com/gi, '');\nconst NEG = /\\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\\b/i;\nconst POS = /\\b(has|have|carries|carry|contains|populated|present|complete|covered)\\b/i;\nlet ok = false, negated = false;\nconst clauses = out.split(/[.;\\n]+/);\nfor (let c = 0; c < clauses.length; c++) {\n  const clause = clauses[c];\n  const i = clause.toLowerCase().indexOf('cedarvalehealt');\n  if (i === -1) continue;\n  let after = clause.slice(i + 'cedarvalehealt'.length);\n  // A clause that is a bare heading (\"### cedarvalehealt\", \"**cedarvale-\n  // healt**\") names the subject and defers the claim to the body that\n  // follows. Read the next clause in that case — but only then, and only\n  // if it does not name the other site, so a clause carrying its own\n  // content is never allowed to borrow a verdict from its neighbour.\n  const residue = (clause.slice(0, i) + after)\n    .replace(/[^a-z0-9\\s]/gi, ' ').trim().split(/\\s+/).filter(Boolean);\n  if (residue.length <= 3 && !/\\b(has|have|missing|lacks?|absent|carries|carry)\\b/i.test(after)) {\n    const next = clauses[c + 1] || '';\n    if (!/summitdermatol/i.test(next)) after = after + ' ' + next;\n  }\n  // Whichever verb sits NEARER the site name is the one making a claim\n  // about it. A clause can hold both — \"cedarvalehealt has hours,\n  // summitdermatol is missing them\" — and testing NEG first would read\n  // the other site's verb as this site's.\n  const p = POS.exec(after), n = NEG.exec(after);\n  if (p && (!n || p.index < n.index)) ok = true;\n  else if (n) negated = true;\n}\nif (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };\nreturn { pass: false, score: 0, reason: negated\n  ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'\n  : 'no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)' };\n"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "not-icontains-any",
+                "value": [
+                  "neither site has",
+                  "neither has hours",
+                  "both sites are missing",
+                  "both lack",
+                  "cedarvalehealt is missing",
+                  "cedarvalehealt lacks"
+                ]
+              }
+            }
+          ]
+        },
+        "id": "924bb262-1248-4679-9cfd-7149f527499c",
+        "latencyMs": 48689,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "nexus-mcp",
+          "label": "Nexus"
+        },
+        "response": {
+          "output": "## Answer: **summitdermatol** has the gap; **cedarvalehealt** has the data.\n\n**cedarvalehealt — 25 locations, all with opening hours.** Hours are stored as a repeater (`hours_0_day` … `hours_6_day`, each with `_opens`/`_closes`), and the `hours` field shows 7/7 days present on all 25 of 25 records. Examples:\n\n- Bellevue (98007) — Mon–Fri 08:30–17:00, Sat 09:00–13:00\n- Durham (27701) — Mon–Fri 07:30–17:30\n- Tempe (85281) — Mon–Fri 08:00–17:30\n\nWhere a day has a `_day` key but no `_opens`/`_closes` (Sunday everywhere, Saturday at several sites), that's an explicitly closed day, not missing data.\n\n**summitdermatol — 2 locations, neither with any opening hours.** The `hours` field does not exist at all on this site's `location` post type. Both records carry the full complement of *other* location fields — address, geo coordinates, phone, parking, accessibility, `opened_date`, `accepting_new_patients` — so this is specifically an hours gap, not a generally thin record.\n\nNeither result is a staleness artifact: both indexes report complete coverage with custom fields collected. summitdermatol was indexed today (2026-08-25), so the missing `hours` reflects the site's current state. cedarvalehealt's index is 2 days old, but it's the site that *has* the data, so age doesn't undercut that finding.\n\n## One thing worth flagging\n\nsummitdermatol's two \"locations\" are not Summit Dermatology locations. They're Cedar & Vale records:\n\n| | summitdermatol post 5 / 6 | cedarvalehealt equivalent |\n|---|---|---|\n| Title | Cedar & Vale Dermatology — Denver (80202) / (80206) | same |\n| `place_id` | `cv-cedar-vale-dermatology-denver-80202-001` / `-80206-005` | same |\n| Address | 4653 Keenan Mall / 774 Golda Parks | same |\n| Phone | (598) 555-5488 / (860) 555-9330 | same |\n\nSame titles, same `cv-` prefixed place IDs, same addresses and phone numbers — they're a two-record subset of cedarvalehealt's location set, minus the hours. So the likely story isn't \"someone forgot to fill in hours on Summit's locations\" but \"a partial copy of Cedar & Vale's location data landed on summitdermatol and the hours repeater didn't come across.\" That matters for the fix: populating hours on those two records would be entrenching the wrong data. Worth confirming what summitdermatol's real locations are meant to be first.",
+          "metadata": {
+            "durationMs": 48686
+          }
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "CV-A-01 — which clinic sites are missing opening hours?",
+          "vars": {
+            "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+          },
+          "assert": [
+            {
+              "type": "latency",
+              "threshold": 600000
+            },
+            {
+              "type": "icontains",
+              "value": "summitdermatol"
+            },
+            {
+              "type": "javascript",
+              "value": "const GAP = /(missing|lacks?\\b|lacking|absent|\\bempty\\b|\\bnone\\b|zero hours|without[^.;\\n]{0,24}\\bhours\\b|\\bno\\b[^.;\\n]{0,24}\\bhours\\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;\nconst m = GAP.exec(String(output));\nreturn m\n  ? { pass: true, score: 1, reason: 'gap identified: \"' + m[0] + '\"' }\n  : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };\n"
+            },
+            {
+              "type": "javascript",
+              "value": "const out = String(output).replace(/\\.wpenginepowered\\.com/gi, '');\nconst NEG = /\\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\\b/i;\nconst POS = /\\b(has|have|carries|carry|contains|populated|present|complete|covered)\\b/i;\nlet ok = false, negated = false;\nconst clauses = out.split(/[.;\\n]+/);\nfor (let c = 0; c < clauses.length; c++) {\n  const clause = clauses[c];\n  const i = clause.toLowerCase().indexOf('cedarvalehealt');\n  if (i === -1) continue;\n  let after = clause.slice(i + 'cedarvalehealt'.length);\n  // A clause that is a bare heading (\"### cedarvalehealt\", \"**cedarvale-\n  // healt**\") names the subject and defers the claim to the body that\n  // follows. Read the next clause in that case — but only then, and only\n  // if it does not name the other site, so a clause carrying its own\n  // content is never allowed to borrow a verdict from its neighbour.\n  const residue = (clause.slice(0, i) + after)\n    .replace(/[^a-z0-9\\s]/gi, ' ').trim().split(/\\s+/).filter(Boolean);\n  if (residue.length <= 3 && !/\\b(has|have|missing|lacks?|absent|carries|carry)\\b/i.test(after)) {\n    const next = clauses[c + 1] || '';\n    if (!/summitdermatol/i.test(next)) after = after + ' ' + next;\n  }\n  // Whichever verb sits NEARER the site name is the one making a claim\n  // about it. A clause can hold both — \"cedarvalehealt has hours,\n  // summitdermatol is missing them\" — and testing NEG first would read\n  // the other site's verb as this site's.\n  const p = POS.exec(after), n = NEG.exec(after);\n  if (p && (!n || p.index < n.index)) ok = true;\n  else if (n) negated = true;\n}\nif (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };\nreturn { pass: false, score: 0, reason: negated\n  ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'\n  : 'no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)' };\n"
+            },
+            {
+              "type": "not-icontains-any",
+              "value": [
+                "neither site has",
+                "neither has hours",
+                "both sites are missing",
+                "both lack",
+                "cedarvalehealt is missing",
+                "cedarvalehealt lacks"
+              ]
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 1,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+        },
+        "metadata": {
+          "durationMs": 48686,
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "error": "cedarvalehealt stated as MISSING hours — the gap is summitdermatol",
+        "gradingResult": {
+          "pass": false,
+          "score": 0.8,
+          "reason": "cedarvalehealt stated as MISSING hours — the gap is summitdermatol",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "latency",
+                "threshold": 600000
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains",
+                "value": "summitdermatol"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "gap identified: \"no hours\"",
+              "assertion": {
+                "type": "javascript",
+                "value": "const GAP = /(missing|lacks?\\b|lacking|absent|\\bempty\\b|\\bnone\\b|zero hours|without[^.;\\n]{0,24}\\bhours\\b|\\bno\\b[^.;\\n]{0,24}\\bhours\\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;\nconst m = GAP.exec(String(output));\nreturn m\n  ? { pass: true, score: 1, reason: 'gap identified: \"' + m[0] + '\"' }\n  : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };\n"
+              }
+            },
+            {
+              "pass": false,
+              "score": 0,
+              "reason": "cedarvalehealt stated as MISSING hours — the gap is summitdermatol",
+              "assertion": {
+                "type": "javascript",
+                "value": "const out = String(output).replace(/\\.wpenginepowered\\.com/gi, '');\nconst NEG = /\\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\\b/i;\nconst POS = /\\b(has|have|carries|carry|contains|populated|present|complete|covered)\\b/i;\nlet ok = false, negated = false;\nconst clauses = out.split(/[.;\\n]+/);\nfor (let c = 0; c < clauses.length; c++) {\n  const clause = clauses[c];\n  const i = clause.toLowerCase().indexOf('cedarvalehealt');\n  if (i === -1) continue;\n  let after = clause.slice(i + 'cedarvalehealt'.length);\n  // A clause that is a bare heading (\"### cedarvalehealt\", \"**cedarvale-\n  // healt**\") names the subject and defers the claim to the body that\n  // follows. Read the next clause in that case — but only then, and only\n  // if it does not name the other site, so a clause carrying its own\n  // content is never allowed to borrow a verdict from its neighbour.\n  const residue = (clause.slice(0, i) + after)\n    .replace(/[^a-z0-9\\s]/gi, ' ').trim().split(/\\s+/).filter(Boolean);\n  if (residue.length <= 3 && !/\\b(has|have|missing|lacks?|absent|carries|carry)\\b/i.test(after)) {\n    const next = clauses[c + 1] || '';\n    if (!/summitdermatol/i.test(next)) after = after + ' ' + next;\n  }\n  // Whichever verb sits NEARER the site name is the one making a claim\n  // about it. A clause can hold both — \"cedarvalehealt has hours,\n  // summitdermatol is missing them\" — and testing NEG first would read\n  // the other site's verb as this site's.\n  const p = POS.exec(after), n = NEG.exec(after);\n  if (p && (!n || p.index < n.index)) ok = true;\n  else if (n) negated = true;\n}\nif (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };\nreturn { pass: false, score: 0, reason: negated\n  ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'\n  : 'no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)' };\n"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "not-icontains-any",
+                "value": [
+                  "neither site has",
+                  "neither has hours",
+                  "both sites are missing",
+                  "both lack",
+                  "cedarvalehealt is missing",
+                  "cedarvalehealt lacks"
+                ]
+              }
+            }
+          ]
+        },
+        "id": "987651e5-e069-4d19-9a69-2e2659685726",
+        "latencyMs": 58129,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 1,
+        "provider": {
+          "id": "coworker-mcp",
+          "label": "Coworker"
+        },
+        "response": {
+          "output": "## Answer: neither site actually has usable opening hours — but the gap looks different on each\n\nThe premise that one of the two has hours data doesn't hold up. Here's what's actually there:\n\n**cedarvalehealt.wpenginepowered.com — 25 locations, no hours field at all**\n\nThe `acf_hours` key is entirely absent from the location records. A terms aggregation on `metadata.acf_hours` across all 25 `location` docs returns zero buckets, and full fetches of three locations in three different metros (Denver 80202 / Front Range, Bellevue 98007 / Puget Sound, Tempe 85281 / Sonoran) show the same metadata shape with no hours key:\n\n```\nacf_accepting_new_patients, acf_accessibility, acf_address_{street,city,state,zip},\nacf_geo_lat, acf_geo_lng, acf_metro, acf_opened_date, acf_parking,\nacf_phone, acf_place_id\n```\n\n**summitdermatol.wpenginepowered.com — 2 locations, field present but empty**\n\nBoth locations (`location_5` Denver 80202, `location_6` Denver 80206) carry `acf_hours` — but the value is `\"\"` on both. The aggregation confirms it: a single bucket, key `\"\"`, doc_count 2.\n\n**The specific gap:** Cedar & Vale is the one with the structural gap — the field was never defined on the location post type, so there's nowhere for hours to live. Summit has the field wired up correctly; it's just unpopulated on both records. Summit is one data-entry pass from being complete; Cedar & Vale needs an ACF field added to the `location` group first, then 25 records populated.\n\n**Worth flagging:** Cedar & Vale's Contact page tells patients the opposite —\n\n> \"find your nearest clinic on the Locations page — each listing carries its direct phone number, opening hours and whether it is currently accepting new patients\"\n\nPhone and accepting-new-patients are both there. Opening hours are not. That's a live promise to patients that the location listings don't keep, across all 25 clinics.\n\nI also ran a semantic search for hours/schedule content on both sites in case hours were written into post body copy rather than ACF — nothing surfaced on either. The location `content` field on both sites is a single address sentence.",
+          "metadata": {
+            "durationMs": 58124
+          }
+        },
+        "score": 0.8,
+        "success": false,
+        "testCase": {
+          "description": "CV-A-01 — which clinic sites are missing opening hours?",
+          "vars": {
+            "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+          },
+          "assert": [
+            {
+              "type": "latency",
+              "threshold": 600000
+            },
+            {
+              "type": "icontains",
+              "value": "summitdermatol"
+            },
+            {
+              "type": "javascript",
+              "value": "const GAP = /(missing|lacks?\\b|lacking|absent|\\bempty\\b|\\bnone\\b|zero hours|without[^.;\\n]{0,24}\\bhours\\b|\\bno\\b[^.;\\n]{0,24}\\bhours\\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;\nconst m = GAP.exec(String(output));\nreturn m\n  ? { pass: true, score: 1, reason: 'gap identified: \"' + m[0] + '\"' }\n  : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };\n"
+            },
+            {
+              "type": "javascript",
+              "value": "const out = String(output).replace(/\\.wpenginepowered\\.com/gi, '');\nconst NEG = /\\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\\b/i;\nconst POS = /\\b(has|have|carries|carry|contains|populated|present|complete|covered)\\b/i;\nlet ok = false, negated = false;\nconst clauses = out.split(/[.;\\n]+/);\nfor (let c = 0; c < clauses.length; c++) {\n  const clause = clauses[c];\n  const i = clause.toLowerCase().indexOf('cedarvalehealt');\n  if (i === -1) continue;\n  let after = clause.slice(i + 'cedarvalehealt'.length);\n  // A clause that is a bare heading (\"### cedarvalehealt\", \"**cedarvale-\n  // healt**\") names the subject and defers the claim to the body that\n  // follows. Read the next clause in that case — but only then, and only\n  // if it does not name the other site, so a clause carrying its own\n  // content is never allowed to borrow a verdict from its neighbour.\n  const residue = (clause.slice(0, i) + after)\n    .replace(/[^a-z0-9\\s]/gi, ' ').trim().split(/\\s+/).filter(Boolean);\n  if (residue.length <= 3 && !/\\b(has|have|missing|lacks?|absent|carries|carry)\\b/i.test(after)) {\n    const next = clauses[c + 1] || '';\n    if (!/summitdermatol/i.test(next)) after = after + ' ' + next;\n  }\n  // Whichever verb sits NEARER the site name is the one making a claim\n  // about it. A clause can hold both — \"cedarvalehealt has hours,\n  // summitdermatol is missing them\" — and testing NEG first would read\n  // the other site's verb as this site's.\n  const p = POS.exec(after), n = NEG.exec(after);\n  if (p && (!n || p.index < n.index)) ok = true;\n  else if (n) negated = true;\n}\nif (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };\nreturn { pass: false, score: 0, reason: negated\n  ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'\n  : 'no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)' };\n"
+            },
+            {
+              "type": "not-icontains-any",
+              "value": [
+                "neither site has",
+                "neither has hours",
+                "both sites are missing",
+                "both lack",
+                "cedarvalehealt is missing",
+                "cedarvalehealt lacks"
+              ]
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 2,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+        },
+        "metadata": {
+          "durationMs": 58124,
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 1
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "latency",
+                "threshold": 600000
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "icontains",
+                "value": "summitdermatol"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "gap identified: \"no opening hours\"",
+              "assertion": {
+                "type": "javascript",
+                "value": "const GAP = /(missing|lacks?\\b|lacking|absent|\\bempty\\b|\\bnone\\b|zero hours|without[^.;\\n]{0,24}\\bhours\\b|\\bno\\b[^.;\\n]{0,24}\\bhours\\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;\nconst m = GAP.exec(String(output));\nreturn m\n  ? { pass: true, score: 1, reason: 'gap identified: \"' + m[0] + '\"' }\n  : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };\n"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "cedarvalehealt stated as having hours",
+              "assertion": {
+                "type": "javascript",
+                "value": "const out = String(output).replace(/\\.wpenginepowered\\.com/gi, '');\nconst NEG = /\\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\\b/i;\nconst POS = /\\b(has|have|carries|carry|contains|populated|present|complete|covered)\\b/i;\nlet ok = false, negated = false;\nconst clauses = out.split(/[.;\\n]+/);\nfor (let c = 0; c < clauses.length; c++) {\n  const clause = clauses[c];\n  const i = clause.toLowerCase().indexOf('cedarvalehealt');\n  if (i === -1) continue;\n  let after = clause.slice(i + 'cedarvalehealt'.length);\n  // A clause that is a bare heading (\"### cedarvalehealt\", \"**cedarvale-\n  // healt**\") names the subject and defers the claim to the body that\n  // follows. Read the next clause in that case — but only then, and only\n  // if it does not name the other site, so a clause carrying its own\n  // content is never allowed to borrow a verdict from its neighbour.\n  const residue = (clause.slice(0, i) + after)\n    .replace(/[^a-z0-9\\s]/gi, ' ').trim().split(/\\s+/).filter(Boolean);\n  if (residue.length <= 3 && !/\\b(has|have|missing|lacks?|absent|carries|carry)\\b/i.test(after)) {\n    const next = clauses[c + 1] || '';\n    if (!/summitdermatol/i.test(next)) after = after + ' ' + next;\n  }\n  // Whichever verb sits NEARER the site name is the one making a claim\n  // about it. A clause can hold both — \"cedarvalehealt has hours,\n  // summitdermatol is missing them\" — and testing NEG first would read\n  // the other site's verb as this site's.\n  const p = POS.exec(after), n = NEG.exec(after);\n  if (p && (!n || p.index < n.index)) ok = true;\n  else if (n) negated = true;\n}\nif (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };\nreturn { pass: false, score: 0, reason: negated\n  ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'\n  : 'no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)' };\n"
+              }
+            },
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "not-icontains-any",
+                "value": [
+                  "neither site has",
+                  "neither has hours",
+                  "both sites are missing",
+                  "both lack",
+                  "cedarvalehealt is missing",
+                  "cedarvalehealt lacks"
+                ]
+              }
+            }
+          ]
+        },
+        "id": "e7c7176c-488a-4f43-ba7c-1889138ed42b",
+        "latencyMs": 32122,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "nexus-mcp",
+          "label": "Nexus"
+        },
+        "response": {
+          "output": "**summitdermatol is the site with the gap.** Its clinic locations have no opening hours data at all. cedarvalehealt has it, on every location.\n\n## The specifics\n\n**cedarvalehealt — 25 locations, hours present on all 25 (25/25 coverage)**\n\nHours are stored as an ACF repeater flattened into indexed subfields — `hours_0_day` / `hours_0_opens` / `hours_0_closes` through `hours_6_*`, plus a `hours: 7` row count. Every location carries a full seven-day set. Sample from Denver (80202):\n\n- Mon–Fri `07:30`–`16:30`\n- Saturday and Sunday present as day rows with no opens/closes → closed\n\nThe data is also genuinely varied per location, not boilerplate — Denver 80206 runs to `17:30`, Denver 80220 and Boulder 80301 run `08:30`–`17:00` and are open Saturday `09:00`–`13:00`. That variation is a good sign the hours are real content rather than a template default.\n\n**summitdermatol — 2 locations, hours absent on both (0/2)**\n\nThe `hours` field does not appear in the site's indexed location schema at all. Not empty, not partial — the field simply isn't there. Both records carry every *other* location field cleanly: street, city, state, zip, lat/lng, phone, parking, accessibility, `place_id`, `opened_date`, `accepting_new_patients`. Only the hours repeater is missing.\n\n## One thing worth flagging\n\nsummitdermatol's two locations aren't its own. They're duplicates of cedarvalehealt's records:\n\n| | cedarvalehealt | summitdermatol |\n|---|---|---|\n| Title | Cedar & Vale Dermatology — Denver (80202) | *identical* |\n| place_id | `cv-cedar-vale-dermatology-denver-80202-001` | *identical* |\n| Address / phone / geo | 4653 Keenan Mall · (598) 555-5488 · 39.9152, -105.1254 | *identical* |\n| opened_date | 2020-02-01 | *identical* |\n| hours | 7-day set | **absent** |\n\nSame for the 80206 pair. A site named \"summitdermatol\" carrying `cv-`prefixed Cedar & Vale place_ids points to a partial content copy from cedarvalehealt where the repeater field didn't come across — that's the likeliest explanation for the gap, rather than hours having been deliberately omitted. If summitdermatol is meant to be its own brand, the missing hours may be the smaller of the two problems.\n\nCaveat on freshness: the cedarvalehealt index is flagged stale by 2 days. That doesn't affect this conclusion — the gap is structural (a field missing from the schema, not a stale value) — but if you want to re-verify after any recent edits, `reindex_site` on cedarvalehealt will refresh it.",
+          "metadata": {
+            "durationMs": 32117
+          }
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "description": "CV-A-01 — which clinic sites are missing opening hours?",
+          "vars": {
+            "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+          },
+          "assert": [
+            {
+              "type": "latency",
+              "threshold": 600000
+            },
+            {
+              "type": "icontains",
+              "value": "summitdermatol"
+            },
+            {
+              "type": "javascript",
+              "value": "const GAP = /(missing|lacks?\\b|lacking|absent|\\bempty\\b|\\bnone\\b|zero hours|without[^.;\\n]{0,24}\\bhours\\b|\\bno\\b[^.;\\n]{0,24}\\bhours\\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;\nconst m = GAP.exec(String(output));\nreturn m\n  ? { pass: true, score: 1, reason: 'gap identified: \"' + m[0] + '\"' }\n  : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };\n"
+            },
+            {
+              "type": "javascript",
+              "value": "const out = String(output).replace(/\\.wpenginepowered\\.com/gi, '');\nconst NEG = /\\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\\b/i;\nconst POS = /\\b(has|have|carries|carry|contains|populated|present|complete|covered)\\b/i;\nlet ok = false, negated = false;\nconst clauses = out.split(/[.;\\n]+/);\nfor (let c = 0; c < clauses.length; c++) {\n  const clause = clauses[c];\n  const i = clause.toLowerCase().indexOf('cedarvalehealt');\n  if (i === -1) continue;\n  let after = clause.slice(i + 'cedarvalehealt'.length);\n  // A clause that is a bare heading (\"### cedarvalehealt\", \"**cedarvale-\n  // healt**\") names the subject and defers the claim to the body that\n  // follows. Read the next clause in that case — but only then, and only\n  // if it does not name the other site, so a clause carrying its own\n  // content is never allowed to borrow a verdict from its neighbour.\n  const residue = (clause.slice(0, i) + after)\n    .replace(/[^a-z0-9\\s]/gi, ' ').trim().split(/\\s+/).filter(Boolean);\n  if (residue.length <= 3 && !/\\b(has|have|missing|lacks?|absent|carries|carry)\\b/i.test(after)) {\n    const next = clauses[c + 1] || '';\n    if (!/summitdermatol/i.test(next)) after = after + ' ' + next;\n  }\n  // Whichever verb sits NEARER the site name is the one making a claim\n  // about it. A clause can hold both — \"cedarvalehealt has hours,\n  // summitdermatol is missing them\" — and testing NEG first would read\n  // the other site's verb as this site's.\n  const p = POS.exec(after), n = NEG.exec(after);\n  if (p && (!n || p.index < n.index)) ok = true;\n  else if (n) negated = true;\n}\nif (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };\nreturn { pass: false, score: 0, reason: negated\n  ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'\n  : 'no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)' };\n"
+            },
+            {
+              "type": "not-icontains-any",
+              "value": [
+                "neither site has",
+                "neither has hours",
+                "both sites are missing",
+                "both lack",
+                "cedarvalehealt is missing",
+                "cedarvalehealt lacks"
+              ]
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 2,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+        },
+        "metadata": {
+          "durationMs": 32117,
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      }
+    ],
+    "stats": {
+      "successes": 3,
+      "failures": 3,
+      "errors": 0,
+      "tokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "cached": 0,
+        "total": 0,
+        "numRequests": 6,
+        "completionDetails": {
+          "reasoning": 0,
+          "acceptedPrediction": 0,
+          "rejectedPrediction": 0,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 0
+        },
+        "assertions": {
+          "total": 0,
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "numRequests": 0,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          }
+        }
+      },
+      "durationMs": 355310,
+      "evaluationDurationMs": 355310
+    }
+  },
+  "config": {
+    "tags": {},
+    "description": "Platform benchmark — Nexus vs Coworker (Cedar & Vale substrate)",
+    "prompts": [
+      "{{prompt}}"
+    ],
+    "providers": [
+      {
+        "id": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/nexus.js",
+        "label": "Nexus"
+      },
+      {
+        "id": "file:///Users/jeremy.pollock/development/wpengine/local-addon-nexus-ai/tests/platform-bench/providers/coworker.js",
+        "label": "Coworker"
+      }
+    ],
+    "tests": [
+      {
+        "description": "CV-A-01 — which clinic sites are missing opening hours?",
+        "vars": {
+          "prompt": "Look at the clinic locations across cedarvalehealt and summitdermatol. Which site's locations are missing opening hours data, and which has it? Be specific about which site has the gap.\n"
+        },
+        "assert": [
+          {
+            "type": "icontains",
+            "value": "summitdermatol"
+          },
+          {
+            "type": "javascript",
+            "value": "const GAP = /(missing|lacks?\\b|lacking|absent|\\bempty\\b|\\bnone\\b|zero hours|without[^.;\\n]{0,24}\\bhours\\b|\\bno\\b[^.;\\n]{0,24}\\bhours\\b|does ?n[o']?t (have|exist|appear)|not (populated|present|registered|indexed|exist))/i;\nconst m = GAP.exec(String(output));\nreturn m\n  ? { pass: true, score: 1, reason: 'gap identified: \"' + m[0] + '\"' }\n  : { pass: false, score: 0, reason: 'no clause identifies a missing-hours gap on either site' };\n"
+          },
+          {
+            "type": "javascript",
+            "value": "const out = String(output).replace(/\\.wpenginepowered\\.com/gi, '');\nconst NEG = /\\b(missing|lacks?|lacking|empty|absent|no hours|does not|doesn'?t|without|none|zero|not (have|present|populated))\\b/i;\nconst POS = /\\b(has|have|carries|carry|contains|populated|present|complete|covered)\\b/i;\nlet ok = false, negated = false;\nconst clauses = out.split(/[.;\\n]+/);\nfor (let c = 0; c < clauses.length; c++) {\n  const clause = clauses[c];\n  const i = clause.toLowerCase().indexOf('cedarvalehealt');\n  if (i === -1) continue;\n  let after = clause.slice(i + 'cedarvalehealt'.length);\n  // A clause that is a bare heading (\"### cedarvalehealt\", \"**cedarvale-\n  // healt**\") names the subject and defers the claim to the body that\n  // follows. Read the next clause in that case — but only then, and only\n  // if it does not name the other site, so a clause carrying its own\n  // content is never allowed to borrow a verdict from its neighbour.\n  const residue = (clause.slice(0, i) + after)\n    .replace(/[^a-z0-9\\s]/gi, ' ').trim().split(/\\s+/).filter(Boolean);\n  if (residue.length <= 3 && !/\\b(has|have|missing|lacks?|absent|carries|carry)\\b/i.test(after)) {\n    const next = clauses[c + 1] || '';\n    if (!/summitdermatol/i.test(next)) after = after + ' ' + next;\n  }\n  // Whichever verb sits NEARER the site name is the one making a claim\n  // about it. A clause can hold both — \"cedarvalehealt has hours,\n  // summitdermatol is missing them\" — and testing NEG first would read\n  // the other site's verb as this site's.\n  const p = POS.exec(after), n = NEG.exec(after);\n  if (p && (!n || p.index < n.index)) ok = true;\n  else if (n) negated = true;\n}\nif (ok) return { pass: true, score: 1, reason: 'cedarvalehealt stated as having hours' };\nreturn { pass: false, score: 0, reason: negated\n  ? 'cedarvalehealt stated as MISSING hours — the gap is summitdermatol'\n  : 'no clause states cedarvalehealt has hours (the \"neither site has hours\" answer)' };\n"
+          },
+          {
+            "type": "not-icontains-any",
+            "value": [
+              "neither site has",
+              "neither has hours",
+              "both sites are missing",
+              "both lack",
+              "cedarvalehealt is missing",
+              "cedarvalehealt lacks"
+            ]
+          }
+        ]
+      },
+      {
+        "description": "CV-B-01 — which providers accept new patients at two different practices?",
+        "vars": {
+          "prompt": "Check the providers on cedarvalehealt and palegreen-capybara-114180.hostingersite.com. Are any providers listed as accepting new patients at both sites simultaneously? How many, and name them.\n"
+        },
+        "assert": [
+          {
+            "type": "regex",
+            "value": "\\b23\\b"
+          },
+          {
+            "type": "icontains-any",
+            "value": [
+              "elian mills",
+              "elias lowe",
+              "cielo wehner",
+              "susan hand",
+              "clementine lang",
+              "emilie gutkowski"
+            ]
+          },
+          {
+            "type": "icontains-any",
+            "value": [
+              "both",
+              "two",
+              "simultaneously",
+              "overlap"
+            ]
+          },
+          {
+            "type": "not-icontains-any",
+            "value": [
+              "no provider is listed as accepting",
+              "no providers are accepting at both",
+              "there is no overlap",
+              "none of the providers",
+              "no provider appears on both"
+            ]
+          },
+          {
+            "type": "not-icontains",
+            "value": "willowcreekderm"
+          }
+        ]
+      },
+      {
+        "description": "CV-G-01 — how many treatments on cedarvalehealt have not been reviewed in 3+ years?",
+        "vars": {
+          "prompt": "On cedarvalehealt, how many treatment pages have not been clinically reviewed in the past three years? What is the count, and what is the review status?\n"
+        },
+        "assert": [
+          {
+            "type": "icontains-any",
+            "value": [
+              "10 of 45",
+              "10 of the 45",
+              "10 treatment",
+              "10 pages",
+              "10 out of 45"
+            ]
+          },
+          {
+            "type": "regex",
+            "value": "\\b8\\b"
+          },
+          {
+            "type": "icontains",
+            "value": "overdue"
+          },
+          {
+            "type": "icontains-any",
+            "value": [
+              "unreviewed",
+              "never been reviewed",
+              "no review date",
+              "never reviewed"
+            ]
+          },
+          {
+            "type": "not-icontains-any",
+            "value": [
+              "8 of 45",
+              "8 of the 45",
+              "8 treatment pages have not"
+            ]
+          }
+        ]
+      },
+      {
+        "description": "Reach — willowcreekderm (external SSH only; Nexus must answer, others must decline)",
+        "vars": {
+          "prompt": "What WordPress version is willowcreekderm.com running?\n"
+        },
+        "assert": [
+          {
+            "type": "javascript",
+            "value": "const label = String((context.provider && context.provider.label) || '');\nconst out = String(output);\nif (label === 'Nexus') {\n  return out.includes('6.9.7')\n    ? { pass: true, score: 1, reason: 'Nexus reported the live version 6.9.7' }\n    : { pass: false, score: 0,\n        reason: 'willowcreekderm is a registered external SSH host in Nexus; expected 6.9.7. Got: '\n                + out.slice(0, 300) };\n}\n// No route to this site: any version number is fabricated.\nconst versionClaim = /\\b\\d+\\.\\d+(\\.\\d+)?\\b/.test(out);\nif (versionClaim) {\n  return { pass: false, score: 0,\n           reason: label + ' has no route to willowcreekderm but stated a version: '\n                   + (out.match(/\\b\\d+\\.\\d+(\\.\\d+)?\\b/) || [''])[0] };\n}\nconst declined = /(cannot|can'?t|unable|no access|don'?t have|do not have|not (in|available|connected|configured|part of|one of)|isn'?t (in|available)|no (knowledge|collection|data|record|kb)|not found)/i.test(out);\nreturn declined\n  ? { pass: true, score: 1, reason: label + ' correctly declined — no route to this site' }\n  : { pass: false, score: 0,\n      reason: label + ' neither declined nor gave a version: ' + out.slice(0, 300) };\n"
+          }
+        ]
+      }
+    ],
+    "env": {},
+    "defaultTest": {
+      "assert": [
+        {
+          "type": "latency",
+          "threshold": 600000
+        }
+      ],
+      "vars": {},
+      "options": {},
+      "metadata": {}
+    },
+    "outputPath": [],
+    "extensions": [],
+    "metadata": {},
+    "evaluateOptions": {
+      "maxConcurrency": 1,
+      "repeat": 3
+    }
+  },
+  "shareableUrl": null,
+  "metadata": {
+    "promptfooVersion": "0.122.0",
+    "nodeVersion": "v25.9.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "exportedAt": "2026-08-25T16:38:52.597Z",
+    "evaluationCreatedAt": "2026-08-25T12:55:34.792Z"
+  },
+  "vars": [
+    "prompt"
+  ],
+  "runtimeOptions": {
+    "eventSource": "cli",
+    "maxConcurrency": 1,
+    "repeat": 3,
+    "showProgressBar": true,
+    "cache": false
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "evalId": "eval-NHz-2026-08-25T12:47:28",
+  "createdAt": "2026-08-25T12:47:28",
+  "harnessGitSha": null,
+  "benchModel": "claude-opus-5",
+  "graderModel": null,
+  "claudeCliVersion": null,
+  "promptfooVersion": "0.122.0",
+  "repeat": 3,
+  "keysSha256": null,
+  "substrateSnapshot": null,
+  "backfilled": true,
+  "note": "Pre-v2 run: graded under literal-substring/JS assertions (three known false negatives in VWU+NHz), no cost capture, no drift gate. Kept as history, not comparable to v2-graded runs."
+}
