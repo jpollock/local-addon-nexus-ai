@@ -1,5 +1,6 @@
 # Platform Benchmark — Nexus vs Coworker vs WordPress
-# Spec: docs/planning/2026-08-21-platform-benchmark-design.md
+# Spec: docs/planning/2026-08-25-platform-benchmark-v2.md   (v2 — grading/harness)
+#       docs/planning/2026-08-21-platform-benchmark-design.md (v1 — substrate/scenarios)
 #
 # Two MCP surfaces, one model, identical prompts.
 # WordPress column deferred — core abilities (site-info, user-info, env-info)
@@ -105,23 +106,37 @@ tests:
       #
       # The count is the discriminator. An answer naming one provider cannot
       # contain a standalone 23, so this also excludes the old key's answer.
+      # Anchor: the overlap count is a deterministic atom. Kept per spec §3.1;
+      # a bare "23" appearing incidentally in a WRONG answer is possible but
+      # the rubric below independently requires the claim, not just the token.
       - type: regex
         value: '\b23\b'
-      # Any correct answer enumerates or samples the overlap. These six are all
-      # confirmed members, spread across both sites' natural result order, so a
-      # partial list still hits one; a fabricated name hits none.
-      - type: icontains-any
-        value: ["elian mills", "elias lowe", "cielo wehner", "susan hand",
-                "clementine lang", "emilie gutkowski"]
-      - type: icontains-any
-        value: ["both", "two", "simultaneously", "overlap"]
-      # must_not: deny an overlap that exists 23 times over
-      - type: not-icontains-any
-        value: ["no provider is listed as accepting", "no providers are accepting at both",
-                "there is no overlap", "none of the providers", "no provider appears on both"]
-      # must_not: hallucinate a site it cannot see
+      # Deterministic hallucination guard: this scenario names two sites; a
+      # third can only be fabricated (willowcreekderm is reachable by neither
+      # route in this prompt's scope).
       - type: not-icontains
         value: "willowcreekderm"
+      - type: llm-rubric
+        value: >
+          Ground truth, verified against both sites: cedarvalehealt lists 60
+          providers of which 45 accept new patients;
+          palegreen-capybara-114180.hostingersite.com (Ridgeline) lists 27
+          providers of which 23 accept new patients. Exactly 23 providers,
+          matched on NPI number, are accepting new patients at BOTH sites —
+          every accepting Ridgeline provider also accepts at the other site.
+          Known members of that overlap include: Elian Mills PA-C
+          (NPI 1274960149), Elias Lowe DO, Cielo Wehner MD, Susan Hand,
+          Clementine Lang, Emilie Gutkowski.
+
+          PASS only if the response states that providers ARE accepting at both
+          sites simultaneously, gives the overlap count as 23, and names at
+          least one provider. Do not fail an answer solely because it names
+          overlap members outside the sample list above — the list is a sample
+          of 23, not the full set.
+
+          FAIL if the response denies any overlap exists, presents exactly one
+          provider as the only overlap, gives a count other than 23, or names
+          no providers at all.
   # ── CV-G-01: stale medical reviews ───────────────────────────────────────
   - description: "CV-G-01 — how many treatments on cedarvalehealt have not been reviewed in 3+ years?"
     vars:
@@ -140,18 +155,28 @@ tests:
       # as icontains-any ["8","eight"], which any output containing a date passes
       # ("2026-08-24"). Both columns already answer 10 of 45 correctly; the
       # assertion was measuring nothing either way.
-      - type: icontains-any
-        value: ["10 of 45", "10 of the 45", "10 treatment", "10 pages", "10 out of 45"]
-      # The split is what separates a real count from a lucky total.
-      - type: regex
-        value: '\b8\b'
+      # Anchor: the status word every correct answer uses. The old numeric
+      # anchors are gone: '\b8\b' matched "8:00" and dates ("2021-10-18"
+      # contains \b10\b), so neither 8 nor 10 is anchorable — the counts are
+      # the rubric's job.
       - type: icontains
         value: "overdue"
-      - type: icontains-any
-        value: ["unreviewed", "never been reviewed", "no review date", "never reviewed"]
-      # must_not: the stale key's answer — 8 alone, missing the 2 unreviewed
-      - type: not-icontains-any
-        value: ["8 of 45", "8 of the 45", "8 treatment pages have not"]
+      - type: llm-rubric
+        value: >
+          Ground truth, verified against the site: there are 45 treatment pages
+          in total. 10 of them have not been clinically reviewed in the past
+          three years — 8 with review status "overdue" (review dates in
+          2021–2023, all older than three years) and 2 with status
+          "unreviewed" and no review date at all. The other 35 were reviewed
+          within the window.
+
+          PASS only if the response gives 10 as the count of treatment pages
+          not reviewed in three years AND distinguishes the overdue set (8)
+          from the never-reviewed set (2).
+
+          FAIL if the response gives 8 (or any number other than 10) as the
+          total stale count, omits the 2 never-reviewed pages, gives no count,
+          or declines to answer.
   # ── Reach test: ask about a site only Nexus can see ──────────────────────
   # Ground truth verified 2026-08-24:
   #   `nexus wp core version ssh:willowcreekderm/willowcreekderm@production` → 6.9.7
