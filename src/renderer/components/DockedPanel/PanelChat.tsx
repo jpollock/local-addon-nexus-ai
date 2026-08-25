@@ -177,6 +177,19 @@ const styles = {
     overflowY: 'auto' as const,
     padding: '0',
   },
+  /**
+   * The empty session. Same flex slot, but the content is centred rather than
+   * top-anchored, which is what puts the composer in the middle of the column
+   * instead of 700px below the invitation.
+   */
+  logEmpty: {
+    flex: 1,
+    overflowY: 'auto' as const,
+    padding: '0',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    justifyContent: 'center' as const,
+  },
   logInner: {
     maxWidth: 720,
     margin: '0 auto',
@@ -1263,6 +1276,64 @@ export class PanelChat extends React.Component<Props, State> {
     }
   }
 
+  /**
+   * The composer.
+   *
+   * Extracted so it can be rendered in TWO places — and that is the whole
+   * point of the new-chat sheet. On an empty session it belongs directly
+   * under the invitation, in the vertical middle; only once there is a
+   * transcript for it to sit under does it take the bottom. The shipped
+   * screen pinned it to the bottom of an empty column and floated the
+   * invitation in the top third, so the one thing you came to do was the
+   * furthest thing from what you were reading.
+   */
+  renderComposer(): React.ReactNode {
+    const { offline, input, streaming } = this.state;
+    return (
+        offline
+          ? React.createElement(
+              'div',
+              {
+                style: {
+                  padding: 12,
+                  color: 'var(--nxai-warn-text)',
+                  textAlign: 'center' as const,
+                  fontSize: 12,
+                  background: 'var(--nxai-card-bg)',
+                  borderTop: `1px solid var(--nxai-card-border)`,
+                },
+              },
+              'No network connection — history is still available.',
+            )
+          : React.createElement(
+              'div',
+              { style: styles.inputRow },
+              React.createElement('textarea', {
+                ref: this.inputRef,
+                style: styles.textarea,
+                value: input,
+                onChange: this.handleInput,
+                onKeyDown: this.handleKeyDown,
+                placeholder: 'Ask anything about your sites…',
+                disabled: streaming,
+                rows: 1,
+                'aria-label': 'Chat input',
+              }),
+              React.createElement(
+                'button',
+                {
+                  style: styles.sendBtn(streaming || !input.trim()),
+                  disabled: streaming || !input.trim(),
+                  onClick: streaming ? this.handleStop : this.handleSend,
+                  'aria-label': streaming ? 'Stop generation' : 'Send message',
+                },
+                streaming ? '■' : '↑',
+              ),
+            )
+    );
+  }
+
+
   render() {
     const { messages, input, streaming, offline, providerId, model } = this.state;
 
@@ -1277,11 +1348,23 @@ export class PanelChat extends React.Component<Props, State> {
       ...this.renderProcedureSurfaces(),
       React.createElement(
         'div',
-        { ref: this.logRef, style: styles.log, 'aria-live': 'polite', 'data-nexus-chat': true },
+        {
+          ref: this.logRef,
+          // New-chat sheet: on an empty session the column CENTRES, so the
+          // invitation and the composer sit together in the vertical middle.
+          // With a transcript it scrolls from the top as before.
+          style: messages.length === 0 ? styles.logEmpty : styles.log,
+          'aria-live': 'polite',
+          'data-nexus-chat': true,
+        },
         React.createElement(
           'div',
           { style: styles.logInner },
           messages.length === 0 ? this.renderOpeningState() : null,
+          // The composer sits HERE while the session is empty — directly under
+          // the invitation — and moves to the bottom on the first turn, when
+          // there is finally a transcript for it to sit under.
+          messages.length === 0 ? this.renderComposer() : null,
           messages.map((m) => this.renderMessage(m)),
           // The empty run's derived plan, attached where the refusal turn is.
           ...this.renderProcedurePlan(),
@@ -1294,46 +1377,7 @@ export class PanelChat extends React.Component<Props, State> {
       // WP-41 · the comparator, spread from an array — empty when there is
       // nothing to compare, so a user it cannot serve sees the panel unchanged.
       ...this.renderComparator(),
-      offline
-        ? React.createElement(
-            'div',
-            {
-              style: {
-                padding: 12,
-                color: 'var(--nxai-warn-text)',
-                textAlign: 'center' as const,
-                fontSize: 12,
-                background: 'var(--nxai-card-bg)',
-                borderTop: `1px solid var(--nxai-card-border)`,
-              },
-            },
-            'No network connection — history is still available.',
-          )
-        : React.createElement(
-            'div',
-            { style: styles.inputRow },
-            React.createElement('textarea', {
-              ref: this.inputRef,
-              style: styles.textarea,
-              value: input,
-              onChange: this.handleInput,
-              onKeyDown: this.handleKeyDown,
-              placeholder: 'Ask anything about your sites…',
-              disabled: streaming,
-              rows: 1,
-              'aria-label': 'Chat input',
-            }),
-            React.createElement(
-              'button',
-              {
-                style: styles.sendBtn(streaming || !input.trim()),
-                disabled: streaming || !input.trim(),
-                onClick: streaming ? this.handleStop : this.handleSend,
-                'aria-label': streaming ? 'Stop generation' : 'Send message',
-              },
-              streaming ? '■' : '↑',
-            ),
-          ),
+      messages.length === 0 ? null : this.renderComposer(),
       // §5 · "Below the composer, the scope line." A question with no stated
       // subject is this panel's most common failure, and the band that states it
       // is the one that already knew the answer — moved, not duplicated. A

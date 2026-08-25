@@ -60,6 +60,72 @@ function sshRaw(hostKey, remoteCmd) {
     { encoding: 'utf8', timeout: SSH_TIMEOUT_MS }).trim();
 }
 
+/**
+ * Plugin census by CLASS, not just count.
+ *
+ * `wp plugin list` distinguishes active / inactive / must-use / dropin. This is the
+ * whole point of AO-S-01: the graph cache stores one `is_active` integer and collapses
+ * must-use and dropins into 0, so a cache-derived answer calls eight always-on plugins
+ * "inactive". Coworker's `list-plugins` ability has the opposite blind spot — it uses
+ * the WordPress plugins REST API, which returns regular plugins ONLY, so must-use and
+ * dropins are invisible to it entirely. Neither view is complete; the key holds the
+ * truth both are measured against.
+ */
+/** Installed version of one slug from a census, or null if absent. */
+function versionOf(census, slug) {
+  const hit = census.roster.find((r) => r.slug === slug);
+  return hit ? hit.version : null;
+}
+
+function sshPluginCensus(hostKey) {
+  const raw = sshRaw(hostKey, 'wp plugin list --format=json --skip-plugins --skip-themes 2>/dev/null');
+  const start = raw.indexOf('[');
+  if (start < 0) throw new Error(`${hostKey}: no JSON array in wp plugin list output:\n${raw.slice(-400)}`);
+  const rows = JSON.parse(raw.slice(start));
+  const by = (st) => rows.filter((r) => r.status === st).length;
+  return {
+    entries_total: rows.length,
+    active: by('active'),
+    inactive: by('inactive'),
+    mustuse: by('must-use'),
+    dropin: by('dropin'),
+    // What a REST-API-shaped view (Coworker) can see: regular plugins only.
+    regular_only_total: by('active') + by('inactive'),
+    // Provenance, not an assertion. Named `roster` (not `plugins`) so diffKeys can
+    // IGNORE it by key without also ignoring the counts above — the counts are what
+    // the rubrics assert, and they must stay gated. Any plugin version a rubric
+    // actually quotes is promoted to its own scalar key below, so it stays gated too.
+    roster: rows.map((r) => ({ slug: r.name, version: r.version, status: r.status })),
+  };
+}
+
+/**
+ * Maintenance facts from the wp.org plugin directory — NOT from either column.
+ *
+ * WC-S-01 turns on the difference between currency and maintenance, and that
+ * difference is only visible here: `search-everything` is at its LATEST published
+ * version and has not been touched since 2017. An update check answers "0 updates"
+ * and calls the site healthy. This is also the one key source in the suite that is
+ * genuinely independent of Nexus AND of Coworker, which is why wp.org-anchored
+ * plugin facts are preferred wherever a scenario allows them.
+ *
+ * Returns null for a plugin the directory does not carry (commercial, host-bundled,
+ * or ours) — absence is a real answer, not a failure.
+ */
+async function wpOrgPluginFacts(slug) {
+  const res = await fetch(`https://api.wordpress.org/plugins/info/1.0/${slug}.json`, {
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) return null;
+  const d = await res.json();
+  if (!d || d.error) return null;
+  return {
+    version: d.version ?? null,
+    last_updated: (d.last_updated ?? '').slice(0, 10) || null,
+    tested_up_to: d.tested ?? null,
+  };
+}
+
 // ── PHP measurement snippets (postmeta keys are the unprefixed ACF names) ─────
 
 const PHP_PROVIDERS = `
@@ -169,7 +235,7 @@ echo "NEXUSGT:" . json_encode([
 ]) . "\\n";
 `;
 
-function measure() {
+async function measure() {
   process.stderr.write('measuring cedarvalehealt…\n');
   const cvProviders = sshWpEval('cedarvalehealt', PHP_PROVIDERS);
   const cvTreatments = sshWpEval('cedarvalehealt', PHP_TREATMENTS);
@@ -186,11 +252,23 @@ function measure() {
 
   process.stderr.write('measuring willowcreekderm…\n');
   const wcVersion = sshRaw('willowcreekderm', 'wp core version');
+  const wcPlugins = sshPluginCensus('willowcreekderm');
 
   process.stderr.write('measuring alpineoutfitte…\n');
   const aoContent = sshWpEval('alpineoutfitte', PHP_ALPINE_CONTENT);
   const aoInventory = sshWpEval('alpineoutfitte', PHP_ALPINE_INVENTORY);
+  const aoPlugins = sshPluginCensus('alpineoutfitte');
   const aoFp = sshWpEval('alpineoutfitte', PHP_FINGERPRINT);
+
+  // WC-S-01's discriminator: two plugins, both at their latest published version,
+  // one shipped this month and one abandoned in 2017. Measured from wp.org, which is
+  // neither column's data. Slugs are named rather than swept so the key states which
+  // contrast it rests on; a plugin the directory does not carry returns null.
+  process.stderr.write('measuring wp.org maintenance facts…\n');
+  const wcMaintenance = {};
+  for (const slug of ['search-everything', 'limit-login-attempts-reloaded']) {
+    wcMaintenance[slug] = await wpOrgPluginFacts(slug);
+  }
 
   // Overlap: NPIs accepting at BOTH sites; names from the flagship's roster.
   const overlapNpis = Object.keys(rgProviders.npis).filter((npi) => npi in cvProviders.npis);
@@ -214,8 +292,25 @@ function measure() {
         providers_total: rgProviders.total, providers_accepting: rgProviders.accepting,
         fingerprint: rgFp,
       },
-      willowcreekderm: { wp_version: wcVersion },
-      alpineoutfitte: { ...aoContent, ...aoInventory, fingerprint: aoFp },
+      willowcreekderm: {
+        wp_version: wcVersion,
+        plugins: wcPlugins,
+        // WC-S-01 turns on this pair being at their LATEST version while one is
+        // abandoned — so the installed versions are part of the claim, not detail.
+        search_everything_version: versionOf(wcPlugins, 'search-everything'),
+        limit_login_version: versionOf(wcPlugins, 'limit-login-attempts-reloaded'),
+        wporg: wcMaintenance,
+      },
+      alpineoutfitte: {
+        ...aoContent, ...aoInventory,
+        plugins: aoPlugins,
+        // Quoted verbatim by AO-S-01's rubric, so gated as scalars rather than left
+        // inside the ignored roster. A silent bump here would leave the rubric
+        // asserting a version the site no longer runs.
+        acf_version: versionOf(aoPlugins, 'advanced-custom-fields-pro'),
+        woocommerce_version: versionOf(aoPlugins, 'woocommerce'),
+        fingerprint: aoFp,
+      },
     },
     npi_overlap: { count: overlapNpis.length, names: overlapNames },
   };
@@ -224,7 +319,11 @@ function measure() {
 /** Compare measured vs stored, ignoring volatile non-key fields. */
 function diffKeys(stored, measured) {
   const mismatches = [];
-  const IGNORE = new Set(['measuredAt', 'last_modified_gmt', 'published_posts']);
+  // `roster` is the full per-plugin list: provenance for a human reading keys.json,
+  // not something any rubric asserts. Gating on it would trip the drift gate on every
+  // unrelated plugin bump, and a gate that cries wolf is a gate people set
+  // BENCH_SKIP_DRIFT to silence. The counts and the quoted versions stay gated.
+  const IGNORE = new Set(['measuredAt', 'last_modified_gmt', 'published_posts', 'roster']);
   (function walk(a, b, trail) {
     for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
       if (IGNORE.has(k)) continue;
@@ -243,25 +342,38 @@ function diffKeys(stored, measured) {
 }
 
 const checkMode = process.argv.includes('--check');
-const measured = measure();
 
-if (!checkMode) {
-  fs.writeFileSync(KEYS_PATH, JSON.stringify(measured, null, 2) + '\n');
-  process.stderr.write(`wrote ${KEYS_PATH}\n`);
+// measure() reaches wp.org for WC-S-01's maintenance facts, so the entrypoint is
+// async. Nothing else about the contract changes: exit 0 and a snapshot on stdout,
+// or exit 1 naming every mismatch.
+async function main() {
+  const measured = await measure();
+
+  if (!checkMode) {
+    fs.writeFileSync(KEYS_PATH, JSON.stringify(measured, null, 2) + '\n');
+    process.stderr.write(`wrote ${KEYS_PATH}\n`);
+    console.log(JSON.stringify(measured, null, 2));
+    return;
+  }
+
+  if (!fs.existsSync(KEYS_PATH)) {
+    process.stderr.write('DRIFT GATE: keys.json does not exist — run `node ground-truth.js` first.\n');
+    process.exit(1);
+  }
+  const stored = JSON.parse(fs.readFileSync(KEYS_PATH, 'utf8'));
+  const mismatches = diffKeys(stored, measured);
+  if (mismatches.length > 0) {
+    process.stderr.write('DRIFT GATE: substrate disagrees with keys.json — a run now would grade correct answers as wrong (or wrong as correct).\n');
+    for (const m of mismatches) process.stderr.write(`  ${m}\n`);
+    process.stderr.write('Re-run `node tests/platform-bench/ground-truth.js`, review the diff, update the rubrics that quote changed numbers, and commit both.\n');
+    process.exit(1);
+  }
   console.log(JSON.stringify(measured, null, 2));
-  process.exit(0);
 }
 
-if (!fs.existsSync(KEYS_PATH)) {
-  process.stderr.write('DRIFT GATE: keys.json does not exist — run `node ground-truth.js` first.\n');
+main().catch((err) => {
+  // A measurement that threw is not a passing gate. Fail loudly: a silent zero here
+  // would let a run grade against a stale key and call the result verified.
+  process.stderr.write(`GROUND TRUTH FAILED: ${err && err.message ? err.message : err}\n`);
   process.exit(1);
-}
-const stored = JSON.parse(fs.readFileSync(KEYS_PATH, 'utf8'));
-const mismatches = diffKeys(stored, measured);
-if (mismatches.length > 0) {
-  process.stderr.write('DRIFT GATE: substrate disagrees with keys.json — a run now would grade correct answers as wrong (or wrong as correct).\n');
-  for (const m of mismatches) process.stderr.write(`  ${m}\n`);
-  process.stderr.write('Re-run `node tests/platform-bench/ground-truth.js`, review the diff, update the rubrics that quote changed numbers, and commit both.\n');
-  process.exit(1);
-}
-console.log(JSON.stringify(measured, null, 2));
+});

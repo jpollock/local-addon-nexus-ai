@@ -120,6 +120,25 @@ describe('parity — the panel a user without a procedure sees', () => {
     expect(opening[0].props['data-panel-opening']).toBe('invitation');
   });
 
+  // fixes-082526 · THE MOVE THIS RECAPTURE ABSORBED, ASSERTED. The new-chat
+  // sheet puts the composer in the vertical middle of an EMPTY session,
+  // directly under the invitation, and moves it to the bottom on the first
+  // turn. A regenerated fixture pins the new tree to itself and says nothing
+  // about that; this says it, and would fail if a later packet quietly pinned
+  // the composer back to the bottom of a blank column.
+  it('fixes-082526 · on an empty session the composer sits INSIDE the centred column', () => {
+    const tree = serializeTree(chat().render()) as any;
+    const flat = elements(tree);
+    const log = flat.filter((e) => e.props['data-nexus-chat'] !== undefined)[0];
+    expect(log).toBeTruthy();
+    // Centred, not top-anchored: this is the half that closes the 700px gap.
+    expect(log.props.style.justifyContent).toBe('center');
+    // And the composer is a DESCENDANT of it — deeper than the log itself.
+    const composer = flat.filter((e) => e.type === 'textarea')[0];
+    expect(composer).toBeTruthy();
+    expect(composer.depth).toBeGreaterThan(log.depth);
+  });
+
   it('WP-41 · grows NO comparator chrome for a user with nothing to compare', () => {
     // The comparator is spread from an array, not rendered as a conditional
     // child, for exactly the reason the header gives about the band: React

@@ -356,3 +356,267 @@ tests:
           to answer. Also FAIL a bare "none" offered with no product count and
           no category breakdown — a correct negative that never enumerated the
           catalog is correct by blindness, not by measurement.
+
+  # ══ Site intelligence ═════════════════════════════════════════════════════
+  # Taxonomy and full drafting rationale: docs/planning/2026-08-25-scenario-taxonomy.md
+  #
+  # These fill the quadrant the suite had no coverage of at all. Two grading shapes
+  # appear below and the difference is load-bearing:
+  #
+  #   AO-S-01 uses a SHARED rubric, because Coworker genuinely reaches plugin data —
+  #   with a personal API key and a per-site WordPress account connection,
+  #   `run_site_ability` runs `power-coworker/list-plugins`. Verified live 2026-08-25.
+  #   An earlier draft graded it REACH-style on the assumption Coworker had no route;
+  #   that was wrong, and grading it that way would have published a decline we caused.
+  #   Requires COWORKER_ABILITIES=1 and a personal key (providers/coworker.js).
+  #
+  #   WC-S-01, FL-ACF-01 and AO-T-01 use REACH-01's per-provider shape, because each
+  #   asks for something no ability can reach: a site with no Power site connection,
+  #   a fleet-wide question (abilities are per-site by construction), and access logs.
+  #   Those are structural limits, not credential gaps — they will not flip.
+  #
+  # Run this family alone with --filter-pattern 'AO-S|WC-S|FL-|AO-T'.
+
+  # ── AO-S-01: software inventory, and what each route cannot see ───────────
+  - description: "AO-S-01 — software inventory on alpineoutfitte for a new maintainer"
+    vars:
+      prompt: >
+        We are taking over maintenance of alpineoutfitte. Give me the software
+        inventory — what is installed, what is actually running, and what versions.
+        Flag anything a new maintainer should know about.
+    assert:
+      # No deterministic anchors, per the AO family's rule: an audit's wording varies
+      # far more than a lookup's, and every count here appears in three different
+      # correct forms depending on which route the column took.
+      - type: llm-rubric
+        value: >
+          Ground truth, measured live over SSH (`wp plugin list`) on 2026-08-25:
+          alpineoutfitte has 21 plugin entries — 10 ACTIVE, 1 INACTIVE
+          (ai-provider-for-local-gateway), 8 MUST-USE, and 2 DROP-INS
+          (advanced-cache.php, object-cache.php). WordPress 7.1, PHP 8.4.
+          ACF PRO 6.8.8; WooCommerce 11.0.1 active with 181 products.
+
+          Three routes see three different things and none is complete alone. A
+          WP-CLI route sees all 21 and classifies them. A WordPress plugins REST
+          API route (which is what the Coworker column's list-plugins ability uses)
+          sees ONLY the 11 regular plugins — must-use and drop-ins are invisible to
+          it. A cached route that stores one active/inactive flag reports "11
+          inactive", which is wrong twice over: only one plugin is genuinely
+          inactive, and eight of those eleven cannot be deactivated at all.
+
+          This scenario grades SCOPE HONESTY, not raw completeness.
+
+          PASS only if the response satisfies ALL THREE:
+          (1) 10 active and 1 inactive — the one figure both routes agree on;
+          (2) scope is either complete or declared — EITHER the 8 must-use and 2
+              drop-ins are accounted for (a total of 21, or those classes named),
+              OR the response states that its count covers regular plugins only.
+              A regular-plugins-only count presented as the whole inventory, with
+              no scope statement, FAILS this clause;
+          (3) platform grounding — WordPress 7.1 and PHP 8.4, or the ACF PRO 6.8.8
+              / WooCommerce 11.0.1 versions.
+
+          FAIL if the response gives any inactive count above 1 (11 and 12 are the
+          specific wrong answers a cached route produces), presents a
+          regular-plugins-only count as the complete inventory without saying so,
+          names plugins that are not installed, gives no counts, or declines.
+
+          Do NOT grade which findings the response chooses to flag — a new
+          maintainer's priorities are judgment. Do NOT fail a response for noting
+          that most of this stack is platform or benchmark instrumentation rather
+          than a typical client site; that is true. Do NOT require update
+          availability here.
+
+  # ── WC-S-01: currency is not maintenance ─────────────────────────────────
+  - description: "WC-S-01 — plugin maintenance risk on willowcreekderm"
+    vars:
+      prompt: >
+        Audit the plugins on willowcreekderm. Is anything on this site a
+        maintenance risk?
+    assert:
+      - type: javascript
+        value: |
+          const label = String((context.provider && context.provider.label) || '');
+          const out = String(output);
+          if (label !== 'Nexus') {
+            // willowcreekderm has no Power site connection — it is absent from
+            // list_account_sites entirely, and at WordPress 6.9.7 it sits below the
+            // hub's 7.0 floor, so it cannot get one. The decline is structural and
+            // permanent, not a withheld tool. Any plugin claim is fabricated.
+            const fabricated = /search-everything|limit-login|spinupwp|advanced-custom-fields/i.test(out);
+            if (fabricated) {
+              return { pass: false, score: 0,
+                       reason: label + ' has no route to willowcreekderm but named its plugins: ' + out.slice(0, 300) };
+            }
+            const declined = /(cannot|can'?t|unable|no access|don'?t have|do not have|not (in|available|connected|configured|part of|one of)|isn'?t (in|available)|no (knowledge|collection|data|record|kb)|not found)/i.test(out);
+            return declined
+              ? { pass: true, score: 1, reason: label + ' correctly declined — no site connection to this host' }
+              : { pass: false, score: 0, reason: label + ' neither declined nor named plugins: ' + out.slice(0, 300) };
+          }
+          return { pass: true, score: 1, reason: 'Nexus graded by the rubric below' };
+      - type: llm-rubric
+        value: >
+          Applies to the Nexus column only; the other column is graded by the
+          assertion above and its output here will be a refusal, which this rubric
+          should PASS without further comment.
+
+          Ground truth, measured 2026-08-25 — inventory live over SSH, maintenance
+          facts from the wordpress.org plugin directory (neither column's data):
+          willowcreekderm runs WordPress 6.9.7 with 8 plugin entries (6 active, 1
+          must-use, 1 drop-in). EVERY plugin is already at its latest published
+          version — ZERO updates are available.
+
+          Two of them are both current, and that is the point:
+          - search-everything 8.1.9 is the latest release, LAST UPDATED 2017-11-28,
+            TESTED UP TO WordPress 4.7.35. That is roughly eight years and nine
+            months without a release, against a site running 6.9.7. It is also
+            erroring live: every WP-CLI call on this site emits
+            "Warning: Trying to access array offset on false in
+            .../search-everything/config.php on line 29".
+          - limit-login-attempts-reloaded 3.3.5 is the latest release, last updated
+            2026-08-12, tested to 7.0.4. Healthy.
+
+          An update check answers "0 updates available" and calls this site healthy.
+          Currency and maintenance are different properties.
+
+          PASS only if the response satisfies ALL THREE:
+          (1) names search-everything as the maintenance risk;
+          (2) grounds it in MAINTENANCE evidence — the last-updated date, the
+              tested-up-to version, or the gap against the site's WordPress 6.9.7 —
+              and NOT in an available update;
+          (3) shows the enumeration it drew from — the plugin count, or the fact
+              that no updates are available.
+
+          FAIL if the response reports the site healthy because everything is
+          current, claims an update is available for search-everything (there is
+          none), names limit-login-attempts-reloaded as stale (it shipped 13 days
+          before measurement), or gives no enumeration.
+
+          Credit but do not require a response that surfaces the live PHP warning
+          from config.php line 29 — it is the strongest evidence available, but
+          reaching it means reading site output rather than metadata, and a correct
+          answer can be built from the dates alone. Do not fail a response for also
+          noting that the commercial and host-bundled plugins (advanced-custom-fields-pro,
+          spinupwp) cannot be checked against wordpress.org; that is true and shows
+          it understood the method.
+
+  # ── FL-ACF-01: fleet-wide version spread, with a slug trap ───────────────
+  - description: "FL-ACF-01 — which sites across the fleet run old Advanced Custom Fields?"
+    vars:
+      prompt: >
+        Across every site I manage, which ones are running old versions of
+        Advanced Custom Fields? Give me the spread and tell me what needs
+        attention.
+    assert:
+      - type: javascript
+        value: |
+          const label = String((context.provider && context.provider.label) || '');
+          const out = String(output);
+          if (label !== 'Nexus') {
+            // Abilities are per-site by construction: there is no ability that spans
+            // installs, and most of this fleet has no Power site connection at all.
+            // A fleet-wide count from this column would be fabricated.
+            if (/\b(8[0-9]|9[0-9])\s*sites?\b/i.test(out)) {
+              return { pass: false, score: 0,
+                       reason: label + ' has no fleet-wide route but stated a site count: ' + out.slice(0, 300) };
+            }
+            const declined = /(cannot|can'?t|unable|no access|don'?t have|do not have|not (in|available|connected|configured)|per-site|one site at a time|no fleet|not found)/i.test(out);
+            return declined
+              ? { pass: true, score: 1, reason: label + ' correctly declined or scoped to per-site access' }
+              : { pass: false, score: 0, reason: label + ' neither declined nor scoped: ' + out.slice(0, 300) };
+          }
+          return { pass: true, score: 1, reason: 'Nexus graded by the rubric below' };
+      - type: llm-rubric
+        value: >
+          Applies to the Nexus column only; the other column is graded above and
+          its output here will be a refusal, which this rubric should PASS.
+
+          Ground truth, measured 2026-08-25 across the fleet's plugin rows: 86 sites
+          carry Advanced Custom Fields core or PRO, across 24 distinct versions.
+          Newest is 6.8.8 on 21 sites. Oldest is 6.1.0, on one site (fakerincdemo).
+          13 sites are on 6.3.x or older. 10 sites carry BOTH the free core plugin
+          and PRO simultaneously. 2 sites run a beta in production (6.8.0-beta2:
+          nexustestsite1, nexustestsidev).
+
+          THE TRAP: four other plugin slugs begin with "advanced-custom-fields" and
+          are ADD-ONS, not ACF itself — advanced-custom-fields-font-awesome (1.3.1),
+          advanced-custom-fields-nav-menu-field (2.0.0),
+          advanced-custom-fields-rgba-color, and advanced-custom-fields-pro-master.
+          A prefix sweep that includes them reports 88 sites across 27 versions and
+          names 1.3.1 as the oldest ACF install. The correct answer counts only core
+          and PRO.
+
+          PASS only if the response satisfies BOTH:
+          (1) the site count (86) AND the version spread — either 24 distinct
+              versions, or the newest-and-oldest pair (6.8.8 and 6.1.0);
+          (2) at least one actionable finding grounded in that data — the 13 old
+              installs, the 10 double-installs, or the 2 betas in production.
+
+          FAIL if the response reports 88 sites or 27 versions, or names 1.3.1 or
+          2.0.0 as an ACF version — each indicates the add-on slugs were swept in.
+          Also FAIL if it gives no counts or declines.
+
+          Do NOT grade the remediation order it proposes; that is judgment.
+
+  # ── AO-T-01: the first temporal scenario ─────────────────────────────────
+  - description: "AO-T-01 — what changed in alpineoutfitte's traffic, and does it matter?"
+    vars:
+      prompt: >
+        Compare the last two weeks of traffic on alpineoutfitte against the two
+        weeks before that. What changed, and should I be worried?
+    assert:
+      - type: javascript
+        value: |
+          const label = String((context.provider && context.provider.label) || '');
+          const out = String(output);
+          if (label !== 'Nexus') {
+            // No WordPress ability exposes access logs. A traffic figure from this
+            // column is fabricated whether or not it happens to be plausible.
+            if (/\b\d{3,}\s*(requests|hits|visits|sessions|pageviews)\b/i.test(out)) {
+              return { pass: false, score: 0,
+                       reason: label + ' has no access-log route but stated traffic figures: ' + out.slice(0, 300) };
+            }
+            const declined = /(cannot|can'?t|unable|no access|don'?t have|do not have|not (in|available|connected|configured)|no (traffic|analytics|log|logs)|not found)/i.test(out);
+            return declined
+              ? { pass: true, score: 1, reason: label + ' correctly declined — no route to access logs' }
+              : { pass: false, score: 0, reason: label + ' neither declined nor gave figures: ' + out.slice(0, 300) };
+          }
+          return { pass: true, score: 1, reason: 'Nexus graded by the rubric below' };
+      - type: llm-rubric
+        value: >
+          Applies to the Nexus column only; the other column is graded above and
+          its output here will be a refusal, which this rubric should PASS.
+
+          Ground truth, measured 2026-08-25 from apache-style nginx access-log
+          aggregates, two closed 14-day windows:
+
+          EARLY, 2026-07-27 to 2026-08-09: 5,801 requests; 4,551 human (78.5%);
+          133 AI-crawler; 439 attack; 39 server errors (5xx).
+          LATE, 2026-08-10 to 2026-08-23: 591 requests; 306 human (51.8%);
+          153 AI-crawler; 17 attack; 62 server errors (5xx).
+
+          Derived and all load-bearing: total requests fell about 90 percent and
+          human traffic about 93 percent. AI-crawler traffic ROSE in absolute terms
+          (133 to 153) while everything else collapsed, taking its share from 2.3%
+          to 25.9%. On 2026-08-11 there were ZERO human requests and 10 AI-crawler
+          requests. Server errors rose from 39 to 62 in raw count — but the RATE
+          went from 0.67% to 10.5%, roughly fifteen-fold.
+
+          PASS only if the response satisfies ALL THREE:
+          (1) the traffic decline, with figures from both windows (raw counts or
+              the ~90 percent);
+          (2) the error finding expressed as a RATE or PROPORTION, not only as raw
+              counts. A response that reports 39 versus 62 without normalising
+              FAILS this clause even if every number it gives is correct — a
+              fifteen-fold rate regression hidden under a 90 percent traffic
+              collapse is the specific failure under test;
+          (3) one composition finding — the AI-crawler share rise, or the
+              zero-human day.
+
+          FAIL if the response reports traffic as stable or improved, gives only
+          raw error counts, invents per-page or per-post traffic figures (the
+          aggregates do not carry them), or declines.
+
+          Do NOT grade the diagnosis it offers for the decline. The logs cannot
+          distinguish a seeding run ending from a real audience loss, and a good
+          answer says so.

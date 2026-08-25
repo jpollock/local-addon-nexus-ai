@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-08-25T18:24:12.060Z",
+  "measuredAt": "2026-08-25T22:21:04.291Z",
   "sites": {
     "cedarvalehealt": {
       "providers_total": 60,
@@ -32,7 +32,69 @@
       }
     },
     "willowcreekderm": {
-      "wp_version": "6.9.7"
+      "wp_version": "6.9.7",
+      "plugins": {
+        "entries_total": 8,
+        "active": 6,
+        "inactive": 0,
+        "mustuse": 1,
+        "dropin": 1,
+        "regular_only_total": 6,
+        "plugins": [
+          {
+            "slug": "advanced-custom-fields-pro",
+            "version": "6.8.8",
+            "status": "active"
+          },
+          {
+            "slug": "cedar-vale-seeder",
+            "version": "1.0.0",
+            "status": "active"
+          },
+          {
+            "slug": "limit-login-attempts-reloaded",
+            "version": "3.3.5",
+            "status": "active"
+          },
+          {
+            "slug": "mcp-adapter",
+            "version": "0.6.1",
+            "status": "active"
+          },
+          {
+            "slug": "search-everything",
+            "version": "8.1.9",
+            "status": "active"
+          },
+          {
+            "slug": "spinupwp",
+            "version": "1.9.1",
+            "status": "active"
+          },
+          {
+            "slug": "spinupwp-debug-log-path",
+            "version": "1.0",
+            "status": "must-use"
+          },
+          {
+            "slug": "object-cache.php",
+            "version": "",
+            "status": "dropin"
+          }
+        ]
+      },
+      "wporg": {
+        "search-everything": {
+          "version": "8.1.9",
+          "last_updated": "2017-11-28",
+          "tested_up_to": "4.7.35"
+        },
+        "limit-login-attempts-reloaded": {
+          "version": "3.3.5",
+          "last_updated": "2026-08-12",
+          "tested_up_to": "7.0.4"
+        }
+      }
     },
     "alpineoutfitte": {
       "posts_total": 60,
@@ -57,6 +119,121 @@
       "products_total": 181,
       "product_categories": 9,
       "products_kids": 0,
+      "plugins": {
+        "entries_total": 21,
+        "active": 10,
+        "inactive": 1,
+        "mustuse": 8,
+        "dropin": 2,
+        "regular_only_total": 11,
+        "plugins": [
+          {
+            "slug": "advanced-custom-fields-pro",
+            "version": "6.8.8",
+            "status": "active"
+          },
+          {
+            "slug": "ai",
+            "version": "1.3.0",
+            "status": "active"
+          },
+          {
+            "slug": "ai-provider-for-local-gateway",
+            "version": "1.0.0",
+            "status": "inactive"
+          },
+          {
+            "slug": "alpine-seeder",
+            "version": "1.0.0",
+            "status": "active"
+          },
+          {
+            "slug": "mcp-adapter",
+            "version": "0.6.1",
+            "status": "active"
+          },
+          {
+            "slug": "nexus-ai-connector",
+            "version": "1.0.0",
+            "status": "active"
+          },
+          {
+            "slug": "wpe-hub",
+            "version": "0.16.0",
+            "status": "active"
+          },
+          {
+            "slug": "power-coworker",
+            "version": "0.7.0",
+            "status": "active"
+          },
+          {
+            "slug": "woocommerce",
+            "version": "11.0.1",
+            "status": "active"
+          },
+          {
+            "slug": "atlas-search",
+            "version": "0.3.26",
+            "status": "active"
+          },
+          {
+            "slug": "wordpress-seo",
+            "version": "28.3",
+            "status": "active"
+          },
+          {
+            "slug": "slt-force-strong-passwords",
+            "version": "1.8.0",
+            "status": "must-use"
+          },
+          {
+            "slug": "nexus-ai-connector-config",
+            "version": "",
+            "status": "must-use"
+          },
+          {
+            "slug": "nexus-hub-bridge",
+            "version": "1.0.0",
+            "status": "must-use"
+          },
+          {
+            "slug": "wpe-cache-plugin",
+            "version": "1.3.0",
+            "status": "must-use"
+          },
+          {
+            "slug": "wpe-wp-sign-on-plugin",
+            "version": "1.6.2",
+            "status": "must-use"
+          },
+          {
+            "slug": "wpengine-security-auditor",
+            "version": "1.1.1",
+            "status": "must-use"
+          },
+          {
+            "slug": "mu-plugin",
+            "version": "6.6.3",
+            "status": "must-use"
+          },
+          {
+            "slug": "wpe-update-source-selector",
+            "version": "1.1.5",
+            "status": "must-use"
+          },
+          {
+            "slug": "advanced-cache.php",
+            "version": "",
+            "status": "dropin"
+          },
+          {
+            "slug": "object-cache.php",
+            "version": "",
+            "status": "dropin"
+          }
+        ]
+      },
       "fingerprint": {
         "published_posts": 383,
         "last_modified_gmt": "2026-07-28 16:28:50"

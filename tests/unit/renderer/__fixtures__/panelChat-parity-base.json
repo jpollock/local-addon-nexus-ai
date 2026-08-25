@@ -22,7 +22,10 @@
         "style": {
           "flex": 1,
           "overflowY": "auto",
-          "padding": "0"
+          "padding": "0",
+          "display": "flex",
+          "flexDirection": "column",
+          "justifyContent": "center"
         }
       },
       "children": {
@@ -72,79 +75,80 @@
               }
             ]
           },
+          {
+            "type": "div",
+            "key": null,
+            "props": {
+              "style": {
+                "display": "flex",
+                "gap": 8,
+                "padding": "10px 14px",
+                "borderTop": "1px solid var(--nxai-card-border)",
+                "background": "var(--nxai-card-bg)",
+                "flexShrink": 0
+              }
+            },
+            "children": [
+              {
+                "type": "textarea",
+                "key": null,
+                "props": {
+                  "aria-label": "Chat input",
+                  "disabled": false,
+                  "onChange": "[fn]",
+                  "onKeyDown": "[fn]",
+                  "placeholder": "Ask anything about your sites…",
+                  "ref": {
+                    "current": null
+                  },
+                  "rows": 1,
+                  "style": {
+                    "flex": 1,
+                    "background": "var(--nxai-input-bg)",
+                    "border": "1px solid var(--nxai-card-border)",
+                    "borderRadius": 6,
+                    "color": "var(--nxai-card-text)",
+                    "fontSize": 13,
+                    "padding": "8px 10px",
+                    "resize": "none",
+                    "outline": "none",
+                    "fontFamily": "inherit",
+                    "minHeight": 36,
+                    "maxHeight": 120
+                  },
+                  "value": ""
+                },
+                "children": null
+              },
+              {
+                "type": "button",
+                "key": null,
+                "props": {
+                  "aria-label": "Send message",
+                  "disabled": true,
+                  "onClick": "[fn]",
+                  "style": {
+                    "background": "var(--nxai-card-border)",
+                    "border": "none",
+                    "borderRadius": 6,
+                    "color": "var(--nxai-card-sub)",
+                    "cursor": "not-allowed",
+                    "fontSize": 18,
+                    "padding": "0 14px",
+                    "fontWeight": 700,
+                    "alignSelf": "flex-end",
+                    "height": 36
+                  }
+                },
+                "children": "↑"
+              }
+            ]
+          },
           []
         ]
       }
     },
-    {
-      "type": "div",
-      "key": null,
-      "props": {
-        "style": {
-          "display": "flex",
-          "gap": 8,
-          "padding": "10px 14px",
-          "borderTop": "1px solid var(--nxai-card-border)",
-          "background": "var(--nxai-card-bg)",
-          "flexShrink": 0
-        }
-      },
-      "children": [
-        {
-          "type": "textarea",
-          "key": null,
-          "props": {
-            "aria-label": "Chat input",
-            "disabled": false,
-            "onChange": "[fn]",
-            "onKeyDown": "[fn]",
-            "placeholder": "Ask anything about your sites…",
-            "ref": {
-              "current": null
-            },
-            "rows": 1,
-            "style": {
-              "flex": 1,
-              "background": "var(--nxai-input-bg)",
-              "border": "1px solid var(--nxai-card-border)",
-              "borderRadius": 6,
-              "color": "var(--nxai-card-text)",
-              "fontSize": 13,
-              "padding": "8px 10px",
-              "resize": "none",
-              "outline": "none",
-              "fontFamily": "inherit",
-              "minHeight": 36,
-              "maxHeight": 120
-            },
-            "value": ""
-          },
-          "children": null
-        },
-        {
-          "type": "button",
-          "key": null,
-          "props": {
-            "aria-label": "Send message",
-            "disabled": true,
-            "onClick": "[fn]",
-            "style": {
-              "background": "var(--nxai-card-border)",
-              "border": "none",
-              "borderRadius": 6,
-              "color": "var(--nxai-card-sub)",
-              "cursor": "not-allowed",
-              "fontSize": 18,
-              "padding": "0 14px",
-              "fontWeight": 700,
-              "alignSelf": "flex-end",
-              "height": 36
-            }
-          },
-          "children": "↑"
-        }
-      ]
-    },
+    null,
     {
       "type": "SiteContextStrip",
       "key": null,

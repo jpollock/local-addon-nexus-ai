@@ -192,3 +192,10 @@ module.exports = class CoworkerProvider {
     }
   }
 };
+
+// Exported for tests and for run.sh preflight, not part of the provider contract.
+// resolveCoworkerKey returns the key itself; callers must log only `keyClass`.
+module.exports.resolveCoworkerKey = resolveCoworkerKey;
+module.exports.allowedToolFlags = allowedToolFlags;
+module.exports.abilitiesEnabled = () => ABILITIES_ENABLED;
+module.exports.scaffolding = () => COLLECTION_MAP;
