@@ -48,8 +48,8 @@ cd /tmp
 
 echo "Running benchmark from /tmp (avoids Electron ABI conflict)..."
 
-# Pinned promptfoo — `@latest` broke once already (--filter-description ceased to
-# exist between versions). The pin lives in providers/isolation.js.
+# Pinned promptfoo — the previous floating-tag invocation broke once already
+# (--filter-description ceased to exist between versions). The pin lives in providers/isolation.js.
 PF_VERSION=$(node -p "require('$BENCH_DIR/providers/isolation.js').PF_VERSION")
 
 npx "promptfoo@$PF_VERSION" eval -c "$CONFIG" --no-cache "$@"
