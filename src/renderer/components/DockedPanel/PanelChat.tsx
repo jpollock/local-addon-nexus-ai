@@ -1493,10 +1493,12 @@ export class PanelChat extends React.Component<Props, State> {
       // band just changes, and the next turn carries the new id.
       // WP-41 · the comparator, spread from an array — empty when there is
       // nothing to compare, so a user it cannot serve sees the panel unchanged.
-      // Comparator affordance scoped OUT of the empty session (owner ruling
-      // 16:09 removed 'Compare across places' from the new-chat screen; the
-      // WP-41 surface stays reachable once a transcript exists).
-      ...(messages.length === 0 ? [] : this.renderComparator()),
+      // 'Compare across places' REMOVED from the panel entirely — owner
+      // ruling widened 2026-08-25 16:44 (first scoped out of the empty
+      // session at 16:09; the transcript state kept surfacing it and the
+      // ruling followed). The comparator model and ComparatorPanel remain in
+      // the tree and the J-Inspect eval criteria still drive the MODEL
+      // programmatically; this surface just no longer offers the door.
       ...(messages.length === 0 ? [] : this.renderComposerBlock()),
     );
   }

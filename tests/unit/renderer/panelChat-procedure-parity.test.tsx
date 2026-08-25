@@ -151,24 +151,22 @@ describe('parity — the panel a user without a procedure sees', () => {
     expect(tree).not.toContain('Compare across places');
   });
 
-  it('WP-41 · offers the comparator once the records can serve one AND a transcript exists', () => {
-    // The other side, so the pin above cannot pass by the feature being dead.
-    // Owner ruling 2026-08-25 16:09 scoped the affordance OUT of the empty
-    // session: the new chat offers nothing beside the field. It appears once
-    // there is a conversation for a comparison to serve.
-    const instance = chat();
-    instance.state.comparatorFacts = [{ fact: 'plugin:woocommerce', label: 'woocommerce', places: 3 }];
-    instance.state.messages = [{ id: 'm1', role: 'user', content: 'compare woo across places' }];
-    const tree = JSON.stringify(serializeTree(instance.render()));
-    expect(tree).toContain('Compare across places');
-    // Offered, not opened: the shape appears when she asks for it.
-    expect(tree).not.toContain('ComparatorPanel');
-
-    // And the empty session shows it to no one, facts or not.
-    const empty = chat();
-    empty.state.comparatorFacts = [{ fact: 'plugin:woocommerce', label: 'woocommerce', places: 3 }];
-    expect(JSON.stringify(serializeTree(empty.render()))).not.toContain('Compare across places');
+  it('WP-41 → 16:44 ruling · the comparator door is gone from the panel in EVERY state', () => {
+    // Ruled out of the empty session at 16:09; the transcript state kept
+    // surfacing it and the ruling widened the same afternoon: the panel
+    // offers no 'Compare across places' door at all. The comparator MODEL
+    // stays in the tree and the J-Inspect eval criteria still drive it
+    // programmatically — this pin is about the chat surface only.
+    for (const msgs of [[], [{ id: 'm1', role: 'user', content: 'compare woo' }]]) {
+      const instance = chat();
+      instance.state.comparatorFacts = [{ fact: 'plugin:woocommerce', label: 'woocommerce', places: 3 }];
+      instance.state.messages = msgs as any;
+      const tree = JSON.stringify(serializeTree(instance.render()));
+      expect(tree).not.toContain('Compare across places');
+      expect(tree).not.toContain('comparator-toggle');
+    }
   });
+
 
   it('WP-41 · mounts even when the host returns nothing thenable for the comparator', () => {
     // The seam's one prohibition, as a pin: an intelligence-layer read must
