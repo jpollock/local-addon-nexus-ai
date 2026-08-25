@@ -57,4 +57,17 @@ function benchCwd(column) {
   return dir;
 }
 
-module.exports = { MCP_ONLY_FLAGS, BENCH_ROOT, benchCwd };
+/**
+ * ── Pins ──────────────────────────────────────────────────────────────────────
+ * Every variable that changes what the benchmark measures is pinned here, in one
+ * place, and recorded in each run's manifest. The /model incident (2026-08-25):
+ * providers used to inherit the operator's saved default model, so a `/model`
+ * switch in an unrelated Claude Code session silently changed the benchmark's
+ * subject. BENCH_MODEL stays env-overridable for deliberate experiments; the
+ * manifest records what actually ran.
+ */
+const PF_VERSION = '0.122.0';
+const BENCH_MODEL = process.env.BENCH_MODEL ?? 'claude-opus-5';
+const GRADER_MODEL = 'claude-haiku-4-5-20251001';
+
+module.exports = { MCP_ONLY_FLAGS, BENCH_ROOT, benchCwd, PF_VERSION, BENCH_MODEL, GRADER_MODEL };

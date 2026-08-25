@@ -16,9 +16,7 @@ const { execSync, execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { benchCwd, MCP_ONLY_FLAGS } = require('./isolation');
-
-const MODEL = process.env.BENCH_MODEL ?? 'claude-opus-5';
+const { benchCwd, MCP_ONLY_FLAGS, BENCH_MODEL } = require('./isolation');
 const TIMEOUT_MS = 300_000;
 
 const COLLECTION_MAP = `
@@ -68,7 +66,7 @@ module.exports = class CoworkerProvider {
     const escaped = fullPrompt.replace(/'/g, "'\\''");
     const cmd = [
       'claude',
-      '--model', MODEL,
+      '--model', BENCH_MODEL,
       '--mcp-config', configPath,
       '--strict-mcp-config',
       ...MCP_ONLY_FLAGS,

@@ -21,6 +21,7 @@ const os = require('os');
 const path = require('path');
 const yaml = require('js-yaml');
 const { execFileSync } = require('child_process');
+const { PF_VERSION } = require('./providers/isolation');
 
 const CONFIG = path.join(__dirname, 'promptfooconfig.yaml');
 const real = yaml.load(fs.readFileSync(CONFIG, 'utf8'));
@@ -128,7 +129,7 @@ const outPath = path.join(dir, 'out.json');
 fs.writeFileSync(cfgPath, yaml.dump(cfg));
 
 try {
-  execFileSync('npx', ['promptfoo@latest', 'eval', '-c', cfgPath, '--no-cache', '-o', outPath], {
+  execFileSync('npx', [`promptfoo@${PF_VERSION}`, 'eval', '-c', cfgPath, '--no-cache', '-o', outPath], {
     cwd: dir, stdio: ['pipe', 'pipe', 'pipe'],
   });
 } catch {
