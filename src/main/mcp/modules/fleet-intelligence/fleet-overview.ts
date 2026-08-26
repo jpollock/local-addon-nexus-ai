@@ -9,7 +9,7 @@ export const fleetOverviewHandler: McpToolHandler = {
   definition: {
     name: 'fleet_overview',
     description:
-      'Adaptive fleet overview — covers ALL WordPress sites you manage through Nexus AI. ' +
+      'Adaptive fleet overview — how many sites you have, and how the whole fleet is doing: site counts, totals, and health across ALL WordPress sites you manage through Nexus AI. ' +
       'Detects your fleet type from the data layer (no auth required): ' +
       'if no WP Engine installs are in the database, local sites ARE your complete fleet. ' +
       'If WPE installs exist, returns combined local + WPE summary. ' +

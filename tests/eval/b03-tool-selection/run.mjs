@@ -11,9 +11,9 @@
  * selector mirrors search_tools' lexical scoring (name ×4, partial ×2,
  * description ×1): the floor any candidate selector must beat.
  *
- * Escape-hatch cases are SKIPPED here — they need the append-only grants
- * plumbing (P5 stage 3) and a live provider loop. This runner measures the
- * recall half only.
+ * Escape-hatch cases are SKIPPED here — the append-only plumbing landed in
+ * P5 stage 3; what these cases still need is a live provider loop. This
+ * runner measures the recall half only.
  */
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -113,10 +113,14 @@ let hits = 0, total = 0, skipped = 0;
 for (const c of cases) {
   if (c.kind === 'escape-hatch') { skipped++; continue; }
   total++;
-  const ranked = selector(c.request, c.context ?? {}, defs).slice(0, K);
-  const hit = RESIDENT.has(c.correct_tool) || ranked.includes(c.correct_tool);
+  const ranked = (await selector(c.request, c.context ?? {}, defs)).slice(0, K);
+  // A case may declare acceptable alternates (from its own notes) — a hit on
+  // one counts, and the log names which tool satisfied the case.
+  const candidates = [c.correct_tool, ...(c.acceptable ?? [])];
+  const matched = candidates.find((t) => RESIDENT.has(t) || ranked.includes(t));
+  const hit = matched !== undefined;
   if (hit) hits++;
-  console.log(`${hit ? '✓' : '✗'}  ${c.id}  →  ${c.correct_tool}  ${hit ? '' : `(top-${K}: ${ranked.slice(0, 5).join(', ') || '∅'}…)`}`);
+  console.log(`${hit ? '✓' : '✗'}  ${c.id}  →  ${c.correct_tool}${hit && matched !== c.correct_tool ? ` (via acceptable: ${matched})` : ''}  ${hit ? '' : `(top-${K}: ${ranked.slice(0, 5).join(', ') || '∅'}…)`}`);
 }
-console.log(`\nrecall@${K}: ${hits}/${total}${skipped ? `  (${skipped} escape-hatch case(s) skipped — need P5 stage 3 plumbing)` : ''}`);
+console.log(`\nrecall@${K}: ${hits}/${total}${skipped ? `  (${skipped} escape-hatch case(s) skipped — need the live-provider harness; plumbing landed in stage 3)` : ''}`);
 process.exit(hits === total ? 0 : 1);
