@@ -22,8 +22,11 @@ export interface GoogleAccount {
   connected: boolean;
   /** A Google account exists on the machine, whatever this agent's own access is. */
   accountExists: boolean;
-  /** The account label from the credential manager — usually the email. */
+  /** The first granted account's label — kept for single-account call sites. */
   label?: string;
+  /** Every account THIS AGENT was granted, in connection order. The Sites tab's account card
+   * renders all of them — showing the first of two reads as "the other one isn't connected". */
+  labels?: string[];
   status?: string;
 }
 
@@ -60,6 +63,11 @@ export async function loadAnalyticsState(electron: any): Promise<AnalyticsState>
   const active = (creds?.connections ?? []).find((c: any) => c?.provider === 'google' && c.status !== 'revoked');
   const revoked = (creds?.connections ?? []).find((c: any) => c?.provider === 'google' && c.status === 'revoked');
   const agentStatus: string | null = creds?.agentStatus ?? null;
+  // The GRANTED list, not the machine list — same boundary as the Connected Accounts card.
+  const labels: string[] = (creds?.grantedConnections ?? [])
+    .filter((c: any) => c?.provider === 'google' && c.status !== 'revoked')
+    .map((c: any) => c.accountLabel)
+    .filter(Boolean);
 
   return {
     bindings: state?.bindings ?? {},
@@ -69,7 +77,8 @@ export async function loadAnalyticsState(electron: any): Promise<AnalyticsState>
     google: {
       connected: agentStatus === 'connected',
       accountExists: !!active,
-      label: active?.accountLabel,
+      label: labels[0] ?? active?.accountLabel,
+      labels,
       status: agentStatus ?? (revoked ? 'revoked' : undefined),
     },
   };

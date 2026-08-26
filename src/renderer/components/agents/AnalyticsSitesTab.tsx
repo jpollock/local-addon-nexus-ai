@@ -84,10 +84,12 @@ export class AnalyticsSitesTab extends React.Component<Props, State> {
         React.createElement('div', { style: { flex: 1, minWidth: 0 } },
           React.createElement('div', {
             style: { fontSize: 10.5, letterSpacing: '0.5px', textTransform: 'uppercase' as const, color: 'var(--ag-picker-text-muted)' },
-          }, 'Google account'),
+          }, (google.labels?.length ?? 0) > 1 ? 'Google accounts' : 'Google account'),
           React.createElement('div', {
             style: { fontFamily: MONO, fontSize: 13, marginTop: 6, color: 'var(--ag-picker-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
-          }, google.label ?? 'connected'),
+          // Every granted account — the bind picker draws from all of them, so naming only the
+          // first reads as "the second account isn't connected here".
+          }, google.labels?.length ? google.labels.join(' · ') : (google.label ?? 'connected')),
           React.createElement('div', {
             style: { fontSize: 11.5, color: 'var(--ag-picker-text-dim)', marginTop: 5 },
           }, [

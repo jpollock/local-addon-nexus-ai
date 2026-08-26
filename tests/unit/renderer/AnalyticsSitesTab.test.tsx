@@ -370,3 +370,22 @@ describe('row keys across platforms', () => {
     expect(new Set(keys).size).toBe(2);
   });
 });
+
+describe('the account card with two granted accounts', () => {
+  it('names both accounts, plural — not the first of two', () => {
+    const state: AnalyticsState = {
+      google: {
+        connected: true, accountExists: true,
+        label: 'jeremy@wpengine.com',
+        labels: ['jeremy@wpengine.com', 'jpollock911@gmail.com'],
+      },
+      fleet: [site('alpineoutfitters')],
+      bindings: {},
+    };
+    const { instance } = makeTab({ state });
+    const text = textOf(instance.render());
+    expect(text).toContain('jeremy@wpengine.com');
+    expect(text).toContain('jpollock911@gmail.com');
+    expect(text).toContain('Google accounts');
+  });
+});

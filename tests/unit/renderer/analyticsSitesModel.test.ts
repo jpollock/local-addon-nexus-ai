@@ -92,12 +92,14 @@ describe('loadAnalyticsState', () => {
       [IPC_CHANNELS.GET_SITES]: () => [{ id: 'l', name: 'alpha' }],
       [IPC_CHANNELS.CREDENTIAL_STATUS]: () => ({
         connections: [{ id: 'c', provider: 'google', accountLabel: 'jeremy@wpengine.com', status: 'active' }],
+        grantedConnections: [{ id: 'c', provider: 'google', accountLabel: 'jeremy@wpengine.com', status: 'active' }],
         agentStatus: 'connected',
       }),
     });
     const result = await loadAnalyticsState(electron);
     expect(result.google).toEqual({
-      connected: true, accountExists: true, label: 'jeremy@wpengine.com', status: 'connected',
+      connected: true, accountExists: true, label: 'jeremy@wpengine.com',
+      labels: ['jeremy@wpengine.com'], status: 'connected',
     });
     expect(result.bindings.alpha.property).toBe('properties/1');
     // Unlike log-processor, both platforms are eligible — a GA4 property can belong to either.
@@ -115,7 +117,7 @@ describe('loadAnalyticsState', () => {
       }),
     });
     expect((await loadAnalyticsState(electron)).google).toEqual({
-      connected: false, accountExists: false, label: undefined, status: 'revoked',
+      connected: false, accountExists: false, label: undefined, labels: [], status: 'revoked',
     });
   });
 });
@@ -152,5 +154,34 @@ describe('the per-agent gate', () => {
   it('distinguishes "no account at all" from "no grant for this agent"', async () => {
     const none = await loadAnalyticsState(makeElectron('not_connected', []));
     expect(none.google).toMatchObject({ connected: false, accountExists: false });
+  });
+});
+
+describe('multiple granted accounts on the Sites tab', () => {
+  const makeElectron = (handlers: Record<string, () => any>) => ({
+    ipcRenderer: { invoke: jest.fn(async (channel: string) => handlers[channel]?.()) },
+  });
+
+  it('carries every granted account label — the account card must not show one of two', async () => {
+    const electron = makeElectron({
+      [IPC_CHANNELS.AGENT_WEB_ANALYTICS_STATE]: () => ({ bindings: {} }),
+      [IPC_CHANNELS.WPE_GET_SYNCED_SITES]: () => ({ sites: [] }),
+      [IPC_CHANNELS.GET_SITES]: () => [],
+      [IPC_CHANNELS.CREDENTIAL_STATUS]: () => ({
+        connections: [
+          { id: 'c1', provider: 'google', accountLabel: 'jeremy@wpengine.com', status: 'active' },
+          { id: 'c2', provider: 'google', accountLabel: 'jpollock911@gmail.com', status: 'active' },
+          // Granted to a DIFFERENT agent — exists on the machine, not this agent's to show.
+          { id: 'c3', provider: 'google', accountLabel: 'other-agents@example.com', status: 'active' },
+        ],
+        grantedConnections: [
+          { id: 'c1', provider: 'google', accountLabel: 'jeremy@wpengine.com', status: 'active' },
+          { id: 'c2', provider: 'google', accountLabel: 'jpollock911@gmail.com', status: 'active' },
+        ],
+        agentStatus: 'connected',
+      }),
+    });
+    const result = await loadAnalyticsState(electron);
+    expect(result.google.labels).toEqual(['jeremy@wpengine.com', 'jpollock911@gmail.com']);
   });
 });
