@@ -224,7 +224,42 @@ export function createResolvers(context: ResolverContext) {
    * once. A verification failure does NOT roll back the site write above —
    * see the inline comment near `verifyExternalSite` below.
    */
+  /**
+   * The auditing wrapper (fixes-082526 item 6). Registration mutates the
+   * addon's operational state — a connection profile and a graph site row
+   * pointing at a third party's production server — which is the exact
+   * reasoning that got nexusHostRefresh/nexusHostIndex audited while these
+   * stayed in CLAUDE.md's gaps list. Auditing HERE covers nexusHostAdd and
+   * nexusHostAddSites with one write, since both funnel through this
+   * chokepoint. A probe that refused to register is audited as failure: the
+   * caller asked for a mutation and none (or only a partial profile write)
+   * happened.
+   */
   async function registerExternalHostSite(
+    alias: string,
+    path: string | undefined,
+    environment: string | undefined,
+    site: string | undefined,
+  ): ReturnType<typeof registerExternalHostSiteInner> {
+    const result = await registerExternalHostSiteInner(alias, path, environment, site);
+    const failureReason = result.error
+      ?? (result.registered ? null : result.siteVerification[0]?.error ?? 'not registered');
+    auditDirectOperation(services, {
+      operation: 'external.host.add',
+      target: alias,
+      parameters: {
+        alias,
+        ...(site !== undefined ? { site } : {}),
+        ...(environment !== undefined ? { environment } : {}),
+        registered: result.registered,
+      },
+      outcome: result.registered ? 'success' : 'failure',
+      ...(result.registered ? {} : { error: failureReason ?? 'not registered' }),
+    });
+    return result;
+  }
+
+  async function registerExternalHostSiteInner(
     alias: string,
     path: string | undefined,
     environment: string | undefined,
@@ -5908,7 +5943,18 @@ export function createResolvers(context: ResolverContext) {
         return withQueue(async () => {
           try {
             const storage = (services as any).registryStorage;
-            if (!storage) return { success: false, error: 'Storage not available', removed: false };
+            if (!storage) {
+              // A refused remove is audited as failure, same as nexusWpCommand's
+              // refusals — the caller asked for a mutation and none happened.
+              auditDirectOperation(services, {
+                operation: 'external.host.remove',
+                target: alias,
+                parameters: { alias },
+                outcome: 'failure',
+                error: 'Storage not available',
+              });
+              return { success: false, error: 'Storage not available', removed: false };
+            }
 
             const removed = removeExternalProfile(storage, alias);
 
@@ -5951,8 +5997,24 @@ export function createResolvers(context: ResolverContext) {
               });
             }
 
+            // Item 6: the cascade deactivates every site under the alias —
+            // a mutation of what the fleet surfaces show, recorded like the
+            // add that created them.
+            auditDirectOperation(services, {
+              operation: 'external.host.remove',
+              target: alias,
+              parameters: { alias, removed, sitesDeactivated: sites.length },
+              outcome: 'success',
+            });
             return { success: true, error: null, removed };
           } catch (e: any) {
+            auditDirectOperation(services, {
+              operation: 'external.host.remove',
+              target: alias,
+              parameters: { alias },
+              outcome: 'failure',
+              error: e?.message ?? String(e),
+            });
             return { success: false, error: e?.message ?? String(e), removed: false };
           }
         });

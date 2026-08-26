@@ -764,7 +764,11 @@ Engine and external SSH targets (it lives in `resolvers/wp-cli.ts`, which
 resolvers.ts spreads rather than duplicates — its read-only sibling
 `nexusWpPluginList` is deliberately not audited);
 IPC `UPGRADE_WP`, `REMOVE_WP_AI` plugin deactivation, `WPE_DIAGNOSE` remote
-WP-CLI, `nexus:sentinel:execute`; `BulkOperationManager` per-site plugin updates.
+WP-CLI, `nexus:sentinel:execute`; `BulkOperationManager` per-site plugin updates;
+`nexusHostAdd`/`nexusHostAddSites` (one write at their shared
+`registerExternalHostSite` chokepoint, `external.host.add`) and
+`nexusHostRemove` (`external.host.remove`, cascade count in parameters) —
+closed 2026-08-26.
 
 **Known gaps — do not assume completeness:**
 
@@ -796,10 +800,6 @@ WP-CLI, `nexus:sentinel:execute`; `BulkOperationManager` per-site plugin updates
   `resolvers/wp-cli.ts` is the one file in that directory that is genuinely
   live: `resolvers.ts` imports `createWpCliResolvers` from it directly
   (`./resolvers/wp-cli`), not through the dead `resolvers/index.ts` barrel.
-- `nexusHostAdd`/`nexusHostRemove` write to the graph directly via
-  `upsertSite` — the exact reasoning that justified auditing
-  `nexusHostRefresh`/`nexusHostIndex` (fixed above) — yet remain unaudited
-  themselves.
 
 **How this list has been wrong before.** It previously scoped the remaining gap
 to "IPC handlers that mutate *local* site state" and asserted production-WPE
