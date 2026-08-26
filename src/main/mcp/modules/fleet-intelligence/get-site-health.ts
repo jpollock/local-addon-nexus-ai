@@ -10,6 +10,7 @@ function ok(text: string): McpToolResult {
 export const getSiteHealthHandler: McpToolHandler = {
   definition: {
     name: 'get_site_health',
+    namespace: 'fleet',
     description:
       'Get a detailed health breakdown for a specific indexed site — overall score (0–100), per-dimension scores (database, index freshness, plugin currency), and actionable recommendations. Use after fleet_health_summary to drill into a site flagged with a low score. For database-specific details and cleanup commands, use scan_database_health.' +
       'with factor scores (security, performance, maintenance, activity, stability), ' +

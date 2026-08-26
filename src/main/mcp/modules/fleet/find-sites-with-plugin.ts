@@ -21,6 +21,7 @@ interface Match {
 export const findSitesWithPluginHandler: McpToolHandler = {
   definition: {
     name: 'find_sites_with_plugin',
+    namespace: 'fleet',
     description:
       'Find all indexed sites that have a specific plugin installed — matches by slug (exact) or plugin name (case-insensitive substring). Works even when sites are stopped — reads from the content index. Returns site names, plugin version, and active/inactive status, plus when each fact was last observed (provenance-stamped from the intelligence ledger where available). Use before bulk updates to identify which sites have a specific plugin, or for security audits.' +
       'Matches by slug (exact) or name (case-insensitive substring). ' +

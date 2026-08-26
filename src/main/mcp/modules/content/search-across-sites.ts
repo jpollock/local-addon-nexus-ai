@@ -5,6 +5,7 @@ import { vectorSiteId } from '../../../vector-store/vectorSiteId';
 export const searchAcrossSitesHandler: McpToolHandler = {
   definition: {
     name: 'search_across_sites',
+    namespace: 'content',
     description:
       'Search across ALL indexed sites simultaneously using semantic similarity — finds relevant content regardless of which site has it. ' +
       'Returns results ranked by relevance with site name, post title, and excerpt. ' +

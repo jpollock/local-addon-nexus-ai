@@ -81,6 +81,15 @@ export interface McpToolDefinition {
   isAvailable?: (services: NexusServices) => boolean;
   /** MCP tool annotations (title, readOnlyHint, etc.) */
   annotations?: Record<string, unknown>;
+  /**
+   * P5 (charter 2026-08-26) — routing domain for tool selection. Most tools
+   * derive it from their name prefix (wpe_, wp_, local_, …) and may omit it;
+   * the ~50 verb-prefixed tools (get_, list_, find_, scan_…) must declare it
+   * explicitly. `resolveToolNamespace` (tool-namespace.ts) is the one
+   * resolver, and toolNamespaces.test.ts fails the suite if any registered
+   * tool resolves to nothing — a new tool cannot silently land unroutable.
+   */
+  namespace?: string;
 }
 
 export interface McpToolResult {

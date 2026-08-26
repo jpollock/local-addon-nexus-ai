@@ -8,7 +8,18 @@ module.exports = {
   roots: ['<rootDir>/tests', '<rootDir>/src'],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.test.json' }],
+    // The Vercel AI SDK (ai, @ai-sdk/*) ships ESM-only with no CJS build, and
+    // unlike p-limit/marked below it cannot be shimmed — the spike's tests
+    // exercise the SDK's own SSE parsing, so the real package must load.
+    // ts-jest downlevels its ESM to CJS for Jest's CommonJS runtime; at
+    // runtime Electron 42 (Node 22.20) / CI's 22.16 load it natively via
+    // require(esm), so this transform is a Jest-only concern.
+    '^.+\\.m?js$': ['ts-jest', {
+      tsconfig: { allowJs: true, module: 'commonjs', target: 'ES2022', esModuleInterop: true },
+      diagnostics: false,
+    }],
   },
+  transformIgnorePatterns: ['/node_modules/(?!(ai|@ai-sdk|@workflow|eventsource-parser)/)'],
   moduleNameMapper: {
     '^@getflywheel/local/main$': '<rootDir>/tests/__mocks__/local-main.ts',
     '^@getflywheel/local-components$': '<rootDir>/tests/__mocks__/local-components.ts',

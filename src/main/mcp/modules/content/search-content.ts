@@ -35,6 +35,7 @@ export function coerceMetadataFilters(raw: unknown): MetadataFilter[] | undefine
 export const searchContentHandler: McpToolHandler = {
   definition: {
     name: 'search_site_content',
+    namespace: 'content',
     description:
       'Search a single site\'s indexed content using semantic similarity — understands meaning, not just keywords. ' +
       '"Optimize images" also matches posts about compression, WebP, lazy loading, and CDN. ' +

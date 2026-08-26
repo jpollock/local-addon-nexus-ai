@@ -165,6 +165,19 @@ export class ChatService {
       });
     } catch { /* context assembly is never worth a lost chat turn */ }
 
+    // P2 — the prompt describes the toolset actually sent. Same adapter call
+    // runAgentLoop makes per iteration (pure mapping, no side effects), so the
+    // prompt and the payload cannot drift. withheldCount compares against the
+    // unrestricted set: today only a grants list can withhold; any future
+    // bound must flow through the same count or it reintroduces the silent
+    // 2026-08-25 failure.
+    const sentTools = adaptToolsForChat(this.registry, this.services, assembly?.grants);
+    const fullCount = adaptToolsForChat(this.registry, this.services).length;
+    const toolInfo = {
+      toolNames: new Set(sentTools.map((t) => t.name)),
+      withheldCount: Math.max(0, fullCount - sentTools.length),
+    };
+
     if (!session) {
       const abortController = new AbortController();
       const pendingApprovals: ChatSession['pendingApprovals'] = new Map();
@@ -187,7 +200,7 @@ export class ChatService {
 
         // Rebuild the system prompt — without it a reopened session runs with no
         // fleet context, no tool doctrine, and no UNTRUSTED_DATA_DIRECTIVE.
-        const systemPrompt = await this.buildSystemPrompt(siteId, assembly?.ambientBlock);
+        const systemPrompt = await this.buildSystemPrompt(siteId, assembly?.ambientBlock, toolInfo);
 
         session = {
           id: sessionId,
@@ -197,7 +210,7 @@ export class ChatService {
         };
       } else {
         // Fresh session — build system prompt
-        const systemPrompt = await this.buildSystemPrompt(siteId, assembly?.ambientBlock);
+        const systemPrompt = await this.buildSystemPrompt(siteId, assembly?.ambientBlock, toolInfo);
         session = {
           id: sessionId,
           messages: [{ role: 'system', content: systemPrompt }],
@@ -263,6 +276,22 @@ export class ChatService {
     // turns these into the `name#index` addresses the convention cites.
     const turnToolCalls: string[] = [];
 
+    // P5 stage 3 · append-only grants (charter; Fig. 2 of the tool-context
+    // design). Computed ONCE per turn from the caller's grants (copied —
+    // never mutated), stable order, and grown only at the end: when
+    // search_tools surfaces a tool outside the grant set, it is appended so
+    // the NEXT iteration can call it. Providers only accept calls to
+    // declared tools, so without the append the P2 disclosure ("call
+    // search_tools before concluding a capability is unavailable") points at
+    // tools the model can never call. One cache invalidation per discovery,
+    // only on turns that search; undefined stays undefined — unrestricted
+    // turns are byte-identical to pre-stage-3 behaviour. Pinned by
+    // appendOnlyGrants.test.ts: the array never shrinks or reorders mid-turn.
+    const turnGrants = grants && grants.length > 0 ? [...grants] : undefined;
+    const knownToolNames = turnGrants
+      ? new Set(adaptToolsForChat(this.registry, this.services).map((t) => t.name))
+      : undefined;
+
     for (let iteration = 0; iteration < CHAT_DEFAULTS.MAX_AGENT_ITERATIONS; iteration++) {
       if (session.abortController.signal.aborted) break;
 
@@ -270,33 +299,20 @@ export class ChatService {
       // grant set could change mid-task without touching the message array.
       // Signature only in v0 — `grants` is always undefined (unrestricted),
       // which is today's behaviour exactly.
-      let tools = adaptToolsForChat(this.registry, this.services, grants);
-
-      // ── Power's route caps tools per request ──────────────────────────────
-      // Chat-on-Power 400'd ("request is incompatible with the selected
-      // model") on EVERY model — sonnet-5, 4-6, 4-5 alike — while the agent
-      // path, which sends one tool through the same adapter, works. The one
-      // structural difference is this array: the full registry is ~190 tool
-      // schemas, and Vertex-fronted OpenAI-compatible routes (Power's catalog
-      // ids carry Vertex's `-maas` suffix) cap tools at 128. No log line on
-      // this machine has ever shown a successful full-registry Power chat, so
-      // this is a never-worked path, not a regression.
-      //
-      // The bound is deliberate and LOUD, never silent (the no-silent-caps
-      // rule): registration order is kept — it already puts the fleet/content
-      // tools a chat actually reaches first — and the dropped tail is named
-      // in the log with its count. The real fix is the scoped toolset the
-      // grants mechanism was built for (ContextBundle.tools, signature-only
-      // in v0); this bound is the floor that makes Power chat exist at all.
-      const POWER_MAX_TOOLS = 128;
-      if (providerId === 'power' && tools.length > POWER_MAX_TOOLS) {
-        const dropped = tools.length - POWER_MAX_TOOLS;
-        console.warn(
-          `[NexusAI] chat: Power tool cap — sending first ${POWER_MAX_TOOLS} of ${tools.length} tools, ` +
-          `${dropped} dropped (registration-order tail). Route rejects larger tool arrays.`,
-        );
-        tools = tools.slice(0, POWER_MAX_TOOLS);
-      }
+      // Power gets the full toolset like every other provider. A 128-tool cap
+      // lived here for one day (502d3554) on the hypothesis that Power's
+      // Vertex-fronted route capped tools per request; three live probes
+      // (2026-08-25/26, spike-power-*-probe.mjs) exonerated count, content,
+      // bytes, request shape and model — the route accepts all 207 real
+      // schemas in the exact chat shape on sonnet-4-5 and sonnet-5. The cap's
+      // cost was silent and severe: the dropped registration-order tail held
+      // every agent__* tool, fleet_overview, and search_tools itself, so the
+      // model denied capabilities it had. If the route ever regresses, the
+      // failure is the actionable "incompatible with the selected model"
+      // sentence in power.ts — loud, not a silent amputation. History and
+      // probe results: powerToolCap.test.ts header,
+      // docs/planning/2026-08-26-chat-harness-plan.md (P1).
+      const tools = adaptToolsForChat(this.registry, this.services, turnGrants);
 
       // Stream the LLM response
       let assistantContent = '';
@@ -333,6 +349,19 @@ export class ChatService {
             this.emit(sessionId(session), event);
           } else if (event.type === 'done') {
             stopReason = event.stopReason;
+            // Turn usage through the logger that reaches local-lightning.log —
+            // this line is how the live parity drive proves the P3/P4.2 cache
+            // breakpoints (second turn of a session: cacheRead in the tens of
+            // thousands). Providers that report no usage log nothing.
+            if (event.usage) {
+              const u = event.usage;
+              this.services.logger?.info(
+                `[NexusAI] chat: turn usage provider=${providerId} in=${u.inputTokens ?? '?'} out=${u.outputTokens ?? '?'}` +
+                (u.cacheReadTokens !== undefined || u.cacheWriteTokens !== undefined
+                  ? ` cacheRead=${u.cacheReadTokens ?? 0} cacheWrite=${u.cacheWriteTokens ?? 0}`
+                  : ''),
+              );
+            }
           } else if (event.type === 'error') {
             this.emit(sessionId(session), event);
             this.endTurn(session, 'error', assembly, turnToolCalls);
@@ -377,6 +406,20 @@ export class ChatService {
             toolCallId: tc.id,
             toolName: tc.name,
           });
+
+          // P5 stage 3 — discovery append: registry tool names surfaced by a
+          // search_tools result join the turn's grant set at the END, making
+          // them callable from the next iteration. Whole-name matching
+          // against the known registry, dedup'd; visibility only —
+          // registry.call remains the enforcement layer regardless of what
+          // the model can see.
+          if (turnGrants && knownToolNames && tc.name === 'search_tools') {
+            for (const name of knownToolNames) {
+              if (!turnGrants.includes(name) && new RegExp(`\\b${name}\\b`).test(result.text)) {
+                turnGrants.push(name);
+              }
+            }
+          }
 
           // Only count Tier 2/3 (state-changing) ops as actions — Tier 1 reads are invisible
           const actionSafety = getToolSafety(tc.name);
@@ -584,10 +627,11 @@ export class ChatService {
       // The approval is this act's cause: `causation` makes the chain
       // approval -> action -> outcome readable straight off the ledger.
       const result3 = await this.registry.call(
-        // 'chat', not 'mcp' (fixes-082526 phase 2): at the chokepoint the
-        // docked panel used to be indistinguishable from an external MCP
-        // client, so a grant made to chat could be refused by the registry's
-        // own gate — and the audit's _accessMethod said 'mcp' about the panel.
+        // 'chat', not 'mcp' (fixes-082526 phase 2, converged with the chat
+        // harness's own b9550951): at the chokepoint the docked panel used to
+        // be indistinguishable from an external MCP client, so a grant made
+        // to chat could be refused by the registry's own gate — and the
+        // audit's _accessMethod said 'mcp' about the panel.
         toolCall.name, toolCall.arguments, this.services, 'chat', false, undefined,
         { id: taskId, causation: rationaleId },
       );
@@ -789,7 +833,41 @@ export class ChatService {
    * doctrine, so policy outranks tool enthusiasm. Null/undefined inserts
    * nothing at all — the additive-parity pin.
    */
-  private async buildSystemPrompt(siteId?: string, ambientBlock?: string | null): Promise<string> {
+  /**
+   * P2(b) — the fleet-tools block, generated from the payload. The docs table
+   * is declarative; presence in `toolNames` decides what the model is told
+   * about. No toolNames (no production caller) → full list, pre-P2 behaviour.
+   */
+  private fleetToolSection(toolNames?: Set<string>): string[] {
+    const FLEET_TOOL_DOCS: Array<[string, string]> = [
+      ['fleet_health_summary', 'Get health scores for all indexed sites'],
+      ['get_site_health', 'Get detailed health breakdown for a specific site'],
+      ['fleet_search', 'Search across all indexed site content'],
+      ['fleet_filter', 'Apply smart filters (e.g., outdated-php, no-ssl) across the fleet'],
+      ['bulk_reindex', 'Reindex multiple sites at once (pass an array of site_ids)'],
+      ['bulk_plugin_update', 'Update a plugin across multiple sites'],
+      ['list_site_groups', 'List all site groups'],
+      ['manage_site_group', 'Create, rename, delete groups or move sites between groups'],
+    ];
+    const rows = FLEET_TOOL_DOCS
+      .filter(([name]) => !toolNames || toolNames.has(name))
+      .map(([name, doc]) => `- ${name}: ${doc}`);
+    return rows.length > 0 ? ['Fleet management tools:', ...rows, ''] : [];
+  }
+
+  private async buildSystemPrompt(
+    siteId?: string,
+    ambientBlock?: string | null,
+    // P2 (docs/planning/2026-08-26-chat-harness-plan.md): the prompt must be
+    // honest about the payload. `toolNames` = the tools actually being sent
+    // this turn — the fleet section below is GENERATED from it, never a
+    // hand-written list (a tool named in the prompt but absent from the array
+    // is the confabulation mechanism behind the 2026-08-25 incident).
+    // `withheldCount` > 0 adds the disclosure + search_tools escape hatch.
+    // Both optional: callers without the toolset (none in production) get the
+    // full list, i.e. pre-P2 behaviour.
+    toolInfo?: { toolNames?: Set<string>; withheldCount?: number },
+  ): Promise<string> {
     // Build WordPress-aware fleet context (PHP EOL, site counts, insights)
     let fleetContextSection = '';
     try {
@@ -803,9 +881,15 @@ export class ChatService {
       fleetContextSection = buildWordPressSystemPrompt(fleetCtx, true);
     } catch { /* fleet context unavailable — proceed without it */ }
 
+    // P3 (charter §P3) — prefix order for prompt caching. Caching is a prefix
+    // match, so the most volatile text must ride LAST: the fleet context
+    // (live counts) opened the prompt and repriced ~9KB of static doctrine on
+    // every fleet change. Static doctrine first, fleet context at the tail.
+    // ambientBlock deliberately does NOT move — WP-11's ruling places it
+    // after the untrusted-data directive and before the tool doctrine, and a
+    // recorded semantic ordering outranks cache pressure
+    // (tests/unit/chat/promptPrefixOrder.test.ts pins both orderings).
     const lines = [
-      fleetContextSection,
-      '',
       'You are Nexus AI, a WordPress site management assistant built into the Local development environment.',
       'You have access to tools for managing WordPress sites, checking plugin status, running WP-CLI commands, and more.',
       'Be concise and helpful. When using tools, explain what you are doing.',
@@ -817,18 +901,22 @@ export class ChatService {
       'If asked about sites, call local_list_sites or nexus_list_sites first. If asked about plugins, call wp_plugin_list with the site name.',
       'If asked about WordPress versions, call wp_core_version. If you cannot answer using your available tools, say so.',
       'For complex multi-step queries (e.g. "admin users across recipe sites"), chain multiple tool calls together.',
+      // P2(c) — never withhold silently: the model must be able to distinguish
+      // "doesn't exist" from "wasn't given to me", or it confabulates the former.
+      ...(toolInfo?.withheldCount
+        ? [
+            `NOTE: ${toolInfo.withheldCount} tools were not included this turn. ` +
+            'Call search_tools before concluding a capability is unavailable — ' +
+            'never state that a capability does not exist based only on the tools you can see.',
+          ]
+        : []),
       '',
-      'Fleet management tools:',
-      '- fleet_health_summary: Get health scores for all indexed sites',
-      '- get_site_health: Get detailed health breakdown for a specific site',
-      '- fleet_search: Search across all indexed site content',
-      '- fleet_filter: Apply smart filters (e.g., outdated-php, no-ssl) across the fleet',
-      '- bulk_reindex: Reindex multiple sites at once (pass an array of site_ids)',
-      '- bulk_plugin_update: Update a plugin across multiple sites',
-      '- list_site_groups: List all site groups',
-      '- manage_site_group: Create, rename, delete groups or move sites between groups',
-      '',
-      'When asked to reindex sites, use the bulk_reindex tool with site IDs from local_list_sites.',
+      // Generated from FLEET_TOOL_DOCS filtered by the actual payload — see
+      // the toolInfo doc above. An empty section vanishes, header included.
+      ...this.fleetToolSection(toolInfo?.toolNames),
+      ...(!toolInfo?.toolNames || toolInfo.toolNames.has('bulk_reindex')
+        ? ['When asked to reindex sites, use the bulk_reindex tool with site IDs from local_list_sites.']
+        : []),
       'Never suggest manual WP-CLI commands when a tool exists for the task.',
       '',
       '## Content search (finding posts/pages/products/etc.)',
@@ -867,6 +955,12 @@ export class ChatService {
       'start/stop automatically in the background. You will see [Auto-lifecycle: ...] notes in tool',
       'results confirming which sites were started and stopped. You do not need to manage this yourself.',
     ];
+
+    // Volatile tail (P3) — fleet context joins the current-site block here,
+    // after every static line, so its churn reprices only the tail.
+    if (fleetContextSection) {
+      lines.push('', fleetContextSection);
+    }
 
     if (siteId) {
       const site = resolveLocalSite(siteId, this.services.siteData, this.services.graphService);

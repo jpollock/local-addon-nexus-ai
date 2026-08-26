@@ -23,6 +23,7 @@ function error(message: string): McpToolResult {
 export const getEventEndpointInfoTool: McpToolHandler = {
   definition: {
     name: 'get_event_endpoint_info',
+    namespace: 'system',
     description: 'Get connection details for the WordPress event webhook endpoint — URL, port, and authentication token. Used internally by the nexus-ai-connector WordPress plugin to send events to Local. Use when debugging event tracking issues or configuring a site connector plugin manually.',
     inputSchema: {
       type: 'object',
@@ -44,6 +45,7 @@ export const getEventEndpointInfoTool: McpToolHandler = {
 export const getEventProcessorStatsTool: McpToolHandler = {
   definition: {
     name: 'get_event_processor_stats',
+    namespace: 'system',
     description: 'Get event processor statistics — total events received, pending queue size, processed count, and failed event count. Use to monitor the health of the WordPress event tracking pipeline. A large pending queue or failed count indicates the connector plugin may not be working correctly on some sites.',
     inputSchema: {
       type: 'object',
@@ -65,6 +67,7 @@ export const getEventProcessorStatsTool: McpToolHandler = {
 export const getGraphContentTool: McpToolHandler = {
   definition: {
     name: 'get_graph_content',
+    namespace: 'content',
     description: 'Get a specific piece of content from the knowledge graph by site name and WordPress post ID. Returns the stored content data including title, content excerpt, metadata, and last indexed timestamp. Use to inspect what the knowledge graph knows about a specific post, or to debug indexing issues.',
     inputSchema: {
       type: 'object',
@@ -110,6 +113,7 @@ export const getGraphContentTool: McpToolHandler = {
 export const listGraphContentTool: McpToolHandler = {
   definition: {
     name: 'list_graph_content',
+    namespace: 'content',
     description: 'List all content indexed in the knowledge graph for a specific site — posts, pages, and custom post types. Returns title, post type, and last indexed timestamp for each item. Use to audit what has been indexed, or to find post IDs for get_graph_content lookups.',
     inputSchema: {
       type: 'object',
@@ -156,6 +160,7 @@ export const listGraphContentTool: McpToolHandler = {
 export const getGraphPluginTool: McpToolHandler = {
   definition: {
     name: 'get_graph_plugin',
+    namespace: 'fleet',
     description: 'Get plugin metadata stored in the knowledge graph for a specific site and plugin slug. Returns version, active status, and last indexed data. Use to check what the knowledge graph knows about a specific plugin on a site.',
     inputSchema: {
       type: 'object',
@@ -192,6 +197,7 @@ export const getGraphPluginTool: McpToolHandler = {
 export const listGraphPluginsTool: McpToolHandler = {
   definition: {
     name: 'list_graph_plugins',
+    namespace: 'fleet',
     description: 'List all plugins stored in the knowledge graph for a specific site — slug, version, and active status. Filter to active plugins only with active_only=true. Use to audit plugin data in the graph, or to compare against live plugin state from wp_plugin_list.',
     inputSchema: {
       type: 'object',
@@ -229,6 +235,7 @@ export const listGraphPluginsTool: McpToolHandler = {
 export const getGraphStatsTool: McpToolHandler = {
   definition: {
     name: 'get_graph_stats',
+    namespace: 'fleet',
     description: 'Get knowledge graph statistics — total content items, plugin count, and last updated timestamp. Omit site to get global stats across all sites. Use to monitor graph health or confirm a site has been indexed.',
     inputSchema: {
       type: 'object',

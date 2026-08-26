@@ -37,6 +37,7 @@ interface Delta {
 export const verifySiteLiveHandler: McpToolHandler = {
   definition: {
     name: 'verify_site_live',
+    namespace: 'fleet',
     description:
       'Re-observe a site live and reconcile the intelligence ledger: fetches the current plugin state ' +
       'through the real transport (local site, WPE install via SSH, or external SSH host), compares it ' +

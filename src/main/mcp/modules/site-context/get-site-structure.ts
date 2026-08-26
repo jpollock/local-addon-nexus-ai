@@ -21,6 +21,7 @@ import { freshnessFooter } from '../../../twin/twin-helpers';
 export const getSiteStructureHandler: McpToolHandler = {
   definition: {
     name: 'get_site_structure',
+    namespace: 'content',
     description:
       'Get deep structural context for a WordPress site — WP/PHP/MySQL versions, ' +
       'plugins (active/inactive) with versions, themes, post counts, site URL, ' +

@@ -129,6 +129,9 @@ export type ChatStreamEvent =
 export interface TokenUsage {
   inputTokens?: number;
   outputTokens?: number;
+  /** Prompt-cache accounting (P3/P4.2) — providers that report it populate these. */
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
 }
 
 export type ProviderStreamEvent =

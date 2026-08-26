@@ -559,6 +559,14 @@ export default function main(context: any): void {
 
   // Phase 3b: Chat providers + service
   initializeProviders();
+  // The dark flags are invisible without this: name which implementation
+  // serves each flagged id, via the ONE logger that reaches
+  // local-lightning.log (raw console.log goes nowhere under `open` — the
+  // first verification grep proved it empty).
+  localLogger.info(
+    `[NexusAI] chat providers: power=${process.env.NEXUS_POWER_AISDK === '0' ? 'hand-rolled' : 'ai-sdk'} ` +
+    `anthropic=${process.env.NEXUS_ANTHROPIC_AISDK === '0' ? 'hand-rolled' : 'ai-sdk'}`,
+  );
 
   const chatService = new ChatService({
     registry,

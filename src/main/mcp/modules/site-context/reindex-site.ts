@@ -4,6 +4,7 @@ import { resolveLocalSite } from '../../site-resolver';
 export const reindexSiteHandler: McpToolHandler = {
   definition: {
     name: 'reindex_site',
+    namespace: 'content',
     description:
       'Trigger a complete re-index for a site — drops existing index data and rebuilds from the current content. Use after major content migrations, large plugin changes, or when search results are outdated. A halted site is started, indexed, and stopped again automatically. ASYNC: indexing runs in the background and this returns an operation id immediately — check progress with get_index_status.',
     inputSchema: {

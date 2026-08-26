@@ -1,0 +1,56 @@
+{
+  "_comment": "B-03 ground truth. Every case must trace to a REAL request (production 'chat'-labeled call, the owner's own phrasing, or an example stated in the market prioritization doc) \u2014 never invented. 'correct_tool' is the tool a competent operator would reach for first. See README.md for the jobs-weighted target distribution.",
+  "cases": [
+    {
+      "id": "b03-001",
+      "job": 12,
+      "kind": "escape-hatch",
+      "request": "how is my site traffic going for advancedcustomfields?",
+      "context": {
+        "boundEntity": "acfprod (wpe install, GA4 property bound)"
+      },
+      "correct_tool": "agent__web-analytics__traffic_summary",
+      "source": "2026-08-25 incident, session hmbk49fexj \u2014 the model denied this capability existed while the tool worked over MCP; the case this whole workstream exists to make impossible",
+      "notes": "Escape-hatch by construction: traffic_summary is bucket 2, so under any narrowed grant set the model must discover it via search_tools and call it after append."
+    },
+    {
+      "id": "b03-002",
+      "job": 4,
+      "kind": "recall",
+      "request": "a CVE just dropped for a plugin \u2014 which of my sites are running it?",
+      "context": {
+        "fleet": "local + wpe + external"
+      },
+      "correct_tool": "find_sites_with_plugin",
+      "source": "market prioritization doc, vulnerability-triage example (job 4)",
+      "notes": "The doc's own canonical triage move; also acceptable in top-k: fleet_sql.",
+      "acceptable": [
+        "fleet_sql"
+      ]
+    },
+    {
+      "id": "b03-003",
+      "job": 5,
+      "kind": "recall",
+      "request": "how is my fleet doing?",
+      "context": {},
+      "correct_tool": "fleet_overview",
+      "source": "MCP server instructions \u2014 the canonical open-ended fleet-overview tool, named in the system prompt's own doctrine",
+      "notes": "Was in the cap's dropped tail during the 2026-08-25 incident window."
+    },
+    {
+      "id": "b03-004",
+      "job": 6,
+      "kind": "recall",
+      "request": "how many sites do I have?",
+      "context": {},
+      "correct_tool": "fleet_overview",
+      "source": "owner's real chat sessions 2jlbaqq3knu / cpxulozp6kj / n030fx81o8f (2026-08-25, three separate sessions asked exactly this)",
+      "notes": "Acceptable in top-k: nexus_list_sites, local_list_sites. Fleet counts have documented pitfalls (CLAUDE.md 'Fleet counts') \u2014 the composed tool is correct-first.",
+      "acceptable": [
+        "nexus_list_sites",
+        "local_list_sites"
+      ]
+    }
+  ]
+}

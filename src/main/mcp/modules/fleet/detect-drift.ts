@@ -42,6 +42,7 @@ interface LedgerDrift {
 export const detectDriftHandler: McpToolHandler = {
   definition: {
     name: 'detect_drift',
+    namespace: 'fleet',
     description:
       'Compare a baseline LOCAL site against other local sites to detect configuration drift — ' +
       'plugin version differences, missing or extra plugins, WordPress/PHP version mismatches. ' +

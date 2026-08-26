@@ -7,6 +7,7 @@ import { scanDatabase } from './db-scanner';
 export const scanDatabaseHealthHandler: McpToolHandler = {
   definition: {
     name: 'scan_database_health',
+    namespace: 'db',
     description:
       'Scan a local WordPress site database for bloat and health issues — post revisions, auto-drafts, trashed items, expired transients, orphaned postmeta, plugin leftover tables, and autoload bloat. ' +
       'Returns a structured health report with a score (0-100) and per-category breakdown. ' +

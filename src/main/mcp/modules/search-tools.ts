@@ -12,35 +12,7 @@
 import { McpToolHandler, McpToolResult, NexusServices } from '../types';
 import type { ToolRegistry } from '../tool-registry';
 import type { ContributedToolRegistry } from '../../agent-runtime/ContributedToolRegistry';
-
-// ---------------------------------------------------------------------------
-// Scoring
-// ---------------------------------------------------------------------------
-
-function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[_\-\/]/g, ' ')
-    .split(/\s+/)
-    .filter((t) => t.length > 1);
-}
-
-function score(query: string, name: string, description: string): number {
-  const queryTerms = tokenize(query);
-  const nameTerms = new Set(tokenize(name));
-  const descTerms = new Set(tokenize(description));
-
-  let total = 0;
-  for (const term of queryTerms) {
-    // Exact match in name: weight 4
-    if (nameTerms.has(term)) { total += 4; continue; }
-    // Partial match in name: weight 2
-    if (Array.from(nameTerms).some((t) => t.includes(term) || term.includes(t))) { total += 2; continue; }
-    // Match in description: weight 1
-    if (descTerms.has(term) || Array.from(descTerms).some((t) => t.includes(term))) { total += 1; }
-  }
-  return total;
-}
+import { ToolRanker } from '../tool-ranker';
 
 // ---------------------------------------------------------------------------
 // Tool handler factory — needs registry reference at registration time
@@ -50,9 +22,22 @@ export function createSearchToolsHandler(
   registry: ToolRegistry,
   getContributedRegistry?: () => ContributedToolRegistry | undefined,
 ): McpToolHandler {
-  return {
+  // P5 stage 4 — the discovery floor is HYBRID: lexical (moved verbatim to
+  // tool-ranker.ts) + cosine over MiniLM embeddings of name+description,
+  // built lazily in the background off services.embeddingService on the
+  // first search. Walt's template_catalog degradation, ported: lexical-only
+  // until the index is ready or whenever embedding fails — a search never
+  // waits on ONNX warmup. Measured motive: B-03's lexical baseline is blind
+  // to intent phrasings ("how many sites do I have?" → fleet_overview,
+  // zero token overlap), and this tool is P2's escape hatch — its recall is
+  // what "call search_tools before concluding a capability is unavailable"
+  // leans on.
+  let ranker: ToolRanker | null = null;
+
+  const handler: McpToolHandler = {
     definition: {
       name: 'search_tools',
+      namespace: 'meta',
       description:
         'Search available tools by intent or keyword. ' +
         'Use this when you are unsure which specific tool to call for an operation. ' +
@@ -77,7 +62,7 @@ export function createSearchToolsHandler(
       isAvailable: (_services: NexusServices) => true,
     },
 
-    async execute(args): Promise<McpToolResult> {
+    async execute(args, services): Promise<McpToolResult> {
       const query = (args.query as string ?? '').trim();
       if (!query) {
         return { content: [{ type: 'text', text: 'Query is required.' }], isError: true };
@@ -95,15 +80,16 @@ export function createSearchToolsHandler(
         isAvailable: () => true,
       }));
       const tools = [...builtinTools, ...contributedTools];
-      const scored = tools
-        .map((t) => ({
-          name: t.name,
-          description: (t.description as string ?? '').slice(0, 200),
-          score: score(query, t.name, t.description as string ?? ''),
-        }))
-        .filter((t) => t.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, limit);
+
+      if (!ranker) {
+        const embedBatch = services?.embeddingService?.embedBatch?.bind(services.embeddingService);
+        ranker = new ToolRanker(embedBatch);
+        (handler as unknown as { __ranker: ToolRanker }).__ranker = ranker; // test seam
+      }
+      const rankable = tools.map((t) => ({ name: t.name, description: (t.description as string) ?? '' }));
+      ranker.ensureIndex(rankable); // background; no-op when unchanged
+      const scored = (await ranker.rank(query, rankable, limit))
+        .map((t) => ({ ...t, description: t.description.slice(0, 200) }));
 
       if (scored.length === 0) {
         return {
@@ -125,4 +111,5 @@ export function createSearchToolsHandler(
       return { content: [{ type: 'text', text: lines.join('\n') }] };
     },
   };
+  return handler;
 }
