@@ -18,14 +18,18 @@ import {
   GRANT_ISSUED_TOPIC,
   MANDATED_EXPLICIT_CAPABILITIES,
   getCapabilityGrants,
+  CHAT_GRANTEE,
 } from '../capabilityGrants';
 
 const ANCHOR = 'cap.bulk_plugin_update';
 
 function issuedFor(core: { ledger: { query: (o: object) => { payload: Record<string, unknown> }[] } }, capability: string) {
+  // One grantee's slice — the sync issues one act per (grantee, capability)
+  // since the agent-addressing flip; "issued once" is a per-grant claim, and
+  // the per-grantee fan has its own pins in agentAddressedGrants.test.ts.
   return core.ledger
     .query({ topicPrefix: GRANT_ISSUED_TOPIC, limit: 100 })
-    .filter((e) => e.payload.capability === capability);
+    .filter((e) => e.payload.capability === capability && e.payload.grantee === CHAT_GRANTEE);
 }
 
 function boot(kv: Map<string, unknown>, dir: string) {

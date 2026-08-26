@@ -35,6 +35,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { initIntelligenceCore, IntelligenceCore } from '../bootstrap';
 import {
+  CHAT_GRANTEE,
   GRANT_ISSUED_TOPIC,
   GRANT_ISSUE_REASONS,
   GRANTS_STORAGE_KEY,
@@ -78,13 +79,19 @@ afterEach(() => {
 });
 
 function issued(capability: string): EventEnvelope[] {
+  // One grantee's slice — the sync emits per (grantee, capability) since the
+  // agent-addressing flip, and this suite's counts are per-grant lifecycle.
   return core.ledger
     .query({ topicPrefix: GRANT_ISSUED_TOPIC, limit: 200 })
-    .filter((e) => e.payload.capability === capability);
+    .filter((e) => e.payload.capability === capability && e.payload.grantee === CHAT_GRANTEE);
 }
 
 function writeSettings(grants: CapabilityGrantSetting[]) {
-  kv.set(STORAGE_KEYS.SETTINGS, { capabilityGrants: grants });
+  // Stamped with the suite grantee since the agent-addressing flip: this
+  // suite's subject is the re-pin, which is per-grantee-orthogonal.
+  kv.set(STORAGE_KEYS.SETTINGS, {
+    capabilityGrants: grants.map((g) => ({ grantee: CHAT_GRANTEE, ...g })),
+  });
 }
 
 /**
@@ -101,7 +108,7 @@ function writeSettings(grants: CapabilityGrantSetting[]) {
 function rewindMarkerTo(hashes: Map<string, string>) {
   const marker = kv.get(GRANTS_STORAGE_KEY) as {
     version: number;
-    grants: { capability: string; runbookId: string; runbookHash: string; eventId: string; issuedAt: string }[];
+    grants: { grantee: string; capability: string; runbookId: string; runbookHash: string; eventId: string; issuedAt: string }[];
   };
   // The bootstrap sync must actually have announced these, or the rewind is
   // rewinding nothing and every assertion downstream is vacuous.
@@ -112,7 +119,10 @@ function rewindMarkerTo(hashes: Map<string, string>) {
     ...marker,
     grants: marker.grants.map((g) => (hashes.has(g.capability) ? { ...g, runbookHash: hashes.get(g.capability)! } : g)),
   });
-  return new Map(marker.grants.map((g) => [g.capability, g.eventId]));
+  // The CHAT slice's prior ids — the slice `issued()` asserts over.
+  return new Map(
+    marker.grants.filter((g) => g.grantee === CHAT_GRANTEE).map((g) => [g.capability, g.eventId])
+  );
 }
 
 function sync(issueReasons?: ReadonlyMap<string, (typeof GRANT_ISSUE_REASONS)[number]>) {
@@ -142,10 +152,10 @@ describe('WP-45 · what a hash change does to a grant, measured', () => {
       runbooks,
       settings: {
         capabilityGrants: [
-          { capability: CONTAINMENT, enabled: true, runbookId: 'rb.incident-containment', runbookHash: stale },
+          { grantee: CHAT_GRANTEE, capability: CONTAINMENT, enabled: true, runbookId: 'rb.incident-containment', runbookHash: stale },
         ],
       },
-      materialized: materializableCapabilities(runbooks),
+      materialized: materializableCapabilities(runbooks).map((capability) => ({ grantee: CHAT_GRANTEE, capability })),
     });
 
     expect(resolution.grants.map((g) => g.capability)).not.toContain(CONTAINMENT);
@@ -165,7 +175,7 @@ describe('WP-45 · what a hash change does to a grant, measured', () => {
     const resolution = resolveCapabilityGrants({
       runbooks: core.law!.runbooks,
       settings: null,
-      materialized: [CONTAINMENT],
+      materialized: [{ grantee: CHAT_GRANTEE, capability: CONTAINMENT }],
     });
 
     const grant = resolution.grants.find((g) => g.capability === CONTAINMENT)!;
@@ -251,8 +261,16 @@ describe('WP-45 · the re-pin, on both grant shapes', () => {
     ]);
 
     const resolution = sync();
-    expect(resolution.grants.map((g) => g.capability)).not.toContain(CONTAINMENT);
-    expect(resolution.disarmed.find((d) => d.capability === CONTAINMENT)!.reason).toBe('hash-mismatch');
+    // THIS grant disarms. The other grantee's standing materialized grant is
+    // untouched — a bad pin kills the grant that carries it, never the
+    // capability across every holder (the grant unit is (grantee, capability)).
+    expect(
+      resolution.grants.filter((g) => g.grantee === CHAT_GRANTEE).map((g) => g.capability)
+    ).not.toContain(CONTAINMENT);
+    expect(
+      resolution.disarmed.find((d) => d.capability === CONTAINMENT && d.grantee === CHAT_GRANTEE)!
+        .reason
+    ).toBe('hash-mismatch');
   });
 
   test('the ISSUANCE says law-review re-pin, with both hashes on the event', () => {

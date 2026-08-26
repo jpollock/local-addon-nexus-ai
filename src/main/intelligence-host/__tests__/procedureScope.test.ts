@@ -12,7 +12,9 @@
  * one authored in a design fixture, and this suite is where that would start.
  */
 import * as path from 'path';
-import { loadLawDirectory, RunbookRegistry } from '../../../intelligence';
+import {
+  loadLawDirectory, RunbookRegistry } from '../../../intelligence';
+import { CHAT_GRANTEE } from '../capabilityGrants';
 import type { Runbook } from '../../../intelligence';
 import type { ResolvedGrant } from '../capabilityGrants';
 import {
@@ -40,6 +42,7 @@ function anchorRunbook(): Runbook {
 function grantFor(rb: Runbook, scope?: ResolvedGrant['scope']): ResolvedGrant {
   const declared = (rb.frontmatter as { scope?: { environments?: string[] } }).scope?.environments;
   return {
+    grantee: CHAT_GRANTEE,
     capability: rb.capability,
     runbookId: rb.id,
     runbookHash: rb.hash,

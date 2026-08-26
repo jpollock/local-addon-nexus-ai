@@ -1837,7 +1837,12 @@ export async function probeWidening(fixture: EvalFixture): Promise<WideningProbe
     .query({ topicPrefix: GRANT_ISSUED_TOPIC, limit: 500 })
     .filter((e) => e.payload.capability === capability);
   const recordedAsControlEvent = issued.ok && issuedEvents.length > 0;
-  const issuedEventId = issuedEvents[issuedEvents.length - 1]?.id;
+  // The row cites the CHAT act (readGrantIssuance's first-wins keying, marker
+  // order = BUILTIN_GRANTEES order) — the control writes one act per builtin
+  // grantee since the agent-addressing flip, so "the same event id" must be
+  // the same slice the row renders, not merely the newest event of any grantee.
+  const chatIssued = issuedEvents.filter((e) => e.payload.grantee === 'chat');
+  const issuedEventId = chatIssued[chatIssued.length - 1]?.id;
   evidence.push(
     recordedAsControlEvent
       ? `the act wrote a real control.grant.issued (${issuedEventId}) through WP-20b's producer — ` +

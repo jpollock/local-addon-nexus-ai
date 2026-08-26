@@ -23,6 +23,7 @@ import { initIntelligenceCore, IntelligenceCore } from '../bootstrap';
 import { setIntelligenceCore } from '../coreRegistry';
 import { assembleForChatTurn } from '../chatAssembly';
 import {
+  BUILTIN_GRANTEES,
   getCapabilityGrants,
   materializableCapabilities,
   resolveCapabilityGrants,
@@ -85,9 +86,11 @@ describe('procedureRequestForTurn', () => {
     kv.set(
       STORAGE_KEYS.SETTINGS,
       {
+        // Off for every builtin holder — the grant unit is (grantee,
+        // capability) since the agent-addressing flip.
         capabilityGrants: core
           .law!.runbooks.runbooks({ strictness: 'strict' })
-          .map((rb) => ({ capability: rb.capability, enabled: false })),
+          .flatMap((rb) => BUILTIN_GRANTEES.map((grantee) => ({ grantee, capability: rb.capability, enabled: false }))),
       }
     );
     syncCapabilityGrants({ core, storage: storage(), logger: silent });
@@ -177,9 +180,11 @@ describe('assembleForChatTurn reaches the procedure plane', () => {
     kv.set(
       STORAGE_KEYS.SETTINGS,
       {
+        // Off for every builtin holder — the grant unit is (grantee,
+        // capability) since the agent-addressing flip.
         capabilityGrants: core
           .law!.runbooks.runbooks({ strictness: 'strict' })
-          .map((rb) => ({ capability: rb.capability, enabled: false })),
+          .flatMap((rb) => BUILTIN_GRANTEES.map((grantee) => ({ grantee, capability: rb.capability, enabled: false }))),
       }
     );
     syncCapabilityGrants({ core, storage: storage(), logger: silent });
@@ -254,7 +259,7 @@ Prose.
   const { grants } = resolveCapabilityGrants({
     runbooks: registry,
     settings: null,
-    materialized: materializableCapabilities(registry),
+    materialized: materializableCapabilities(registry).map((capability) => ({ grantee: 'chat', capability })),
   });
   return { registry, grants, capability: 'cap.a', second: 'cap.b' };
 }

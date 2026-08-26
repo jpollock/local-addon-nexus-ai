@@ -33,10 +33,13 @@ const registry = RunbookRegistry.build({
   documents: loadLawDirectory(path.join(REPO_ROOT, 'law')).documents,
 });
 
+// Pairs since the agent-addressing flip; the matrix renders per capability,
+// so one grantee suffices.
 const materializedSet = registry
   .runbooks({ strictness: 'strict' })
   .map((rb) => rb.capability)
-  .filter((c) => !MANDATED_EXPLICIT_CAPABILITIES.includes(c));
+  .filter((c) => !MANDATED_EXPLICIT_CAPABILITIES.includes(c))
+  .map((capability) => ({ grantee: 'chat', capability }));
 
 /** The shipped tree as a migrated machine sees it, plus one disarmed row. */
 function realMatrix(): GovernMatrix {
@@ -45,8 +48,10 @@ function realMatrix(): GovernMatrix {
     materialized: materializedSet,
     settings: {
       capabilityGrants: [
-        // A grant made against text that is not what is on disk.
-        { capability: 'cap.promotion_preflight', enabled: true, runbookHash: 'sha256:deadbeefdeadbeef' },
+        // A grant made against text that is not what is on disk — pinned for
+        // the one grantee this fixture materializes ('chat'), so the row's
+        // every holder is disarmed and the capability-level row reads Disarmed.
+        { grantee: 'chat', capability: 'cap.promotion_preflight', enabled: true, runbookHash: 'sha256:deadbeefdeadbeef' },
       ],
     },
     issuance: new Map([

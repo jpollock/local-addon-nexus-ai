@@ -53,7 +53,8 @@ import {
   CONTEXT_ASSEMBLED_TOPIC,
   CONTEXT_ASSEMBLED_SCHEMA,
 } from '../chatAssembly';
-import { getCapabilityGrants } from '../capabilityGrants';
+import {
+  CHAT_GRANTEE, getCapabilityGrants } from '../capabilityGrants';
 import {
   armProcedureRun,
   forgetProcedureRun,
@@ -162,6 +163,7 @@ function delivery(runbook: Runbook = runbookFixture()): ProcedureOutcome {
 function grantFor(rb: Runbook): ResolvedGrant {
   const declared = (rb.frontmatter as { scope?: { environments?: string[] } }).scope?.environments;
   return {
+    grantee: CHAT_GRANTEE,
     capability: rb.capability,
     runbookId: rb.id,
     runbookHash: rb.hash,

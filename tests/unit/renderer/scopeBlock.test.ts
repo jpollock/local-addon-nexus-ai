@@ -38,6 +38,7 @@ const RUNBOOK = {
 };
 
 const GRANT = {
+  grantee: 'chat',
   capability: 'cap.bulk_plugin_update',
   runbookId: 'rb.bulk-plugin-update',
   runbookHash: 'sha256:deadbeef',

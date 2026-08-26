@@ -34,6 +34,7 @@ import { armProcedureRun, forgetProcedureRun, registerProcedureTurn } from '../p
 import { clearArmingRequests } from '../procedureArming';
 import { checkCheckpointSequence } from '../sequenceGuard';
 import {
+  BUILTIN_GRANTEES,
   MANDATED_EXPLICIT_CAPABILITIES,
   MATERIALIZED_STORAGE_KEY,
   getCapabilityGrants,
@@ -83,13 +84,17 @@ afterEach(() => {
 /** Write an explicit settings grant and re-resolve, the way `onSettingsUpdated` does. */
 function grant(...capabilities: string[]): void {
   kv.set(STORAGE_KEYS.SETTINGS, {
-    capabilityGrants: capabilities.map((capability) => ({ capability })),
+    // Named to a grantee since the agent-addressing flip; the reach gate is
+    // grantee-blind in phase 1 (any holder opens reach — phase 2 keys it on
+    // the caller), so one builtin suffices.
+    capabilityGrants: capabilities.map((capability) => ({ grantee: BUILTIN_GRANTEES[0], capability })),
   });
   syncCapabilityGrants({ core, storage: storage(), logger: silent });
 }
 
 function granted(): string[] {
-  return getCapabilityGrants().map((g) => g.capability).sort();
+  // DISTINCT capabilities — one per (grantee, capability) since the flip.
+  return [...new Set(getCapabilityGrants().map((g) => g.capability))].sort();
 }
 
 // ---------------------------------------------------------------------------
@@ -338,8 +343,12 @@ function stubRegistry(runbooks: Runbook[]): RunbookRegistry {
 function serve(runbooks: Runbook[], grants: string[] = []): void {
   const fake = { ...core, law: { ...core.law!, runbooks: stubRegistry(runbooks) } } as IntelligenceCore;
   setIntelligenceCore(fake);
-  kv.set(MATERIALIZED_STORAGE_KEY, { version: 1, migratedAt: '2026-08-19T00:00:00.000Z', capabilities: [] });
-  kv.set(STORAGE_KEYS.SETTINGS, { capabilityGrants: grants.map((capability) => ({ capability })) });
+  // v2-empty: nothing granted by derivation, and no v1 shape for the
+  // agent-addressing flip to fire on mid-fixture.
+  kv.set(MATERIALIZED_STORAGE_KEY, { version: 2, migratedAt: '2026-08-19T00:00:00.000Z', grants: [] });
+  kv.set(STORAGE_KEYS.SETTINGS, {
+    capabilityGrants: grants.map((capability) => ({ grantee: BUILTIN_GRANTEES[0], capability })),
+  });
   syncCapabilityGrants({ core: fake, storage: storage(), logger: silent });
 }
 
@@ -453,7 +462,7 @@ describe('why it is not granted is not interchangeable', () => {
     const fake = { ...core, law: { ...core.law!, runbooks: stubRegistry([fixture({ id: 'rb.alpha', capability: 'cap.alpha', tools: [FIXTURE_TOOL] })]) } } as IntelligenceCore;
     setIntelligenceCore(fake);
     kv.set(MATERIALIZED_STORAGE_KEY, { version: 1, migratedAt: '2026-08-19T00:00:00.000Z', capabilities: ['cap.alpha'] });
-    kv.set(STORAGE_KEYS.SETTINGS, { capabilityGrants: [{ capability: 'cap.alpha', enabled: false }] });
+    kv.set(STORAGE_KEYS.SETTINGS, { capabilityGrants: BUILTIN_GRANTEES.map((grantee) => ({ grantee, capability: 'cap.alpha', enabled: false })) });
     syncCapabilityGrants({ core: fake, storage: storage(), logger: silent });
 
     const refusal = checkCheckpointSequence(FIXTURE_TOOL, undefined)!;
@@ -469,7 +478,7 @@ describe('why it is not granted is not interchangeable', () => {
     setIntelligenceCore(fake);
     kv.set(MATERIALIZED_STORAGE_KEY, { version: 1, migratedAt: '2026-08-19T00:00:00.000Z', capabilities: [] });
     kv.set(STORAGE_KEYS.SETTINGS, {
-      capabilityGrants: [{ capability: 'cap.alpha', runbookHash: `sha256:${'c'.repeat(64)}` }],
+      capabilityGrants: BUILTIN_GRANTEES.map((grantee) => ({ grantee, capability: 'cap.alpha', runbookHash: `sha256:${'c'.repeat(64)}` })),
     });
     syncCapabilityGrants({ core: fake, storage: storage(), logger: silent });
 

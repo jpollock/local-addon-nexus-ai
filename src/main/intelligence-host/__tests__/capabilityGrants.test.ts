@@ -25,6 +25,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { initIntelligenceCore, IntelligenceCore } from '../bootstrap';
 import {
+  BUILTIN_GRANTEES,
+  CHAT_GRANTEE,
   GRANT_ISSUED_TOPIC,
   GRANT_REVOKED_TOPIC,
   GRANTS_STORAGE_KEY,
@@ -66,8 +68,16 @@ function events(topic: string): EventEnvelope[] {
   return core.ledger.query({ topicPrefix: topic, limit: 100 });
 }
 
+/**
+ * Narrowed to ONE grantee since the agent-addressing flip: the sync emits one
+ * act per (grantee, capability), and this suite's cases are about the
+ * per-grant lifecycle — the fan across grantees has its own pins in
+ * agentAddressedGrants.test.ts.
+ */
 function issuedFor(capability: string): EventEnvelope[] {
-  return events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === capability);
+  return events(GRANT_ISSUED_TOPIC).filter(
+    (e) => e.payload.capability === capability && e.payload.grantee === CHAT_GRANTEE
+  );
 }
 
 /**
@@ -88,7 +98,12 @@ function anchorGrant(grants: { capability: string }[]) {
 
 /** Settings live where every other reader finds them: registryStorage. */
 function writeSettings(grants?: CapabilityGrantSetting[]) {
-  kv.set(STORAGE_KEYS.SETTINGS, grants ? { capabilityGrants: grants } : {});
+  // Stamped with the suite grantee: a grantee-less entry grants NOBODY since
+  // the flip (its own pins live in agentAddressedGrants.test.ts).
+  kv.set(
+    STORAGE_KEYS.SETTINGS,
+    grants ? { capabilityGrants: grants.map((g) => ({ grantee: CHAT_GRANTEE, ...g })) } : {}
+  );
 }
 
 function sync() {
@@ -103,11 +118,24 @@ function sync() {
  * guided grants), and they must not silently re-encode which capabilities the
  * flip materializes. The deny-flip's own pins live in `capabilityDenyFlip.test.ts`.
  */
+/**
+ * Since the agent-addressing flip the grant unit is (grantee, capability);
+ * this suite's subject is the OVERLAY semantics (pins, disarms, guided
+ * grants), which are per-grantee-orthogonal — so every case runs under one
+ * grantee ('chat', a builtin the materialization actually covers). Entries
+ * that name no grantee are stamped here: the LEGACY-entry behaviour (grants
+ * nobody, disclosed) has its own pins in agentAddressedGrants.test.ts.
+ */
 function resolve(grants?: CapabilityGrantSetting[]) {
   return resolveCapabilityGrants({
     runbooks: core.law!.runbooks,
-    settings: grants ? { capabilityGrants: grants } : null,
-    materialized: materializableCapabilities(core.law!.runbooks),
+    settings: grants
+      ? { capabilityGrants: grants.map((g) => ({ grantee: CHAT_GRANTEE, ...g })) }
+      : null,
+    materialized: materializableCapabilities(core.law!.runbooks).map((capability) => ({
+      grantee: CHAT_GRANTEE,
+      capability,
+    })),
   });
 }
 
@@ -353,8 +381,12 @@ describe('the storage marker', () => {
       version: number;
       grants: { capability: string; runbookHash: string; eventId: string }[];
     };
-    expect(marker.version).toBe(1);
-    expect(marker.grants.find((g) => g.capability === ANCHOR)).toMatchObject({
+    expect(marker.version).toBe(2);
+    expect(
+      marker.grants.find(
+        (g) => g.capability === ANCHOR && (g as { grantee?: string }).grantee === CHAT_GRANTEE
+      )
+    ).toMatchObject({
       capability: ANCHOR,
       runbookHash: core.law!.runbooks.byCapability(ANCHOR)!.hash,
       eventId: issuedFor(ANCHOR)[0].id,
@@ -417,6 +449,7 @@ describe('grantedRunbooks — the join WP-20c and WP-20d read', () => {
     // function is what the delivery path and the gate read, and a grant must
     // never yield a document other than the one it was reviewed against (§6b).
     const stale = {
+      grantee: CHAT_GRANTEE,
       capability: ANCHOR,
       runbookId: 'rb.bulk-plugin-update',
       runbookHash: 'sha256:thedocumentthatwasreviewed',
@@ -529,10 +562,14 @@ describe('the parity floor', () => {
   test('the process-wide accessor carries what the last sync resolved', () => {
     sync();
     expect(capabilitiesOf(getCapabilityGrants())).toContain(ANCHOR);
+    // The grant unit is (grantee, capability): the parity floor means every
+    // grant OFF for every grantee that holds one — both builtins here.
     writeSettings(
       core
         .law!.runbooks.runbooks({ strictness: 'strict' })
-        .map((rb) => ({ capability: rb.capability, enabled: false }))
+        .flatMap((rb) => BUILTIN_GRANTEES.map((grantee) => ({
+          grantee, capability: rb.capability, enabled: false,
+        })))
     );
     sync();
     expect(getCapabilityGrants()).toEqual([]);

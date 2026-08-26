@@ -346,7 +346,10 @@ describe('WP-33b · a stale pin disarms — it never yields a divergent document
    * it is supplied — derived through the migration's own function, never listed,
    * so this eval cannot quietly re-encode which capabilities the flip enables.
    */
-  const migrated = (): string[] => materializableCapabilities(runbooks());
+  const migrated = (): Array<{ grantee: string; capability: string }> =>
+    // Pairs since the agent-addressing flip; the probes' subject is the stale
+    // pin, per-grantee-orthogonal, so one grantee ('chat') suffices.
+    materializableCapabilities(runbooks()).map((capability) => ({ grantee: 'chat', capability }));
   const grantFor = (res: GrantResolution, capability: string): ResolvedGrant | undefined =>
     res.grants.find((g) => g.capability === capability);
   const disarmFor = (res: GrantResolution, capability: string): DisarmedGrant | undefined =>
@@ -366,7 +369,7 @@ describe('WP-33b · a stale pin disarms — it never yields a divergent document
   it('a pin to a hash the file has moved past DISARMS — no grant, not a different one', () => {
     const res = resolveCapabilityGrants({
       runbooks: runbooks(),
-      settings: { capabilityGrants: [{ capability: CAP, runbookHash: NEVER_THE_FILE_HASH }] },
+      settings: { capabilityGrants: [{ grantee: 'chat', capability: CAP, runbookHash: NEVER_THE_FILE_HASH }] },
       materialized: migrated(),
     });
     expect(grantFor(res, CAP)).toBeUndefined();
@@ -383,7 +386,7 @@ describe('WP-33b · a stale pin disarms — it never yields a divergent document
     // a live-but-divergent grant, and it does not.
     const res = resolveCapabilityGrants({
       runbooks: runbooks(),
-      settings: { capabilityGrants: [{ capability: CAP, runbookId: 'rb.some-other-document' }] },
+      settings: { capabilityGrants: [{ grantee: 'chat', capability: CAP, runbookId: 'rb.some-other-document' }] },
       materialized: migrated(),
     });
     expect(grantFor(res, CAP)).toBeUndefined();
@@ -401,9 +404,9 @@ describe('WP-33b · a stale pin disarms — it never yields a divergent document
     // case the follow-up was actually about.
     const overlays: Array<Pick<NexusSettings, 'capabilityGrants'> | null> = [
       null,
-      { capabilityGrants: [{ capability: CAP, runbookId: runbooks().byCapability(CAP)!.id }] },
-      { capabilityGrants: [{ capability: CAP, runbookId: 'rb.some-other-document' }] },
-      { capabilityGrants: [{ capability: CAP, runbookHash: NEVER_THE_FILE_HASH }] },
+      { capabilityGrants: [{ grantee: 'chat', capability: CAP, runbookId: runbooks().byCapability(CAP)!.id }] },
+      { capabilityGrants: [{ grantee: 'chat', capability: CAP, runbookId: 'rb.some-other-document' }] },
+      { capabilityGrants: [{ grantee: 'chat', capability: CAP, runbookHash: NEVER_THE_FILE_HASH }] },
     ];
     for (const settings of overlays) {
       const res = resolveCapabilityGrants({ runbooks: runbooks(), settings, materialized: migrated() });
@@ -423,8 +426,15 @@ describe('WP-33b · a stale pin disarms — it never yields a divergent document
     // probe the survivor lives in. If the divergent state were reachable this
     // is where it would show up as two different documents. What shows up
     // instead is the absence of the oracle — and the probe says so.
+    // A stale pin on EVERY builtin holder — the grant unit is (grantee,
+    // capability) since the agent-addressing flip, and the disarmed state
+    // means no holder's grant survives the pin.
     const staleStorage = memoryStorageWith({
-      [STORAGE_KEYS.SETTINGS]: { capabilityGrants: [{ capability: CAP, runbookHash: NEVER_THE_FILE_HASH }] },
+      [STORAGE_KEYS.SETTINGS]: {
+        capabilityGrants: ['chat', 'mcp-client'].map((grantee) => ({
+          grantee, capability: CAP, runbookHash: NEVER_THE_FILE_HASH,
+        })),
+      },
     });
     syncCapabilityGrants({ core: fixture.core, storage: staleStorage, logger: quietLogger });
     expect(getCapabilityGrants().some((g) => g.capability === CAP)).toBe(false);

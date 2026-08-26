@@ -400,6 +400,13 @@ export interface WpeSiteException {
 export interface CapabilityGrantSetting {
   /** e.g. 'cap.bulk_plugin_update'. The key an override matches on. */
   capability: string;
+  /**
+   * WHO holds this grant (fixes-082526, agent-addressed grants): an agent id,
+   * 'chat', or 'mcp-client'. A legacy entry with no grantee grants NOBODY —
+   * the fail-closed ruling — and is disclosed as `requires-agent-grant`
+   * rather than silently widened to everyone.
+   */
+  grantee?: string;
   /** Absent = enabled. The shipped grant ships ON — shipping it off would leave the unceremonious path as the default. */
   enabled?: boolean;
   /** The runbook this grant was reviewed against. Absent = whichever runbook serves the capability. */

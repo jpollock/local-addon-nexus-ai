@@ -25,7 +25,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { initIntelligenceCore, IntelligenceCore } from '../bootstrap';
 import { setIntelligenceCore } from '../coreRegistry';
-import { getCapabilityGrants } from '../capabilityGrants';
+import { BUILTIN_GRANTEES, getCapabilityGrants } from '../capabilityGrants';
 import {
   clearArmingRequests,
   recordArmingRequest,
@@ -224,7 +224,10 @@ describe('the gap itself', () => {
     // against consent it does not have.
     const kv = new Map<string, unknown>();
     kv.set(STORAGE_KEYS.SETTINGS, {
-      capabilityGrants: [{ capability: CAPABILITY, enabled: false }],
+      // Off for EVERY grantee that holds it — the grant unit is (grantee,
+      // capability) since the agent-addressing flip, and "switched off"
+      // means the capability is off, not one holder's slice of it.
+      capabilityGrants: BUILTIN_GRANTEES.map((grantee) => ({ grantee, capability: CAPABILITY, enabled: false })),
     });
     const withoutGrant = initIntelligenceCore({
       storage: { get: (k) => kv.get(k) ?? null, set: (k, v) => kv.set(k, v) },

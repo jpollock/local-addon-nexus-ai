@@ -67,6 +67,11 @@ const RemoteSiteExceptionSchema = z.object({
  */
 const CapabilityGrantSchema = z.object({
   capability: z.string().min(1),
+  // Agent-addressed grants (fixes-082526): an agent id, 'chat', or
+  // 'mcp-client'. Optional in the SCHEMA so legacy entries still parse — the
+  // resolver then discloses them as requires-agent-grant rather than the
+  // schema silently deleting the whole entry.
+  grantee: z.string().min(1).optional(),
   enabled: z.boolean().optional(),
   runbookId: z.string().min(1).optional(),
   runbookHash: z.string().min(1).optional(),

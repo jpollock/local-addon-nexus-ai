@@ -45,6 +45,7 @@ import { STORAGE_KEYS } from '../../common/constants';
 import {
   DisarmReason,
   MATERIALIZED_STORAGE_KEY,
+  BUILTIN_GRANTEES,
   readGrantIssuance,
   requiresExplicitGrant,
   resolveCapabilityGrants,
@@ -403,7 +404,7 @@ interface MinimalStorage {
 export function buildGovernMatrix(opts: {
   runbooks: RunbookRegistry;
   settings?: Pick<NexusSettings, 'capabilityGrants'> | null;
-  materialized?: readonly string[];
+  materialized?: readonly { grantee: string; capability: string }[];
   /** capability → the event that announced its grant. */
   issuance?: Map<string, GovernIssuance>;
 }): GovernMatrix {
@@ -620,10 +621,18 @@ export function setCapabilityGrant(opts: {
 
     const settings = (readSettings(storage) ?? {}) as NexusSettings;
     const existing = Array.isArray(settings.capabilityGrants) ? settings.capabilityGrants : [];
-    const entry: CapabilityGrantSetting = grant
-      ? { capability, enabled: true, runbookId: rb.id, runbookHash: rb.hash }
-      : { capability, enabled: false };
-    const next = [...existing.filter((e) => e?.capability !== capability), entry];
+    // INTERIM since the agent-addressing flip (fixes-082526 phase 1): the
+    // Govern control is still the capability-wide switch, so its act covers
+    // the BUILTIN surfaces (chat + mcp-client) — the same set a fresh install
+    // materializes. Agents get their per-agent control in phase 3; nothing
+    // here grants an agent. A grantee-less entry would grant NOBODY, which
+    // would make this switch a lie in the other direction.
+    const entries: CapabilityGrantSetting[] = BUILTIN_GRANTEES.map((grantee) =>
+      grant
+        ? { grantee, capability, enabled: true, runbookId: rb.id, runbookHash: rb.hash }
+        : { grantee, capability, enabled: false }
+    );
+    const next = [...existing.filter((e) => e?.capability !== capability), ...entries];
 
     try {
       storage.set(STORAGE_KEYS.SETTINGS, { ...settings, capabilityGrants: next });
@@ -701,11 +710,19 @@ function readSettings(storage: MinimalStorage): NexusSettings | null {
  * itself, and a reader here that defaulted to the shipped strict set would put
  * that argument back.
  */
-function readMaterialized(storage: MinimalStorage): readonly string[] | undefined {
+function readMaterialized(
+  storage: MinimalStorage
+): readonly { grantee: string; capability: string }[] | undefined {
   try {
-    const raw = storage.get(MATERIALIZED_STORAGE_KEY) as { capabilities?: unknown } | null;
-    if (raw && Array.isArray(raw.capabilities)) {
-      return raw.capabilities.filter((c): c is string => typeof c === 'string');
+    // v2 only, exactly as the resolver's own reader: a v1 record is the
+    // agent-addressing flip's input, and reading it here would render rows
+    // as granted that the gate no longer honours.
+    const raw = storage.get(MATERIALIZED_STORAGE_KEY) as { version?: number; grants?: unknown } | null;
+    if (raw && raw.version === 2 && Array.isArray(raw.grants)) {
+      return (raw.grants as Array<{ grantee?: unknown; capability?: unknown }>).filter(
+        (g): g is { grantee: string; capability: string } =>
+          !!g && typeof g.grantee === 'string' && typeof g.capability === 'string'
+      );
     }
   } catch {
     /* unreadable = absent, exactly as the resolver treats it */

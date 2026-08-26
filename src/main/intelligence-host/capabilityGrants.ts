@@ -74,8 +74,10 @@ import type { CapabilityGrantSetting, NexusSettings } from '../../common/types';
 export const GRANT_ISSUED_TOPIC = 'control.grant.issued';
 export const GRANT_REVOKED_TOPIC = 'control.grant.revoked';
 
-export const GRANT_ISSUED_SCHEMA = 'grant.issued/1';
-export const GRANT_REVOKED_SCHEMA = 'grant.revoked/1';
+// /2 since the agent-addressing flip: payloads carry `grantee` (absent only
+// on the flip's own revocations of v1 platform-wide grants).
+export const GRANT_ISSUED_SCHEMA = 'grant.issued/2';
+export const GRANT_REVOKED_SCHEMA = 'grant.revoked/2';
 
 /**
  * WP-45 · WHY AN ISSUANCE HAPPENED, in a closed vocabulary.
@@ -222,6 +224,19 @@ export function requiresExplicitGrant(capability: string): boolean {
   return MANDATED.has(capability);
 }
 
+/**
+ * The grantee classes (fixes-082526, agent-addressed grants). Agents are
+ * addressed by their own ids; these two are the built-in interactive
+ * surfaces. BUILTINS is the materialization target — and agents are
+ * DELIBERATELY not in it: bootstrap's first sync runs before agent
+ * discovery, and under the fail-closed ruling an agent auto-receiving
+ * grants at discovery would be looser than what upgrading machines get
+ * (explicit re-grants). An agent holds only what a human granted it. Ever.
+ */
+export const CHAT_GRANTEE = 'chat';
+export const MCP_CLIENT_GRANTEE = 'mcp-client';
+export const BUILTIN_GRANTEES: readonly string[] = [CHAT_GRANTEE, MCP_CLIENT_GRANTEE];
+
 /** `source.system` for both topics — one value, so a liveness reader sees one row. */
 export const GRANTS_SYSTEM = 'law:capability-grants';
 /** A user turning a grant off is a different source: their intent, not the shipped law's. */
@@ -232,6 +247,8 @@ export const GRANT_MATERIALIZER_ACTOR = 'act_grant_materializer';
 
 /** A live grant, fully resolved against the documents actually present. */
 export interface ResolvedGrant {
+  /** WHO holds it: an agent id, 'chat', or 'mcp-client'. The grant unit is (grantee, capability). */
+  grantee: string;
   capability: string;
   runbookId: string;
   /** `sha256:…` over the canonical document — the pin, from the registry, never recomputed here. */
@@ -260,10 +277,20 @@ export type DisarmReason =
    * It also gives the Settings matrix the honest row: not-granted WITH the
    * reason, rather than an absence a reader has to infer.
    */
-  | 'requires-explicit-grant';
+  | 'requires-explicit-grant'
+  /**
+   * fixes-082526 · the agent-addressing flip. A grant (or legacy settings
+   * entry) with no grantee grants NOBODY — the fail-closed ruling — and this
+   * reason says so where a person can act. Distinct from
+   * `requires-explicit-grant` so the two flips stay tellable-apart in every
+   * surface that renders reasons.
+   */
+  | 'requires-agent-grant';
 
 /** A grant that was configured and is NOT live, with the reason a user can act on. */
 export interface DisarmedGrant {
+  /** Absent = no grantee holds this capability at all (the disclosure rows). */
+  grantee?: string;
   capability: string;
   runbookId?: string;
   reason: DisarmReason;
@@ -277,6 +304,8 @@ export interface GrantResolution {
 }
 
 interface MarkerEntry {
+  /** v2: who holds it. Entries read from a v1 marker have none — the flip revokes them. */
+  grantee: string;
   capability: string;
   runbookId: string;
   runbookHash: string;
@@ -286,16 +315,25 @@ interface MarkerEntry {
 }
 
 interface MarkerState {
-  version: 1;
+  version: 2;
   grants: MarkerEntry[];
 }
 
-/** WP-20f · what the migration wrote, and the only thing that grants by default. */
+/** A v1 marker entry, as the flip reads it: platform-wide, no grantee. */
+interface MarkerEntryV1 {
+  capability: string;
+  runbookId: string;
+  runbookHash: string;
+  eventId: string;
+  issuedAt: string;
+}
+
+/** WP-20f · what the migration wrote, and the only thing that grants by default. v2: per grantee. */
 interface MaterializedState {
-  version: 1;
+  version: 2;
   /** When the flip landed on this machine. Recorded for the reader, never gated on. */
   migratedAt: string;
-  capabilities: string[];
+  grants: Array<{ grantee: string; capability: string }>;
 }
 
 interface MinimalStorage {
@@ -335,7 +373,12 @@ export function getDisarmedCapabilityGrants(): DisarmedGrant[] {
  */
 export function grantedRunbooks(runbooks: RunbookRegistry, grants: ResolvedGrant[]): Runbook[] {
   const out: Runbook[] = [];
+  const seen = new Set<string>();
   for (const grant of grants) {
+    // One document per capability however many grantees hold it — this feeds
+    // arming/assembly, where the unit is the document, not the holder.
+    if (seen.has(grant.capability)) continue;
+    seen.add(grant.capability);
     const rb = runbooks.byCapability(grant.capability);
     // The hash is re-checked here as well as at resolution: this function is
     // what the gate and the assembler read, and a grant must never hand over a
@@ -393,60 +436,89 @@ export function materializableCapabilities(runbooks: RunbookRegistry): string[] 
 export function resolveCapabilityGrants(opts: {
   runbooks: RunbookRegistry;
   settings?: Pick<NexusSettings, 'capabilityGrants'> | null;
-  /** The persisted, explicit grant set. Absent = nothing is granted but settings. */
-  materialized?: readonly string[];
+  /** The persisted, explicit grant set — (grantee, capability) pairs. Absent = nothing is granted but settings. */
+  materialized?: readonly { grantee: string; capability: string }[];
 }): GrantResolution {
   const { runbooks } = opts;
-  const overrides = new Map<string, CapabilityGrantSetting>();
+  // Keyed (grantee, capability) — the grant unit since the agent-addressing
+  // flip. A LEGACY entry with no grantee grants NOBODY (fail-closed ruling)
+  // and is disclosed below rather than silently widened to everyone.
+  const overrides = new Map<string, CapabilityGrantSetting & { grantee: string }>();
+  const legacyEntries: CapabilityGrantSetting[] = [];
   for (const entry of opts.settings?.capabilityGrants ?? []) {
-    if (entry && typeof entry.capability === 'string' && entry.capability) {
-      overrides.set(entry.capability, entry);
+    if (!entry || typeof entry.capability !== 'string' || !entry.capability) continue;
+    if (typeof entry.grantee === 'string' && entry.grantee) {
+      overrides.set(`${entry.grantee}|${entry.capability}`, entry as CapabilityGrantSetting & { grantee: string });
+    } else {
+      legacyEntries.push(entry);
     }
   }
 
   const grants: ResolvedGrant[] = [];
   const disarmed: DisarmedGrant[] = [];
 
-  // Layer 1: the materialized set — capabilities an explicit, recorded act
-  // granted. Deduped, because a marker is storage and storage can repeat.
-  for (const capability of new Set(opts.materialized ?? [])) {
+  // Layer 1: the materialized set — (grantee, capability) pairs an explicit,
+  // recorded act granted. Deduped, because a marker is storage and storage
+  // can repeat.
+  const seenPairs = new Set<string>();
+  for (const pair of opts.materialized ?? []) {
+    if (!pair || typeof pair.grantee !== 'string' || typeof pair.capability !== 'string') continue;
+    const key = `${pair.grantee}|${pair.capability}`;
+    if (seenPairs.has(key)) continue;
+    seenPairs.add(key);
     // Ruling point 1, enforced HERE and not only at the migration. The
     // migration is what should never write these; this is what makes it
     // impossible for a hand-edited or tampered marker to grant one anyway.
     // Two independent refusals, because a single one is a bypass waiting for a
     // bug — and the guard test drives exactly this case.
-    if (MANDATED.has(capability)) continue;
-    const rb = runbooks.byCapability(capability);
+    if (MANDATED.has(pair.capability)) continue;
+    const rb = runbooks.byCapability(pair.capability);
     if (!rb) {
       // Materialized once, and the document has since gone (removed, renamed,
       // or refused by the ceiling). Disclosed, never silently dropped.
       disarmed.push({
-        capability,
+        grantee: pair.grantee,
+        capability: pair.capability,
         reason: 'runbook-unavailable',
-        detail: `no loaded runbook serves ${capability}`,
+        detail: `no loaded runbook serves ${pair.capability}`,
       });
       continue;
     }
-    admit(rb, 'shipped', overrides.get(capability));
-    overrides.delete(capability);
+    admit(pair.grantee, rb, 'shipped', overrides.get(key));
+    overrides.delete(key);
   }
 
   // Layer 2: whatever settings name that the materialized set did not cover.
-  for (const [capability, entry] of overrides) {
-    const rb = runbooks.byCapability(capability);
+  for (const [, entry] of overrides) {
+    const rb = runbooks.byCapability(entry.capability);
     if (!rb) {
       // The runbook may be absent, or refused by the registry (over the
       // ceiling, unhonourable contract). Either way the capability cannot be
       // served, and saying so is §6(a)'s disclosure obligation.
       disarmed.push({
-        capability,
+        grantee: entry.grantee,
+        capability: entry.capability,
         ...(entry.runbookId ? { runbookId: entry.runbookId } : {}),
         reason: 'runbook-unavailable',
-        detail: `no loaded runbook serves ${capability}`,
+        detail: `no loaded runbook serves ${entry.capability}`,
       });
       continue;
     }
-    admit(rb, 'settings', entry);
+    admit(entry.grantee, rb, 'settings', entry);
+  }
+
+  // The fail-closed disclosure for LEGACY entries: a grant with no grantee
+  // grants nobody, and the row says exactly what to do about it.
+  for (const entry of legacyEntries) {
+    if (disarmed.some((d) => d.capability === entry.capability && !d.grantee)) continue;
+    disarmed.push({
+      capability: entry.capability,
+      ...(entry.runbookId ? { runbookId: entry.runbookId } : {}),
+      reason: 'requires-agent-grant',
+      detail:
+        `${entry.capability} was granted before grants named a holder. Re-grant it to a ` +
+        `specific agent, chat, or mcp-client — a grant with no grantee grants nobody.`,
+    });
   }
 
   // WP-20f point 1's DISCLOSURE. A mandated capability the registry serves and
@@ -458,6 +530,24 @@ export function resolveCapabilityGrants(opts: {
   // HERE when it revokes the grant WP-20b had derived; without the row the
   // revocation would go out saying `runbook-unavailable` about a runbook that
   // is present and serving.
+  // fixes-082526 · the flip's own disclosure: a SERVABLE strict capability no
+  // grantee holds at all is reported with the flip reason, so a machine that
+  // just crossed the flip (everything revoked) renders actionable rows rather
+  // than an absence. Mandated capabilities keep their sharper reason below.
+  for (const rb of runbooks.runbooks({ strictness: 'strict' })) {
+    if (MANDATED.has(rb.capability)) continue;
+    if (grants.some((g) => g.capability === rb.capability)) continue;
+    if (disarmed.some((d) => d.capability === rb.capability)) continue;
+    disarmed.push({
+      capability: rb.capability,
+      runbookId: rb.id,
+      reason: 'requires-agent-grant',
+      detail:
+        `no grantee holds ${rb.capability}. Grant it to a specific agent, chat, or ` +
+        `mcp-client to arm its procedure.`,
+    });
+  }
+
   for (const capability of MANDATED_EXPLICIT_CAPABILITIES) {
     // A capability an explicit settings grant DID cover is not disclosed as
     // ungranted, and one settings already disarmed keeps its sharper reason —
@@ -479,9 +569,9 @@ export function resolveCapabilityGrants(opts: {
 
   return { grants, disarmed };
 
-  function admit(rb: Runbook, source: ResolvedGrant['source'], entry?: CapabilityGrantSetting): void {
+  function admit(grantee: string, rb: Runbook, source: ResolvedGrant['source'], entry?: CapabilityGrantSetting): void {
     if (entry?.enabled === false) {
-      disarmed.push({ capability: rb.capability, runbookId: rb.id, reason: 'disabled-by-settings' });
+      disarmed.push({ grantee, capability: rb.capability, runbookId: rb.id, reason: 'disabled-by-settings' });
       return;
     }
     if (entry?.runbookId && entry.runbookId !== rb.id) {
@@ -495,6 +585,7 @@ export function resolveCapabilityGrants(opts: {
       // a runbook does serve this capability, it is simply not the reviewed one.
       // `runbook-unavailable` is reserved for "nothing serves this at all".
       disarmed.push({
+        grantee,
         capability: rb.capability,
         runbookId: entry.runbookId,
         reason: 'hash-mismatch',
@@ -507,6 +598,7 @@ export function resolveCapabilityGrants(opts: {
       // re-grant against the current file and a message naming neither cannot
       // be acted on.
       disarmed.push({
+        grantee,
         capability: rb.capability,
         runbookId: rb.id,
         reason: 'hash-mismatch',
@@ -515,6 +607,7 @@ export function resolveCapabilityGrants(opts: {
       return;
     }
     grants.push({
+      grantee,
       capability: rb.capability,
       runbookId: rb.id,
       runbookHash: rb.hash,
@@ -571,6 +664,13 @@ export function syncCapabilityGrants(opts: {
     // that announce it describe the same moment, and two `new Date()` calls
     // would let them disagree by a millisecond for no reason.
     const now = opts.now ?? new Date();
+    // fixes-082526 · THE FAIL-CLOSED FLIP, before anything else reads a
+    // marker: every platform-wide (v1) grant is revoked with the flip's own
+    // reason, chained to the act it ends, and BOTH markers convert to v2 —
+    // the materialized record included, or the very next line would re-grant
+    // everything the flip just revoked (its presence short-circuits
+    // re-materialization, and its v1 payload was the grant list).
+    applyAgentAddressingFlip(core, storage, now, logger);
     // WP-45 · P4. Before anything resolves: any settings grant still pinned to a
     // hash the ratified law review READ is moved to the hash it PRODUCED. Done
     // here rather than in the resolver because the resolver is pure by contract
@@ -699,27 +799,32 @@ function materializeShippedGrants(
   storage: MinimalStorage,
   now: Date,
   logger: MinimalLogger
-): string[] {
+): Array<{ grantee: string; capability: string }> {
   const stored = readMaterialized(storage);
   if (stored) {
     // Layer 1 of the dedup key. Tampering is the only way a mandated capability
     // reaches this list, and the resolver refuses it regardless — but a marker
     // that says something false should not say it silently.
-    const mandated = stored.capabilities.filter((c) => MANDATED.has(c));
+    const mandated = stored.grants.filter((g) => MANDATED.has(g.capability));
     if (mandated.length > 0) {
       logger.warn?.(
-        `[Intelligence] materialized grant record names ${mandated.join(', ')}, which are never ` +
-          'granted by default — ignored; grant them explicitly in settings if intended.'
+        `[Intelligence] materialized grant record names ${mandated.map((g) => g.capability).join(', ')}, ` +
+          'which are never granted by default — ignored; grant them explicitly in settings if intended.'
       );
     }
-    return stored.capabilities;
+    return stored.grants;
   }
 
+  // Fresh install: the WP-20f out-of-box set, per BUILTIN grantee — the
+  // human-in-the-loop surfaces only. Agents are deliberately absent (see
+  // BUILTIN_GRANTEES): an agent holds only what a human granted it.
   const capabilities = materializableCapabilities(runbooks);
+  const grants = BUILTIN_GRANTEES.flatMap((grantee) =>
+    capabilities.map((capability) => ({ grantee, capability })));
   const record: MaterializedState = {
-    version: 1,
+    version: 2,
     migratedAt: now.toISOString(),
-    capabilities,
+    grants,
   };
   try {
     storage.set(MATERIALIZED_STORAGE_KEY, record);
@@ -730,22 +835,31 @@ function materializeShippedGrants(
     // would cost the user their procedures over a storage fault.
   }
   logger.info(
-    `[Intelligence] capability grants materialized (${capabilities.length}): ` +
-      `${capabilities.join(', ') || 'none'}. Never by default: ` +
-      `${MANDATED_EXPLICIT_CAPABILITIES.join(', ')}.`
+    `[Intelligence] capability grants materialized (${capabilities.length} × ` +
+      `${BUILTIN_GRANTEES.join('/')}): ${capabilities.join(', ') || 'none'}. ` +
+      `Never by default: ${MANDATED_EXPLICIT_CAPABILITIES.join(', ')}. Agents: explicit grants only.`
   );
-  return capabilities;
+  return grants;
 }
 
 function readMaterialized(storage: MinimalStorage): MaterializedState | null {
   try {
-    const raw = storage.get(MATERIALIZED_STORAGE_KEY) as MaterializedState | null;
-    // PRESENCE, not content: an empty list is a completed migration.
-    if (raw && Array.isArray(raw.capabilities)) {
+    const raw = storage.get(MATERIALIZED_STORAGE_KEY) as
+      | (Partial<MaterializedState> & { capabilities?: unknown })
+      | null;
+    // PRESENCE, not content: an empty list is a completed migration. Only the
+    // v2 shape counts — a v1 record is the FLIP's input, never this reader's
+    // (the flip runs first and converts it; reading v1 here would re-grant
+    // what the flip revoked).
+    if (raw && raw.version === 2 && Array.isArray(raw.grants)) {
       return {
-        version: 1,
+        version: 2,
         migratedAt: typeof raw.migratedAt === 'string' ? raw.migratedAt : '',
-        capabilities: raw.capabilities.filter((c): c is string => typeof c === 'string'),
+        grants: raw.grants.filter(
+          (g): g is { grantee: string; capability: string } =>
+            !!g && typeof (g as { grantee?: unknown }).grantee === 'string' &&
+            typeof (g as { capability?: unknown }).capability === 'string'
+        ),
       };
     }
   } catch {
@@ -784,6 +898,12 @@ export function readGrantIssuance(storage: MinimalStorage): Map<string, { eventI
   const out = new Map<string, { eventId: string; issuedAt: string }>();
   for (const entry of readMarker(storage).grants) {
     if (entry && typeof entry.capability === 'string' && typeof entry.eventId === 'string') {
+      // INTERIM (agent-addressing phase 1): still keyed per CAPABILITY for the
+      // matrix's one-row-per-capability rendering — FIRST entry wins, which is
+      // marker order, which is BUILTIN_GRANTEES order, so the act shown is
+      // deterministic (the chat act). The per-grantee acts become their own
+      // rows in phase 3's surfaces.
+      if (out.has(entry.capability)) continue;
       out.set(entry.capability, {
         eventId: entry.eventId,
         issuedAt: typeof entry.issuedAt === 'string' ? entry.issuedAt : '',
@@ -795,12 +915,99 @@ export function readGrantIssuance(storage: MinimalStorage): Map<string, { eventI
 
 function readMarker(storage: MinimalStorage): MarkerState {
   try {
-    const raw = storage.get(GRANTS_STORAGE_KEY) as MarkerState | null;
-    if (raw && Array.isArray(raw.grants)) return { version: 1, grants: raw.grants };
+    const raw = storage.get(GRANTS_STORAGE_KEY) as (Partial<MarkerState> & { version?: number }) | null;
+    // v2 only: a v1 marker is the FLIP's input (applyAgentAddressingFlip runs
+    // before every read of this), and its entries carry no grantee. Reading
+    // them here would resurrect platform-wide grants under a missing key.
+    if (raw && raw.version === 2 && Array.isArray(raw.grants)) {
+      return { version: 2, grants: raw.grants as MarkerEntry[] };
+    }
   } catch {
     /* an unreadable marker is treated as empty — see emitChanges for the cost */
   }
-  return { version: 1, grants: [] };
+  return { version: 2, grants: [] };
+}
+
+/**
+ * fixes-082526 · THE FAIL-CLOSED FLIP (owner rulings 1/1a, 2026-08-26).
+ *
+ * Runs at the top of every sync and is a no-op on a v2 machine. On a machine
+ * whose markers are v1 — platform-wide grants, no grantee anywhere — it:
+ *
+ *  1. emits one `control.grant.revoked` per v1 issuance-marker entry, reason
+ *     `requires-agent-grant`, `causation` chained to the act it ends. The
+ *     revocations ARE the compliance record of the flip; silence is forbidden
+ *     (the WP-20f precedent: mandated capabilities were revoked on upgrade
+ *     with the reason recorded);
+ *  2. writes BOTH markers as v2-empty. The materialized record especially:
+ *     its presence short-circuits re-materialization, so leaving it v1 would
+ *     have the very next sync re-grant everything this just revoked.
+ *
+ * Nothing is re-granted here. Re-grants are explicit human acts — settings
+ * entries naming a grantee — which is the whole of the ruling.
+ */
+function applyAgentAddressingFlip(
+  core: IntelligenceCore,
+  storage: MinimalStorage,
+  now: Date,
+  logger: MinimalLogger
+): void {
+  try {
+    const rawMarker = storage.get(GRANTS_STORAGE_KEY) as
+      | { version?: number; grants?: MarkerEntryV1[] }
+      | null;
+    const rawMaterialized = storage.get(MATERIALIZED_STORAGE_KEY) as
+      | { version?: number; migratedAt?: string; capabilities?: string[] }
+      | null;
+
+    const markerIsV1 = !!rawMarker && Array.isArray(rawMarker.grants) && rawMarker.version !== 2;
+    const materializedIsV1 =
+      !!rawMaterialized && Array.isArray(rawMaterialized.capabilities) && rawMaterialized.version !== 2;
+    if (!markerIsV1 && !materializedIsV1) return;
+
+    const v1Entries = markerIsV1 ? rawMarker!.grants! : [];
+    for (const entry of v1Entries) {
+      if (!entry || typeof entry.capability !== 'string') continue;
+      emit(core, logger, {
+        topic: GRANT_REVOKED_TOPIC,
+        schema: GRANT_REVOKED_SCHEMA,
+        observedAt: now.toISOString(),
+        actor: { id: GRANT_MATERIALIZER_ACTOR, kind: 'system' },
+        source: { class: 'platform', system: GRANTS_SYSTEM, trust: 'observed' },
+        ...(entry.eventId ? { causation: entry.eventId } : {}),
+        payload: {
+          capability: entry.capability,
+          runbook_id: entry.runbookId,
+          runbook_hash: entry.runbookHash,
+          reason: 'requires-agent-grant',
+          detail:
+            'grants became agent-addressed: a platform-wide grant names no holder and is ' +
+            'revoked. Re-grant this capability to a specific agent, chat, or mcp-client.',
+        },
+      });
+    }
+
+    try {
+      storage.set(GRANTS_STORAGE_KEY, { version: 2, grants: [] } satisfies MarkerState);
+      storage.set(MATERIALIZED_STORAGE_KEY, {
+        version: 2,
+        migratedAt: now.toISOString(),
+        grants: [],
+      } satisfies MaterializedState);
+    } catch {
+      // Best effort with a safe failure direction: unconverted markers repeat
+      // the flip next sync, where the emissions repeat too — noisy, never
+      // wrong-way (nothing re-grants from a v1 record, readMaterialized and
+      // readMarker both refuse the shape).
+    }
+
+    logger.info(
+      `[Intelligence] agent-addressing flip: revoked ${v1Entries.length} platform-wide grant(s); ` +
+        're-grant per agent/chat/mcp-client in Settings.'
+    );
+  } catch (err) {
+    logger.error(`[Intelligence] agent-addressing flip failed (non-fatal): ${(err as Error).message}`);
+  }
 }
 
 function emitChanges(
@@ -812,12 +1019,15 @@ function emitChanges(
   issueReasons?: ReadonlyMap<string, GrantIssueReason>
 ): void {
   const previous = readMarker(storage);
-  const priorByCapability = new Map(previous.grants.map((g) => [g.capability, g]));
+  // The grant unit is (grantee, capability) — one key, both halves, or a
+  // grant moved between grantees would read as "unchanged".
+  const keyOf = (g: { grantee: string; capability: string }) => `${g.grantee}|${g.capability}`;
+  const priorByKey = new Map(previous.grants.map((g) => [keyOf(g), g]));
   const next: MarkerEntry[] = [];
 
   for (const grant of resolution.grants) {
-    const prior = priorByCapability.get(grant.capability);
-    priorByCapability.delete(grant.capability);
+    const prior = priorByKey.get(keyOf(grant));
+    priorByKey.delete(keyOf(grant));
 
     const unchanged =
       prior && prior.runbookId === grant.runbookId && prior.runbookHash === grant.runbookHash;
@@ -854,6 +1064,7 @@ function emitChanges(
       source: { class: 'expertise', system: GRANTS_SYSTEM, trust: 'authored' },
       ...(prior ? { causation: prior.eventId } : {}),
       payload: {
+        grantee: grant.grantee,
         capability: grant.capability,
         runbook_id: grant.runbookId,
         runbook_hash: grant.runbookHash,
@@ -872,6 +1083,7 @@ function emitChanges(
     // ceremony came from, which is the one thing these events are for.
     if (id) {
       next.push({
+        grantee: grant.grantee,
         capability: grant.capability,
         runbookId: grant.runbookId,
         runbookHash: grant.runbookHash,
@@ -882,8 +1094,10 @@ function emitChanges(
   }
 
   // Whatever the marker still holds was granted and is not live any more.
-  for (const stale of priorByCapability.values()) {
-    const disarm = resolution.disarmed.find((d) => d.capability === stale.capability);
+  for (const stale of priorByKey.values()) {
+    const disarm = resolution.disarmed.find(
+      (d) => d.capability === stale.capability && (d.grantee === undefined || d.grantee === stale.grantee)
+    );
     // No disarm record means the grant vanished with its document — nothing
     // configured it, so nothing reported it disarmed.
     const reason: DisarmReason = disarm?.reason ?? 'runbook-unavailable';
@@ -906,6 +1120,7 @@ function emitChanges(
       // subject: which grant, granted when, against which document.
       ...(stale.eventId ? { causation: stale.eventId } : {}),
       payload: {
+        grantee: stale.grantee,
         capability: stale.capability,
         runbook_id: stale.runbookId,
         runbook_hash: stale.runbookHash,
@@ -916,7 +1131,7 @@ function emitChanges(
   }
 
   try {
-    storage.set(GRANTS_STORAGE_KEY, { version: 1, grants: next } as MarkerState);
+    storage.set(GRANTS_STORAGE_KEY, { version: 2, grants: next } as MarkerState);
   } catch {
     // The marker is best-effort. The cost of losing it is a duplicate issuance
     // on the next boot, not a wrong grant — which is the right direction for

@@ -29,6 +29,8 @@ import {
   stateFor,
 } from '../governMatrix';
 import {
+  BUILTIN_GRANTEES,
+  CHAT_GRANTEE,
   GRANT_ISSUED_TOPIC,
   GRANT_REVOKED_TOPIC,
   GRANTS_STORAGE_KEY,
@@ -50,11 +52,14 @@ function registryFrom(dir: string): RunbookRegistry {
 const shipped = () => registryFrom(LAW_DIR);
 
 /** Every capability the shipped registry serves, materialized — the fully-granted tree. */
-function allMaterialized(): string[] {
+function allMaterialized(): Array<{ grantee: string; capability: string }> {
+  // Pairs since the agent-addressing flip; the matrix's subject is per
+  // capability, so one grantee suffices.
   return shipped()
     .runbooks({ strictness: 'strict' })
     .map((rb) => rb.capability)
-    .filter((c) => !MANDATED_EXPLICIT_CAPABILITIES.includes(c));
+    .filter((c) => !MANDATED_EXPLICIT_CAPABILITIES.includes(c))
+    .map((capability) => ({ grantee: CHAT_GRANTEE, capability }));
 }
 
 const tmpDirs: string[] = [];
@@ -321,7 +326,8 @@ describe('WP-44 · the gates column is never softened', () => {
       materialized: runbooks
         .runbooks({ strictness: 'strict' })
         .map((rb) => rb.capability)
-        .filter((c) => !MANDATED_EXPLICIT_CAPABILITIES.includes(c)),
+        .filter((c) => !MANDATED_EXPLICIT_CAPABILITIES.includes(c))
+        .map((capability) => ({ grantee: CHAT_GRANTEE, capability })),
     });
     const zero = matrix.rows.filter((r) => r.gates.kind === 'strict' && r.gates.attestable === 0);
     expect(zero.map((r) => r.capability).sort()).toEqual([
@@ -471,13 +477,13 @@ describe('WP-44 · the five states, each from the grant record', () => {
     const registry = shipped();
     const bySettings = buildGovernMatrix({
       runbooks: registry,
-      settings: { capabilityGrants: [{ capability: 'cap.incident_containment', enabled: true }] },
+      settings: { capabilityGrants: [{ grantee: CHAT_GRANTEE, capability: 'cap.incident_containment', enabled: true }] },
     }).rows.find((r) => r.capability === 'cap.incident_containment')!;
     expect(bySettings.state).toBe('granted-by-you');
 
     const byMigration = buildGovernMatrix({
       runbooks: registry,
-      materialized: ['cap.incident_containment'],
+      materialized: [{ grantee: CHAT_GRANTEE, capability: 'cap.incident_containment' }],
     }).rows.find((r) => r.capability === 'cap.incident_containment')!;
     expect(byMigration.state).toBe('materialized');
 
@@ -509,7 +515,7 @@ describe('WP-44 · the five states, each from the grant record', () => {
     // containment is revoked. A row may not assert a fact about a different row.
     const revoked = buildGovernMatrix({
       runbooks: shipped(),
-      materialized: allMaterialized().filter((c) => c !== 'cap.incident_containment'),
+      materialized: allMaterialized().filter((c) => c.capability !== 'cap.incident_containment'),
     }).rows.find((r) => r.capability === 'cap.incident_remediation')!;
     const granted = buildGovernMatrix({
       runbooks: shipped(),
@@ -524,7 +530,7 @@ describe('WP-44 · the five states, each from the grant record', () => {
     // only through "an explicit settings entry — a grant a person made".
     const row = buildGovernMatrix({
       runbooks: shipped(),
-      settings: { capabilityGrants: [{ capability: 'cap.promote_environment', enabled: true }] },
+      settings: { capabilityGrants: [{ grantee: CHAT_GRANTEE, capability: 'cap.promote_environment', enabled: true }] },
     }).rows.find((r) => r.capability === 'cap.promote_environment')!;
     expect(row.state).toBe('granted-by-you');
     expect(row.inForce).toBe(true);
@@ -550,7 +556,7 @@ describe('WP-44 · the disarmed row, as ruled', () => {
       runbooks: shipped(),
       settings: {
         capabilityGrants: [
-          { capability: 'cap.promotion_preflight', enabled: true, runbookHash: 'sha256:deadbeefdeadbeef' },
+          { grantee: CHAT_GRANTEE, capability: 'cap.promotion_preflight', enabled: true, runbookHash: 'sha256:deadbeefdeadbeef' },
         ],
       },
     }).rows.find((r) => r.capability === 'cap.promotion_preflight')!;
@@ -606,7 +612,7 @@ describe('WP-44 · the disarmed row, as ruled', () => {
     const row = buildGovernMatrix({
       runbooks: shipped(),
       materialized: allMaterialized(),
-      settings: { capabilityGrants: [{ capability: 'cap.bulk_plugin_update', enabled: false }] },
+      settings: { capabilityGrants: [{ grantee: CHAT_GRANTEE, capability: 'cap.bulk_plugin_update', enabled: false }] },
     }).rows.find((r) => r.capability === 'cap.bulk_plugin_update')!;
     expect(row.state).toBe('denied');
     expect(row.consent).toBe(false);
@@ -619,7 +625,7 @@ describe('WP-44 · the disarmed row, as ruled', () => {
     // The mandate did not stop being true while the grant existed.
     const row = buildGovernMatrix({
       runbooks: shipped(),
-      settings: { capabilityGrants: [{ capability: 'cap.promote_environment', enabled: false }] },
+      settings: { capabilityGrants: [{ grantee: CHAT_GRANTEE, capability: 'cap.promote_environment', enabled: false }] },
     }).rows.find((r) => r.capability === 'cap.promote_environment')!;
     expect(row.state).toBe('never-by-default');
     expect(row.consent).toBe(false);
@@ -662,13 +668,13 @@ describe('WP-44 · the act, at the control', () => {
 
   test('granting a production capability writes a REAL control.grant.issued', () => {
     boot();
-    const before = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === 'cap.promote_environment');
+    const before = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === 'cap.promote_environment' && e.payload.grantee === CHAT_GRANTEE);
     expect(before).toEqual([]);
 
     const result = act('cap.promote_environment', true);
     expect(result.ok).toBe(true);
 
-    const issued = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === 'cap.promote_environment');
+    const issued = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === 'cap.promote_environment' && e.payload.grantee === CHAT_GRANTEE);
     expect(issued).toHaveLength(1);
     // Through WP-20b's producer, so the event carries everything that producer
     // carries — including which layer granted it.
@@ -694,7 +700,7 @@ describe('WP-44 · the act, at the control', () => {
     boot();
     act('cap.promote_environment', true);
 
-    const issued = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === 'cap.promote_environment');
+    const issued = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === 'cap.promote_environment' && e.payload.grantee === CHAT_GRANTEE);
     expect(issued).toHaveLength(1);
     expect(issued[0].payload.reason).toBe('granted-at-control');
   });
@@ -726,8 +732,8 @@ describe('WP-44 · the act, at the control', () => {
 
     act('cap.promote_environment', true);
 
-    const acted = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === 'cap.promote_environment');
-    const anchorEvents = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === anchor);
+    const acted = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === 'cap.promote_environment' && e.payload.grantee === CHAT_GRANTEE);
+    const anchorEvents = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === anchor && e.payload.grantee === CHAT_GRANTEE);
     // Both issued in this one sync — the premise, before the claim.
     expect(acted).toHaveLength(1);
     expect(anchorEvents).toHaveLength(2);
@@ -740,7 +746,7 @@ describe('WP-44 · the act, at the control', () => {
   test('a REVOCATION carries no issuance reason — there is no issuance to describe', () => {
     boot();
     act('cap.bulk_plugin_update', false);
-    const revoked = events(GRANT_REVOKED_TOPIC).filter((e) => e.payload.capability === 'cap.bulk_plugin_update');
+    const revoked = events(GRANT_REVOKED_TOPIC).filter((e) => e.payload.capability === 'cap.bulk_plugin_update' && e.payload.grantee === CHAT_GRANTEE);
     expect(revoked).toHaveLength(1);
     // The revoked event's own vocabulary is the DISARM reason, untouched here.
     expect(revoked[0].payload.reason).toBe('disabled-by-settings');
@@ -751,7 +757,7 @@ describe('WP-44 · the act, at the control', () => {
     const capability = 'cap.promote_environment';
     const result = act(capability, true);
     const row = result.matrix!.rows.find((r) => r.capability === capability)!;
-    const issued = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === capability)[0];
+    const issued = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === capability && e.payload.grantee === CHAT_GRANTEE)[0];
 
     expect(row.issuance).not.toBeNull();
     // The id on the row is the id of the event in the ledger — not a reference
@@ -784,7 +790,7 @@ describe('WP-44 · the act, at the control', () => {
     expect(row.inForce).toBe(false);
     expect(row.consent).toBe(false);
 
-    const events2 = events(GRANT_REVOKED_TOPIC).filter((e) => e.payload.capability === capability);
+    const events2 = events(GRANT_REVOKED_TOPIC).filter((e) => e.payload.capability === capability && e.payload.grantee === CHAT_GRANTEE);
     expect(events2).toHaveLength(1);
     // A person's act, recorded as a person's act — not as a platform observation.
     expect(events2[0].actor.kind).toBe('human');
@@ -811,8 +817,12 @@ describe('WP-44 · the act, at the control', () => {
     // change gate correctly suppresses the re-grant as repetition. Announcing it
     // is what the running process does on any settings write, and skipping that
     // step would have this test describe a state the product cannot be in.
+    // Both builtin entries, mirroring what the control itself writes — the
+    // capability-wide row reads 'disarmed' only when EVERY holder's grant is.
     kv.set(STORAGE_KEYS.SETTINGS, {
-      capabilityGrants: [{ capability, enabled: true, runbookHash: 'sha256:deadbeefdeadbeef' }],
+      capabilityGrants: BUILTIN_GRANTEES.map((grantee) => ({
+        grantee, capability, enabled: true, runbookHash: 'sha256:deadbeefdeadbeef',
+      })),
     });
     syncCapabilityGrants({ core, storage: storage(), logger: silent });
     const disarmed = readGovernMatrix({ core, storage: storage() })!.rows.find((r) => r.capability === capability)!;
@@ -833,7 +843,9 @@ describe('WP-44 · the act, at the control', () => {
     // disagree with the resolver about which layer a revocation has to remove.
     expect(after.state).toBe('materialized');
     // The user's act is not lost: it is the issuance the row now cites.
-    const issuances = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === capability);
+    // The row renders the chat act (first-wins keying, marker order) — the
+    // slice this asserts over must match.
+    const issuances = events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === capability && e.payload.grantee === CHAT_GRANTEE);
     expect(issuances.length).toBeGreaterThan(1);
     expect(after.issuance!.eventId).toBe(issuances[issuances.length - 1].id);
   });
@@ -867,7 +879,7 @@ describe('WP-44 · the act, at the control', () => {
     expect(result.reason).toBe('unwritable');
     // And nothing was announced: a grant that was not stored must not be a
     // grant that was recorded.
-    expect(events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === 'cap.promote_environment')).toEqual([]);
+    expect(events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === 'cap.promote_environment' && e.payload.grantee === CHAT_GRANTEE)).toEqual([]);
   });
 
   test('a dark core degrades rather than throwing into the caller', () => {

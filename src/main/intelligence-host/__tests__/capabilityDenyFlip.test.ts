@@ -24,6 +24,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { initIntelligenceCore, IntelligenceCore } from '../bootstrap';
 import {
+  CHAT_GRANTEE,
   GRANTS_STORAGE_KEY,
   GRANT_ISSUED_TOPIC,
   GRANT_REVOKED_TOPIC,
@@ -101,11 +102,18 @@ function events(topic: string): EventEnvelope[] {
 }
 
 function issuedFor(capability: string): EventEnvelope[] {
-  return events(GRANT_ISSUED_TOPIC).filter((e) => e.payload.capability === capability);
+  // One grantee's slice — "issued once" means once per (grantee, capability).
+  return events(GRANT_ISSUED_TOPIC).filter(
+    (e) => e.payload.capability === capability && e.payload.grantee === CHAT_GRANTEE
+  );
 }
 
 function caps(list: { capability: string }[]): string[] {
-  return list.map((g) => g.capability).sort();
+  // DISTINCT capabilities: since the agent-addressing flip a fresh boot holds
+  // one grant per (grantee, capability) — chat and mcp-client — and this
+  // suite's subject is WHICH capabilities are grantable, not to whom (the
+  // per-grantee fan has its own pins in agentAddressedGrants.test.ts).
+  return [...new Set(list.map((g) => g.capability))].sort();
 }
 
 function registry(): RunbookRegistry {
@@ -177,9 +185,14 @@ describe('WP-20f point 1 · the mandated capabilities are DENY by default', () =
     // always had rather than something written over a clean migration.
     boot((store) =>
       store.set(MATERIALIZED_STORAGE_KEY, {
-        version: 1,
+        version: 2,
         migratedAt: '2026-08-18T00:00:00.000Z',
-        capabilities: [ANCHOR, PROMOTE, REMEDIATE],
+        // v2-shaped tampering: the poisoned pairs name a real grantee, so the
+        // refusal under test is the mandated-capability one, not the shape's.
+        grants: [ANCHOR, PROMOTE, REMEDIATE].map((capability) => ({
+          grantee: CHAT_GRANTEE,
+          capability,
+        })),
       })
     );
 
@@ -193,9 +206,11 @@ describe('WP-20f point 1 · the mandated capabilities are DENY by default', () =
   test('the migration never writes them into the record it creates', () => {
     boot();
 
-    const record = kv.get(MATERIALIZED_STORAGE_KEY) as { capabilities: string[] };
+    const record = kv.get(MATERIALIZED_STORAGE_KEY) as {
+      grants: Array<{ grantee: string; capability: string }>;
+    };
     for (const mandated of MANDATED_EXPLICIT_CAPABILITIES) {
-      expect(record.capabilities).not.toContain(mandated);
+      expect(record.grants.map((g) => g.capability)).not.toContain(mandated);
     }
     // And the derivation the migration uses says the same thing on its own, so
     // the exclusion cannot be an accident of what happens to be shipped.
@@ -207,7 +222,7 @@ describe('WP-20f point 1 · the mandated capabilities are DENY by default', () =
     // The positive control, and it is the ruling's own remedy: "a run needs an
     // explicit grant made before it arms". Without this pin the packet would be
     // indistinguishable from having deleted the capability.
-    boot((store) => store.set(STORAGE_KEYS.SETTINGS, { capabilityGrants: [{ capability: PROMOTE }] }));
+    boot((store) => store.set(STORAGE_KEYS.SETTINGS, { capabilityGrants: [{ grantee: CHAT_GRANTEE, capability: PROMOTE }] }));
 
     const { grants, disarmed } = sync();
 
@@ -241,7 +256,7 @@ describe('WP-20f point 1 · the mandated capabilities are DENY by default', () =
     // must not lose that diagnosis to a blanket row.
     boot((store) =>
       store.set(STORAGE_KEYS.SETTINGS, {
-        capabilityGrants: [{ capability: PROMOTE, runbookHash: `sha256:${'0'.repeat(64)}` }],
+        capabilityGrants: [{ grantee: CHAT_GRANTEE, capability: PROMOTE, runbookHash: `sha256:${'0'.repeat(64)}` }],
       })
     );
 
@@ -363,20 +378,34 @@ describe('WP-20f point 2 · what remains enabled becomes an explicit, visible gr
     boot((store) => store.set(GRANTS_STORAGE_KEY, wp20bMarker));
     syncCapabilityGrants({ core, storage: storage(), logger: silent, now });
 
+    // Since the agent-addressing flip (fixes-082526, owner ruling 1a) a v1
+    // marker triggers the FAIL-CLOSED conversion first: EVERY platform-wide
+    // grant is revoked — the mandated two are no longer a special case at the
+    // flip (their sharper story survives in the disclosure rows below), and
+    // the revocations all carry the flip's own reason, each chained to the
+    // act it ends.
     const revoked = events(GRANT_REVOKED_TOPIC);
     expect(caps(revoked.map((e) => ({ capability: e.payload.capability as string })))).toEqual(
-      [...MANDATED_EXPLICIT_CAPABILITIES].sort()
+      caps(wp20bMarker.grants)
     );
     for (const event of revoked) {
-      expect(event.payload.reason).toBe('requires-explicit-grant');
-      // Not the user's act: nobody clicked anything, the law changed.
+      expect(event.payload.reason).toBe('requires-agent-grant');
+      // Not the user's act: nobody clicked anything, the model changed.
       expect(event.actor).toMatchObject({ id: 'act_grant_materializer', kind: 'system' });
       expect(event.source).toMatchObject({ class: 'platform', trust: 'observed' });
       // Chained to the issuance it answers, so "revoked" has a subject.
       expect(event.causation).toBe(priorIdOf.get(event.payload.capability as string));
     }
-    // The anchor was granted before and is granted still: nothing else moved.
-    expect(caps(sync().grants)).toContain(ANCHOR);
+    // FAIL-CLOSED: nothing is granted after the flip — the ruling's own words,
+    // "working automations stop until the user re-grants". The mandated pair
+    // still keeps its sharper disclosure over the generic one.
+    const after = sync();
+    expect(after.grants).toEqual([]);
+    for (const mandated of MANDATED_EXPLICIT_CAPABILITIES) {
+      expect(after.disarmed.find((d) => d.capability === mandated)?.reason).toBe(
+        'requires-explicit-grant'
+      );
+    }
   });
 });
 
@@ -404,8 +433,11 @@ describe('WP-20f point 3 · new capabilities arrive DENIED', () => {
 
   test('a strict runbook that ships AFTER the migration is served, and not granted', () => {
     const before = shipping('cap.already_here');
-    const materialized = materializableCapabilities(before);
-    expect(materialized).toEqual(['cap.already_here']);
+    const materialized = materializableCapabilities(before).map((capability) => ({
+      grantee: CHAT_GRANTEE,
+      capability,
+    }));
+    expect(materialized.map((m) => m.capability)).toEqual(['cap.already_here']);
 
     // The same machine, one release later: the registry now serves a second
     // strict runbook. Nothing re-derives, because nothing ever appends.
@@ -422,8 +454,8 @@ describe('WP-20f point 3 · new capabilities arrive DENIED', () => {
 
     const res = resolveCapabilityGrants({
       runbooks: after,
-      settings: { capabilityGrants: [{ capability: 'cap.brand_new' }] },
-      materialized: ['cap.already_here'],
+      settings: { capabilityGrants: [{ grantee: CHAT_GRANTEE, capability: 'cap.brand_new' }] },
+      materialized: [{ grantee: CHAT_GRANTEE, capability: 'cap.already_here' }],
     });
 
     expect(caps(res.grants)).toEqual(['cap.already_here', 'cap.brand_new']);
