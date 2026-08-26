@@ -5,7 +5,7 @@ source: Permissions pane.dc.html (design component, project "UX Prototyping for 
 fixtures: fixtures/scenario-permissions.js
 date: 2026-08-25
 answers: item 4 of the addon redesign order (merge the permission panes), read against the two shipped Settings panes; plus the two questions the merge raised, both now ruled
-status: proposed
+status: BUILT 2026-08-26 (fixes-082526 phases 1-5) — both platform facts this sheet asserted were made true first: grants are (grantee, capability)-addressed with per-holder acts, and the account scope is a real write bound (wpeWriteExcludedAccounts, excluded-whole). Shipped as PermissionsPaneSection; editors door-reached.
 ---
 
 # The permissions pane

@@ -1086,6 +1086,47 @@ built and rejected) is in the designer's `handoff_log_sources_v3/DECISIONS.md`.
   surface as an actionable message, not a silent no-op — if you touch
   `SentinelExecutor`'s error strings, keep them that specific.
 
+## Capability grants are (grantee, capability) — and the account scope binds
+
+Since 2026-08-26 (fixes-082526, owner-ruled; spec:
+`docs/planning/2026-08-26-agent-addressed-grants.md`):
+
+- **The grant unit is (grantee, capability).** Grantee classes: named agents,
+  `'chat'` (the docked panel), `'mcp-client'` (external MCP callers AND the
+  CLI/GraphQL surface — one machine-interface class, never a fourth id).
+  Constants in `capabilityGrants.ts` (`CHAT_GRANTEE`, `MCP_CLIENT_GRANTEE`,
+  `BUILTIN_GRANTEES`).
+- **The flip was FAIL-CLOSED**: a v1 (platform-wide) grant marker triggers
+  `applyAgentAddressingFlip` at the next sync — every grant revoked with
+  reason `requires-agent-grant`, causation chained, BOTH markers converted to
+  v2 (leaving the materialized record v1 would re-grant everything on the
+  next line — pinned). Re-grants are explicit acts naming a grantee; a
+  grantee-less settings entry grants NOBODY and is disclosed.
+- **Materialization covers the builtin surfaces only.** An agent holds only
+  what a human granted it, ever — granted in that agent's own workspace
+  (AgentWorkspace → "Procedures this agent may run"); chat/mcp-client grants
+  are made in Govern. Each act is its own `control.grant.issued/2` with the
+  grantee in the payload.
+- **The gate is per caller**: `checkCheckpointSequence(tool, taskId, grantee)`
+  — ChatService asks as `'chat'` (and calls the registry with accessMethod
+  `'chat'`, no longer `'mcp'`), AgentDispatcher as its agent name,
+  ToolRegistry derives from accessMethod/task-actor (kind-gated before
+  inverting the id via `agentNameFromActorId`). An unattributable caller
+  holds nothing — fail closed. Refusals name the holder set AND the asker.
+- **The account WRITE bound binds** (`wpeWriteExcludedAccounts`, account ids):
+  an excluded account refuses every write (`pull`/`wpcli`/`push`/`delete`) on
+  every environment, WHOLE — no per-site exception punches through; checked
+  FIRST in `isOperationAllowed`. `wpcli_read` stays allowed. Unresolvable
+  installs fail closed while exclusions exist; the resolver is injected
+  (`setInstallAccountResolver`, registered in index.ts over the WPE install
+  cache's `accountId` column). Empty list = the dimension is inert. This is
+  NOT `wpeAccountFilter`, which scopes syncing and binds nothing.
+- **Settings → Permissions is ONE read-only pane** (`PermissionsPaneSection`,
+  built to `docs/handoff/settings-permissions/`): bound above (account scope
+  at its foot), grants below (holder sets, acts, derived clipped lines). The
+  editors are door-reached (`bound-editor` = the old grid, `capabilities` =
+  Govern), deliberately absent from the nav.
+
 ## Intelligence Layer (`src/intelligence/` + `src/main/intelligence-host/`)
 
 An event-sourced intelligence spine runs alongside the legacy caches: every

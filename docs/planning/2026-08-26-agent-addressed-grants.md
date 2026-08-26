@@ -45,6 +45,18 @@ drawing shrinking to match the models. The pane build (the original items
 - `wpeAccountFilter` = scan scope. It is NOT this packet's bound and is not
   renamed, repurposed, or read by the gate.
 
+## Status — EXECUTED 2026-08-26, phases 1–5 (one commit each, full gate between)
+
+79860f87 (1: model + fail-closed flip), 49425503 (2: per-caller gate),
+aa389a7d (3: granting surfaces), f1227ea6 (4: account write bound),
+abda4ed7 (5: the pane; original Workstream-1 items 7/8 close). Residuals,
+recorded not hidden: no direct door from a pane grant-row into a specific
+agent's workspace yet (the row names holders; the Agents tab is one click);
+refusal copy at call sites doesn't yet name an excluded ACCOUNT as the
+reason (the gate refuses correctly; the message enrichment can ride a later
+pass); `readGrantIssuance` stays capability-keyed first-wins for the
+one-row-per-capability matrix (per-pair accessor exists and the pane uses it).
+
 ## Phases
 
 ### Phase 1 — the grant model (marker v2, fail-closed flip)

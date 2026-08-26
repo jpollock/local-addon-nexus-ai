@@ -33401,3 +33401,38 @@ the opposite of what a mock is for.*
   only once phase 3 lands. It is built and unit-tested now because building it
   later, next to a live grant, is how the two refusal causes get collapsed into
   one message.
+
+---
+
+## fixes-082526 · Agent-addressed grants + the account write bound (2026-08-26)
+
+The permissions-pane prerequisite packet, owner-ruled end to end: the grant
+unit widened to (grantee, capability) with a FAIL-CLOSED flip (every
+platform-wide grant revoked at the next sync, reason `requires-agent-grant`,
+causation chained; both markers converted — the materialized record
+especially, or the flip's own next line re-grants what it revoked); three
+grantee classes (named agents, chat, mcp-client — the CLI rides the
+machine-interface class); the gate made per-caller
+(`checkCheckpointSequence(tool, task, grantee)` — refusals name the holder
+set AND the asker, unattributable callers hold nothing); the granting
+surfaces split by ownership (AgentWorkspace grants an agent, Govern grants
+the interactive surfaces, every act its own `grant.issued/2`); the account
+scope made a REAL write bound (`wpeWriteExcludedAccounts` — excluded whole,
+checked before site exceptions, fail-closed on unresolvable installs,
+resolver injected over the install cache's new accountId column); and the
+designer's merged pane shipped read-only with door-reached editors, closing
+the branch's original items 7/8. Commits 79860f87 → abda4ed7; every phase
+mutation-witnessed; final gate 712 suites / 9,526 tests. Residuals recorded
+in the packet spec (no direct pane→agent-workspace door yet; account-refusal
+copy not yet enriched at call sites; capability-keyed issuance retained for
+the one-row matrix).
+
+Also this branch, same day, before the packet: Tier A 1–8 (twin rebuild
+shipped as `nexus_rebuild_twins`; webhook tap change-gated; `events`
+append-only enforced by triggers; envelope/migration direct suites; WP-67
+badge colour + external read-failure honesty; NaN→withheld; sentinel cadence
+floor; site-link mirror per sweep), the new-chat header + board-D outcome
+titles, the observability pull-forward (pipeline.run log line + Background
+Work activity line), and the CLAUDE.md-flagged batch (shared scoring gate,
+fleet-loop fabrication trio, host add/remove audit, environment-filter
+deletion).
