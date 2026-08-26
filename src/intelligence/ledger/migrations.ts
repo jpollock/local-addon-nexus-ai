@@ -68,4 +68,22 @@ export const MIGRATIONS: string[] = [
     PRIMARY KEY (from_entity, to_entity, kind)
   );
   `,
+  // v3 — append-only ENFORCED (fixes-082526 Tier A 3). The header has said
+  // "events are immutable" since v1 while raw() handed the live connection to
+  // twenty call sites with nothing stopping an UPDATE or DELETE. The guard
+  // lives in the engine because that is the one chokepoint every writer —
+  // present and future — shares; TypeScript cannot see into a SQL string.
+  // Corrections remain what they always were: NEW events with `causation` set.
+  `
+  CREATE TRIGGER IF NOT EXISTS events_append_only_no_update
+  BEFORE UPDATE ON events
+  BEGIN
+    SELECT RAISE(ABORT, 'events is append-only: corrections are new events with causation set, never edits');
+  END;
+  CREATE TRIGGER IF NOT EXISTS events_append_only_no_delete
+  BEFORE DELETE ON events
+  BEGIN
+    SELECT RAISE(ABORT, 'events is append-only: nothing deletes the record');
+  END;
+  `,
 ];
