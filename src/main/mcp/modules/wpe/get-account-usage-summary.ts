@@ -46,15 +46,27 @@ export const getAccountUsageSummaryHandler: McpToolHandler = {
       const storageFileBytes = data?.storage_file_bytes ?? null;
       const storageDbBytes = data?.storage_database_bytes ?? null;
 
-      const fmtGb = (bytes: any): string => {
-        if (bytes == null) return '—';
-        return `${Math.round(Number(bytes) / 1e9 * 100) / 100} GB`;
+      // O3 (fixes-082526 Tier A 6): a value Number() cannot read is WITHHELD
+      // ('—'), never rendered — "Visits: NaN" looks like a number the user
+      // should worry about, which is worse than admitting the value is
+      // unknown. `asFinite` is the one gate both formatters share.
+      const asFinite = (v: any): number | null => {
+        if (v == null || typeof v === 'boolean') return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
       };
 
+      const fmtGb = (bytes: any): string => {
+        const n = asFinite(bytes);
+        if (n == null) return '—';
+        return `${Math.round(n / 1e9 * 100) / 100} GB`;
+      };
+
+      const visitCount = asFinite(visits);
       const lines = [
         `## WP Engine Account Usage Summary — ${monthLabel}`,
         `- **Period:** ${firstDate} to ${lastDate}`,
-        `- **Visits:** ${visits != null ? Number(visits).toLocaleString() : '—'}`,
+        `- **Visits:** ${visitCount != null ? visitCount.toLocaleString() : '—'}`,
         `- **Bandwidth:** ${fmtGb(bandwidthBytes)}`,
       ];
 
