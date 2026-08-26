@@ -126,6 +126,14 @@ export class AnthropicAiSdkProvider implements AIProvider {
                 ...(u.inputTokens !== undefined ? { inputTokens: u.inputTokens } : {}),
                 ...(u.outputTokens !== undefined ? { outputTokens: u.outputTokens } : {}),
               };
+              // The cache breakpoints are unverifiable without this: the live
+              // parity drive's second turn should show cacheRead > 0 (grep
+              // local-lightning.log for "anthropic-aisdk usage").
+              const details = (u as { inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number } }).inputTokenDetails;
+              console.log(
+                `[NexusAI] chat: anthropic-aisdk usage in=${u.inputTokens ?? '?'} out=${u.outputTokens ?? '?'} ` +
+                `cacheRead=${details?.cacheReadTokens ?? 0} cacheWrite=${details?.cacheWriteTokens ?? 0}`,
+              );
             }
             yield { type: 'done', stopReason: FINISH_MAP[part.finishReason] ?? 'end_turn', usage };
             return;

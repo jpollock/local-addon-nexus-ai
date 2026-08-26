@@ -31,6 +31,13 @@ export function initializeProviders(): void {
   for (const p of all) {
     providers.set(p.id, p);
   }
+  // The dark flags are invisible without this: name which implementation is
+  // serving, so a parity test drive can PROVE which path ran (grep
+  // local-lightning.log for "chat providers:").
+  console.log(
+    `[NexusAI] chat providers: power=${process.env.NEXUS_POWER_AISDK === '1' ? 'ai-sdk' : 'hand-rolled'} ` +
+    `anthropic=${process.env.NEXUS_ANTHROPIC_AISDK === '1' ? 'ai-sdk' : 'hand-rolled'}`,
+  );
 }
 
 export function getProvider(id: string): AIProvider | null {
