@@ -40,7 +40,19 @@ export function adaptToolsForChat(
     ? allTools.filter((tool) => grants.includes(tool.name))
     : allTools;
 
-  return granted.map((tool) => {
+  // P2(a) — the discovery invariant: search_tools survives every assembly and
+  // rides at the FRONT of the toolset. Any future bound that trims the array
+  // (a cap, a byte budget, a grants list that forgot it) must never remove the
+  // one tool that lets the model learn what exists — that silent removal is
+  // the mechanism behind the 2026-08-25 "no web-analytics capability" lie, and
+  // Anthropic's own API enforces the same rule (deferring every tool is a
+  // 400). Pinned by tests/unit/chat/discoveryInvariant.test.ts.
+  const searchTool = allTools.find((t) => t.name === 'search_tools');
+  const withDiscovery = searchTool
+    ? [searchTool, ...granted.filter((t) => t.name !== 'search_tools')]
+    : granted;
+
+  return withDiscovery.map((tool) => {
     // Deep-clone the schema to avoid mutating the original
     const parameters = JSON.parse(JSON.stringify(tool.inputSchema));
 

@@ -164,6 +164,19 @@ export class ChatService {
       });
     } catch { /* context assembly is never worth a lost chat turn */ }
 
+    // P2 — the prompt describes the toolset actually sent. Same adapter call
+    // runAgentLoop makes per iteration (pure mapping, no side effects), so the
+    // prompt and the payload cannot drift. withheldCount compares against the
+    // unrestricted set: today only a grants list can withhold; any future
+    // bound must flow through the same count or it reintroduces the silent
+    // 2026-08-25 failure.
+    const sentTools = adaptToolsForChat(this.registry, this.services, assembly?.grants);
+    const fullCount = adaptToolsForChat(this.registry, this.services).length;
+    const toolInfo = {
+      toolNames: new Set(sentTools.map((t) => t.name)),
+      withheldCount: Math.max(0, fullCount - sentTools.length),
+    };
+
     if (!session) {
       const abortController = new AbortController();
       const pendingApprovals: ChatSession['pendingApprovals'] = new Map();
@@ -186,7 +199,7 @@ export class ChatService {
 
         // Rebuild the system prompt — without it a reopened session runs with no
         // fleet context, no tool doctrine, and no UNTRUSTED_DATA_DIRECTIVE.
-        const systemPrompt = await this.buildSystemPrompt(siteId, assembly?.ambientBlock);
+        const systemPrompt = await this.buildSystemPrompt(siteId, assembly?.ambientBlock, toolInfo);
 
         session = {
           id: sessionId,
@@ -196,7 +209,7 @@ export class ChatService {
         };
       } else {
         // Fresh session — build system prompt
-        const systemPrompt = await this.buildSystemPrompt(siteId, assembly?.ambientBlock);
+        const systemPrompt = await this.buildSystemPrompt(siteId, assembly?.ambientBlock, toolInfo);
         session = {
           id: sessionId,
           messages: [{ role: 'system', content: systemPrompt }],
@@ -770,7 +783,41 @@ export class ChatService {
    * doctrine, so policy outranks tool enthusiasm. Null/undefined inserts
    * nothing at all — the additive-parity pin.
    */
-  private async buildSystemPrompt(siteId?: string, ambientBlock?: string | null): Promise<string> {
+  /**
+   * P2(b) — the fleet-tools block, generated from the payload. The docs table
+   * is declarative; presence in `toolNames` decides what the model is told
+   * about. No toolNames (no production caller) → full list, pre-P2 behaviour.
+   */
+  private fleetToolSection(toolNames?: Set<string>): string[] {
+    const FLEET_TOOL_DOCS: Array<[string, string]> = [
+      ['fleet_health_summary', 'Get health scores for all indexed sites'],
+      ['get_site_health', 'Get detailed health breakdown for a specific site'],
+      ['fleet_search', 'Search across all indexed site content'],
+      ['fleet_filter', 'Apply smart filters (e.g., outdated-php, no-ssl) across the fleet'],
+      ['bulk_reindex', 'Reindex multiple sites at once (pass an array of site_ids)'],
+      ['bulk_plugin_update', 'Update a plugin across multiple sites'],
+      ['list_site_groups', 'List all site groups'],
+      ['manage_site_group', 'Create, rename, delete groups or move sites between groups'],
+    ];
+    const rows = FLEET_TOOL_DOCS
+      .filter(([name]) => !toolNames || toolNames.has(name))
+      .map(([name, doc]) => `- ${name}: ${doc}`);
+    return rows.length > 0 ? ['Fleet management tools:', ...rows, ''] : [];
+  }
+
+  private async buildSystemPrompt(
+    siteId?: string,
+    ambientBlock?: string | null,
+    // P2 (docs/planning/2026-08-26-chat-harness-plan.md): the prompt must be
+    // honest about the payload. `toolNames` = the tools actually being sent
+    // this turn — the fleet section below is GENERATED from it, never a
+    // hand-written list (a tool named in the prompt but absent from the array
+    // is the confabulation mechanism behind the 2026-08-25 incident).
+    // `withheldCount` > 0 adds the disclosure + search_tools escape hatch.
+    // Both optional: callers without the toolset (none in production) get the
+    // full list, i.e. pre-P2 behaviour.
+    toolInfo?: { toolNames?: Set<string>; withheldCount?: number },
+  ): Promise<string> {
     // Build WordPress-aware fleet context (PHP EOL, site counts, insights)
     let fleetContextSection = '';
     try {
@@ -798,18 +845,22 @@ export class ChatService {
       'If asked about sites, call local_list_sites or nexus_list_sites first. If asked about plugins, call wp_plugin_list with the site name.',
       'If asked about WordPress versions, call wp_core_version. If you cannot answer using your available tools, say so.',
       'For complex multi-step queries (e.g. "admin users across recipe sites"), chain multiple tool calls together.',
+      // P2(c) — never withhold silently: the model must be able to distinguish
+      // "doesn't exist" from "wasn't given to me", or it confabulates the former.
+      ...(toolInfo?.withheldCount
+        ? [
+            `NOTE: ${toolInfo.withheldCount} tools were not included this turn. ` +
+            'Call search_tools before concluding a capability is unavailable — ' +
+            'never state that a capability does not exist based only on the tools you can see.',
+          ]
+        : []),
       '',
-      'Fleet management tools:',
-      '- fleet_health_summary: Get health scores for all indexed sites',
-      '- get_site_health: Get detailed health breakdown for a specific site',
-      '- fleet_search: Search across all indexed site content',
-      '- fleet_filter: Apply smart filters (e.g., outdated-php, no-ssl) across the fleet',
-      '- bulk_reindex: Reindex multiple sites at once (pass an array of site_ids)',
-      '- bulk_plugin_update: Update a plugin across multiple sites',
-      '- list_site_groups: List all site groups',
-      '- manage_site_group: Create, rename, delete groups or move sites between groups',
-      '',
-      'When asked to reindex sites, use the bulk_reindex tool with site IDs from local_list_sites.',
+      // Generated from FLEET_TOOL_DOCS filtered by the actual payload — see
+      // the toolInfo doc above. An empty section vanishes, header included.
+      ...this.fleetToolSection(toolInfo?.toolNames),
+      ...(!toolInfo?.toolNames || toolInfo.toolNames.has('bulk_reindex')
+        ? ['When asked to reindex sites, use the bulk_reindex tool with site IDs from local_list_sites.']
+        : []),
       'Never suggest manual WP-CLI commands when a tool exists for the task.',
       '',
       '## Content search (finding posts/pages/products/etc.)',
