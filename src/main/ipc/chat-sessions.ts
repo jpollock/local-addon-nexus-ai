@@ -18,7 +18,10 @@ export function createSessionTables(db: Database.Database): void {
       -- and the newest message's role, never from updated_at: a user's own
       -- message bumps updated_at too, which would mark a session you just typed
       -- in as waiting on you.
-      last_read_at INTEGER
+      last_read_at INTEGER,
+      -- Board D: the outcome-at-a-glance line ("rb.x · 2 of 2 verified").
+      -- Derived at save time; NULL on sessions that predate it or armed nothing... see saveSession.
+      outcome_meta TEXT
     );
     CREATE TABLE IF NOT EXISTS chat_messages (
       id          TEXT PRIMARY KEY,
@@ -55,6 +58,16 @@ export function createSessionTables(db: Database.Database): void {
   } catch (e) {
     // Table doesn't exist yet; creation above will include the column
   }
+  // Migration: outcome_meta (board D). Existing rows stay NULL — an outcome
+  // nobody derived is not backfilled with a guess.
+  try {
+    const tableInfo = db.pragma('table_info(chat_sessions)') as Array<{ name: string }>;
+    if (!tableInfo.some((col) => col.name === 'outcome_meta')) {
+      db.exec('ALTER TABLE chat_sessions ADD COLUMN outcome_meta TEXT');
+    }
+  } catch (e) {
+    // Table doesn't exist yet; creation above will include the column
+  }
 }
 
 function rowToSession(row: any): ChatSession {
@@ -69,6 +82,7 @@ function rowToSession(row: any): ChatSession {
     actionCount: row.action_count,
     expiresAt: row.expires_at ?? null,
     lastReadAt: row.last_read_at ?? null,
+    outcomeMeta: row.outcome_meta ?? null,
   };
 }
 
@@ -140,8 +154,8 @@ export function saveSession(
 ): void {
   const upsertSession = db.prepare(`
     INSERT INTO chat_sessions
-      (id, title, scope_label, scope_site_ids, created_at, updated_at, pinned, action_count, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, title, scope_label, scope_site_ids, created_at, updated_at, pinned, action_count, expires_at, outcome_meta)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       scope_label = excluded.scope_label,
@@ -149,7 +163,8 @@ export function saveSession(
       updated_at = excluded.updated_at,
       pinned = excluded.pinned,
       action_count = excluded.action_count,
-      expires_at = excluded.expires_at
+      expires_at = excluded.expires_at,
+      outcome_meta = excluded.outcome_meta
   `);
 
   const upsertMessage = db.prepare(`
@@ -173,6 +188,7 @@ export function saveSession(
       session.pinned ? 1 : 0,
       session.actionCount,
       session.expiresAt ?? null,
+      session.outcomeMeta ?? null,
     );
     for (const msg of messages) {
       upsertMessage.run(

@@ -9,6 +9,7 @@ import { ProcedureSurfaces } from './ProcedureSurfaces';
 import { nexusStore } from '../../store/NexusStateManager';
 import type { GovernDoorTarget } from '../../../main/intelligence-host/sequenceGuard';
 import { CitationSpans } from './CitationSpans';
+import { deriveSessionOutcome } from './sessionOutcome';
 import {
   applyProcedureEvent,
   emptyProcedureState,
@@ -917,12 +918,20 @@ export class PanelChat extends React.Component<Props, State> {
       if (!sessionId) return;
 
       const firstUser = messages.find((m) => m.role === 'user');
-      const title = firstUser ? truncateAtWord(firstUser.content, 60) : 'New chat';
+      const typedTitle = firstUser ? truncateAtWord(firstUser.content, 60) : 'New chat';
+      // Board D: titled by what it DID when a run armed — the runbook, the
+      // halt, the refusal. The typed first message stands only for a session
+      // that armed nothing, because what a person meant IS the honest name
+      // for a session that only asked. The meta line rides the record either
+      // way, so the list can always tell the categories apart.
+      const outcome = deriveSessionOutcome(this.state.procedure);
+      const title = outcome.title ?? typedTitle;
 
       const { actionCount, retentionDays } = this.state;
       const session: ChatSession = {
         id: sessionId,
         title,
+        outcomeMeta: outcome.meta,
         scopeLabel: `${this.props.selectedSiteIds.length} site${this.props.selectedSiteIds.length !== 1 ? 's' : ''}`,
         scopeSiteIds: this.props.selectedSiteIds,
         createdAt: Date.now(),

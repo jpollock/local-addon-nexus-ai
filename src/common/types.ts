@@ -534,6 +534,13 @@ export interface ChatSession {
    * cannot silently mark a session read.
    */
   lastReadAt?: number | null;
+  /**
+   * Board D (new-chat sheet): the outcome at a glance, rendered in mono under
+   * the title in the sessions list — "rb.bulk-plugin-update · 2 of 2
+   * verified", "no run armed". Derived by sessionOutcome.ts from the
+   * procedure stream at save time; null on sessions that predate it.
+   */
+  outcomeMeta?: string | null;
 }
 
 export interface ChatMessage {

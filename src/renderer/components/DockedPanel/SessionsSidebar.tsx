@@ -293,6 +293,17 @@ export class SessionsSidebar extends React.Component<Props, State> {
                       },
                     })
                   : React.createElement('div', { style: styles.rowTitle }, session.pinned ? `📌 ${session.title}` : session.title),
+                // Board D's second row: the outcome at a glance, in mono —
+                // "rb.bulk-plugin-update · 2 of 2 verified" / "no run armed".
+                // Absent (pre-board-D sessions) renders nothing: a blank is
+                // "not derived", which is a different fact from "no run".
+                session.outcomeMeta
+                  ? React.createElement(
+                      'div',
+                      { style: { fontFamily: 'ui-monospace, monospace', fontSize: 10.5, color: 'var(--nxai-card-sub)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+                      session.outcomeMeta,
+                    )
+                  : null,
                 React.createElement(
                   'div',
                   { style: styles.rowMeta },
