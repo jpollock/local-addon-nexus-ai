@@ -51,7 +51,8 @@ interface GoogleConnection {
 
 interface SettingsState {
   settings: AgentSettings;
-  googleConnection: GoogleConnection | null;
+  /** ALL of this provider's usable connections — multiple Google accounts (2026-08-26). */
+  googleConnections: GoogleConnection[];
   connectingGoogle: boolean;
   confirmRemove: boolean;
   scopeSites: ScopeSite[];
@@ -178,7 +179,7 @@ function googleScopeSummary(scopes: string[]): string {
 export class AgentWorkspaceSettings extends React.Component<SettingsProps, SettingsState> {
   state: SettingsState = {
     settings: agentStore.getOrInitSettings(this.props.agentId),
-    googleConnection: null,
+    googleConnections: [],
     connectingGoogle: false,
     confirmRemove: false,
     scopeSites: [],
@@ -237,8 +238,11 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     try {
       const result = await this.props.electron?.ipcRenderer?.invoke('nexus-ai:credential:status');
       const connections: GoogleConnection[] = result?.connections ?? [];
-      const google = connections.find((c: any) => c.provider === 'google' && c.status !== 'revoked') ?? null;
-      this.setState({ googleConnection: google });
+      // ALL usable google connections — `.find` here was the one-account
+      // assumption; the store was always plural.
+      this.setState({
+        googleConnections: connections.filter((c: any) => c.provider === 'google' && c.status !== 'revoked'),
+      });
     } catch { /* Local not running */ }
   }
 
@@ -258,14 +262,15 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     }
   }
 
-  private async disconnectGoogle() {
-    const { googleConnection } = this.state;
-    if (!googleConnection) return;
+  /** Disconnect ONE account; the others stand — each connection is its own decision. */
+  private async disconnectGoogle(connectionId: string) {
     try {
       await this.props.electron?.ipcRenderer?.invoke('nexus-ai:credential:disconnect', {
-        connectionId: googleConnection.id,
+        connectionId,
       });
-      this.setState({ googleConnection: null });
+      this.setState((prev) => ({
+        googleConnections: prev.googleConnections.filter((c) => c.id !== connectionId),
+      }));
     } catch { /* ignore */ }
   }
 
@@ -704,8 +709,8 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
   }
 
   private renderConnectionsCard() {
-    const { googleConnection, connectingGoogle } = this.state;
-    const isConnected = !!googleConnection;
+    const { googleConnections, connectingGoogle } = this.state;
+    const isConnected = googleConnections.length > 0;
     const decl = this.googleDecl();
     const productName = googleScopeSummary(decl?.scopes ?? []);
     return this.renderCard(
@@ -721,30 +726,50 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
             ),
           ),
         ),
-        // Google row
-        React.createElement('div', {
-          style: { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 8, background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border-subtle)' },
-        },
-          // Google icon placeholder
-          React.createElement('div', {
-            style: { width: 28, height: 28, borderRadius: 6, background: isConnected ? 'rgba(66,133,244,0.12)' : 'var(--ag-bg-card)', border: '1px solid var(--ag-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 },
-          }, 'G'),
-          React.createElement('div', { style: { flex: 1 } },
-            React.createElement('div', { style: { fontSize: 13, fontWeight: 500, color: 'var(--ag-text-primary)' } }, productName),
-            React.createElement('div', { style: { fontSize: 12, color: isConnected ? 'var(--ag-green)' : 'var(--ag-text-muted)', marginTop: 2 } },
-              isConnected ? `Connected · ${googleConnection!.accountLabel}` : 'Not connected',
-            ),
-          ),
-          isConnected
-            ? React.createElement('button', {
-                onClick: () => this.disconnectGoogle(),
+        // One row PER connected account (2026-08-26): a second client's GA can
+        // live under a second Google login, and each connection disconnects
+        // on its own. The empty state keeps the original single row.
+        ...(isConnected
+          ? googleConnections.map((conn) => React.createElement('div', {
+              key: conn.id,
+              'data-google-connection': conn.id,
+              style: { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 8, background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border-subtle)', marginBottom: 8 },
+            },
+              React.createElement('div', {
+                style: { width: 28, height: 28, borderRadius: 6, background: 'rgba(66,133,244,0.12)', border: '1px solid var(--ag-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 },
+              }, 'G'),
+              React.createElement('div', { style: { flex: 1 } },
+                React.createElement('div', { style: { fontSize: 13, fontWeight: 500, color: 'var(--ag-text-primary)' } }, productName),
+                React.createElement('div', { style: { fontSize: 12, color: 'var(--ag-green)', marginTop: 2 } },
+                  `Connected · ${conn.accountLabel}`),
+              ),
+              React.createElement('button', {
+                onClick: () => this.disconnectGoogle(conn.id),
                 style: { padding: '6px 14px', background: 'transparent', border: '1px solid var(--ag-border)', borderRadius: 6, fontSize: 12, color: 'var(--ag-text-muted)', cursor: 'pointer' },
-              }, 'Disconnect')
-            : React.createElement('button', {
-                onClick: () => this.connectGoogle(),
-                disabled: connectingGoogle,
-                style: { padding: '6px 14px', background: 'var(--ag-teal)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, color: 'var(--ag-on-teal)', cursor: connectingGoogle ? 'wait' : 'pointer', opacity: connectingGoogle ? 0.7 : 1 },
-              }, connectingGoogle ? 'Connecting…' : 'Connect Google account'),
+              }, 'Disconnect'),
+            ))
+          : [React.createElement('div', {
+              key: 'empty',
+              style: { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 8, background: 'var(--ag-bg-elevated)', border: '1px solid var(--ag-border-subtle)' },
+            },
+              React.createElement('div', {
+                style: { width: 28, height: 28, borderRadius: 6, background: 'var(--ag-bg-card)', border: '1px solid var(--ag-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 },
+              }, 'G'),
+              React.createElement('div', { style: { flex: 1 } },
+                React.createElement('div', { style: { fontSize: 13, fontWeight: 500, color: 'var(--ag-text-primary)' } }, productName),
+                React.createElement('div', { style: { fontSize: 12, color: 'var(--ag-text-muted)', marginTop: 2 } }, 'Not connected'),
+              ),
+            )]),
+        // The connect flow always creates a NEW connection, so the button is
+        // never hidden by having one already — that hiding WAS the
+        // single-account assumption on this card.
+        React.createElement('div', { style: { marginTop: isConnected ? 4 : 10 } },
+          React.createElement('button', {
+            onClick: () => this.connectGoogle(),
+            disabled: connectingGoogle,
+            'data-google-connect': true,
+            style: { padding: '6px 14px', background: 'var(--ag-teal)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, color: 'var(--ag-on-teal)', cursor: connectingGoogle ? 'wait' : 'pointer', opacity: connectingGoogle ? 0.7 : 1 },
+          }, connectingGoogle ? 'Connecting…' : (isConnected ? 'Connect another Google account' : 'Connect Google account')),
         ),
       ),
     );

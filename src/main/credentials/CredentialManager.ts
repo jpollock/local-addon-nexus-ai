@@ -242,6 +242,54 @@ export class CredentialManager implements ICredentialManager {
     return this.store.listConnections();
   }
 
+  /**
+   * Multiple connected accounts (2026-08-26, the web-analytics ask): the
+   * ACTIVE connections this agent+site holds a grant on — the store was
+   * always multi-connection; this is the reach path catching up. The grant
+   * is the boundary: a connection that exists but was never granted to this
+   * agent is not in this list.
+   */
+  listGrantedConnections(provider: string, agentId: string, siteId: string): Connection[] {
+    return this.store
+      .listConnections()
+      .filter((c) => c.provider === provider && c.status === 'active')
+      .filter((c) => !!this.store.getGrant(c.id, agentId, siteId));
+  }
+
+  /**
+   * The NAMED account's token — `getTokenForGrant` pinned to one connection.
+   * Grant-gated exactly like the unpinned form: naming a connection an agent
+   * was never granted refuses, because reach comes from the grant, not from
+   * the connection's existence.
+   */
+  async getTokenForConnection(
+    provider: string,
+    agentId: string,
+    siteId: string,
+    connectionId: string,
+    manifestScopes?: string[],
+  ): Promise<AccessToken> {
+    const grant = this.store.getGrant(connectionId, agentId, siteId);
+    if (!grant) throw new NotConnectedError(provider);
+
+    const conn = this.store.getConnection(connectionId);
+    if (!conn || conn.provider !== provider) throw new NotConnectedError(provider);
+    if (conn.status === 'revoked') throw new RevokedError(provider);
+
+    if (manifestScopes && manifestScopes.length > 0) {
+      const scopesMissing = manifestScopes.some(s => !conn.grantedScopes.includes(s));
+      if (scopesMissing) throw new ScopeInsufficientError(provider);
+    }
+
+    return this.withMutex(connectionId, async () => {
+      const cached = this.tokenCache.get(connectionId);
+      if (cached && cached.expiresAt > Date.now() + TOKEN_REFRESH_BUFFER_MS) {
+        return { token: cached.token, expiresAt: new Date(cached.expiresAt).toISOString(), scopes: cached.scopes };
+      }
+      return this.refreshToken(conn, provider);
+    });
+  }
+
   // ── Private helpers ────────────────────────────────────────────────────────
 
   private findGrant(provider: string, agentId: string, siteId: string): Grant | null {

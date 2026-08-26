@@ -334,6 +334,14 @@ export interface AgentCredentials {
   /** Signal to the platform that stored credentials for this provider are invalid.
    *  Marks the connection revoked in the credential store. Best-effort; never throws. */
   revokeCredential?(provider: string): Promise<void>;
+  /**
+   * Multiple connected accounts (2026-08-26) — feature-detected like getSecret:
+   * the accounts this agent was granted, and a token pinned to a named one.
+   * `getToken` remains the single-account path (the first grant) so agents
+   * that never enumerate keep working unchanged.
+   */
+  listConnections?(provider: string): Promise<Array<{ connectionId: string; accountLabel: string; status: string }>>;
+  getTokenFor?(provider: string, connectionId: string): Promise<import('../credentials/types').AccessToken>;
 }
 
 export interface AgentStatement {

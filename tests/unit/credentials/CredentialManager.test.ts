@@ -182,3 +182,70 @@ describe('the refresh grant', () => {
     await expect(mgr.getTokenForGrant('google', 'agent-a', '')).rejects.toThrow(TemporarilyUnavailableError);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multiple connected accounts (fixes-082526 follow-on, web-analytics ask)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('multiple connections per provider', () => {
+  /** Connect twice with two different Google accounts; both grants for one agent+site. */
+  async function twoAccounts() {
+    const flow = {
+      run: jest
+        .fn()
+        .mockResolvedValueOnce({
+          outcome: 'success', accessToken: 'at_A', refreshToken: 'rt_A',
+          expiresIn: 3600, scopes: [GSC_SCOPE], accountLabel: 'alpha@example.com',
+        })
+        .mockResolvedValueOnce({
+          outcome: 'success', accessToken: 'at_B', refreshToken: 'rt_B',
+          expiresIn: 3600, scopes: [GSC_SCOPE], accountLabel: 'beta@example.com',
+        }),
+      cancel: jest.fn(),
+    };
+    const manager = makeManager({ flow });
+    await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+    await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+    return manager;
+  }
+
+  it('a second connect creates a SECOND connection — never an overwrite', async () => {
+    const manager = await twoAccounts();
+    const conns = manager.listConnections();
+    expect(conns).toHaveLength(2);
+    expect(conns.map((c: any) => c.accountLabel).sort()).toEqual(['alpha@example.com', 'beta@example.com']);
+  });
+
+  it('listGrantedConnections returns exactly the connections THIS agent+site was granted', async () => {
+    const manager = await twoAccounts();
+    const granted = manager.listGrantedConnections('google', 'web-analytics', '');
+    expect(granted.map((c: any) => c.accountLabel).sort()).toEqual(['alpha@example.com', 'beta@example.com']);
+    // Another agent holds no grant on either — the connection list is not the grant list.
+    expect(manager.listGrantedConnections('google', 'seo-insights', '')).toEqual([]);
+  });
+
+  it('getTokenForConnection returns the NAMED account\'s token, not the first grant\'s', async () => {
+    const manager = await twoAccounts();
+    const conns = manager.listConnections();
+    const beta = conns.find((c: any) => c.accountLabel === 'beta@example.com')!;
+    const token = await manager.getTokenForConnection('google', 'web-analytics', '', beta.id, [GSC_SCOPE]);
+    expect(token.token).toBe('at_B');
+  });
+
+  it('an agent cannot reach a connection it was never granted — fail closed by grant, not by existence', async () => {
+    const manager = await twoAccounts();
+    const conns = manager.listConnections();
+    await expect(
+      manager.getTokenForConnection('google', 'seo-insights', '', conns[0].id, [GSC_SCOPE]),
+    ).rejects.toThrow();
+  });
+
+  it('disconnecting one account leaves the other standing', async () => {
+    const manager = await twoAccounts();
+    const conns = manager.listConnections();
+    const alpha = conns.find((c: any) => c.accountLabel === 'alpha@example.com')!;
+    await manager.disconnect(alpha.id);
+    const granted = manager.listGrantedConnections('google', 'web-analytics', '');
+    expect(granted.map((c: any) => c.accountLabel)).toEqual(['beta@example.com']);
+  });
+});

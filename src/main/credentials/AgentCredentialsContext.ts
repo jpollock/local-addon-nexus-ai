@@ -78,6 +78,18 @@ export interface ICredentialManager {
    * Returns all stored fields (e.g. accessKeyId + secretAccessKey for AWS).
    */
   getSecretForAgent(provider: string, agentId: string): Promise<Record<string, string>>;
+  /**
+   * Multiple connected accounts (2026-08-26): the connections this agent+site
+   * was granted, and a token pinned to a NAMED one. Optional on the interface
+   * so partial test doubles and the no-manager fallback keep compiling; the
+   * context degrades to empty/refused when absent.
+   */
+  listGrantedConnections?(provider: string, agentId: string, siteId: string): Array<{
+    id: string; provider: string; accountLabel: string; status: string;
+  }>;
+  getTokenForConnection?(
+    provider: string, agentId: string, siteId: string, connectionId: string, manifestScopes?: string[],
+  ): Promise<AccessToken>;
 
   /**
    * Mark an api_key connection as revoked in the credential store.
@@ -151,6 +163,45 @@ export class AgentCredentialsContext implements AgentCredentials {
       token: token.token,
       expiresAt: token.expiresAt,
       scopes: filteredScopes,
+    };
+  }
+
+  /**
+   * The Google accounts this agent may use — id + label per connection, so an
+   * agent can enumerate accounts and label what came from where. Empty when
+   * none are granted (or the manager predates multi-account). Manifest-gated
+   * like every other method here.
+   */
+  async listConnections(
+    provider: string
+  ): Promise<Array<{ connectionId: string; accountLabel: string; status: string }>> {
+    if (!this.declaredScopes.has(provider)) {
+      throw new NotConnectedError(provider);
+    }
+    const list = this.manager.listGrantedConnections?.(provider, this.agentId, this.siteId) ?? [];
+    return list.map((c) => ({ connectionId: c.id, accountLabel: c.accountLabel, status: c.status }));
+  }
+
+  /**
+   * The NAMED account's token — `getToken` pinned to one connection, with the
+   * identical manifest-scope validation and declared-scope filtering.
+   */
+  async getTokenFor(provider: string, connectionId: string): Promise<AccessToken> {
+    if (!this.declaredScopes.has(provider)) {
+      throw new NotConnectedError(provider);
+    }
+    if (!this.manager.getTokenForConnection) {
+      throw new NotConnectedError(provider);
+    }
+    const declared = this.declaredScopes.get(provider)!;
+    const manifestScopes = Array.from(declared);
+    const token = await this.manager.getTokenForConnection(
+      provider, this.agentId, this.siteId, connectionId, manifestScopes,
+    );
+    return {
+      token: token.token,
+      expiresAt: token.expiresAt,
+      scopes: token.scopes.filter((scope) => declared.has(scope)),
     };
   }
 

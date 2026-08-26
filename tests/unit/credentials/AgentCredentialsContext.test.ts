@@ -383,3 +383,48 @@ describe('AgentCredentialsContext', () => {
     });
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multiple connected accounts (2026-08-26, the web-analytics ask)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('multi-account surface', () => {
+  const GSC = 'https://www.googleapis.com/auth/webmasters.readonly';
+  const decl: CredentialDeclaration[] = [{ provider: 'google', scopes: [GSC], reason: 'r' }];
+
+  function ctxWith(managerOverrides: Record<string, unknown>) {
+    const manager = { ...makeManager(), ...managerOverrides } as never;
+    return {
+      manager,
+      ctx: new AgentCredentialsContext({
+        manager, manifestCredentials: decl, agentId: 'web-analytics', siteId: '',
+      }),
+    };
+  }
+
+  it('listConnections returns the agent\'s granted connections, manifest-gated', async () => {
+    const listGrantedConnections = jest.fn(() => [
+      { id: 'c1', provider: 'google', accountLabel: 'alpha@example.com', status: 'active' },
+      { id: 'c2', provider: 'google', accountLabel: 'beta@example.com', status: 'active' },
+    ]);
+    const { ctx } = ctxWith({ listGrantedConnections });
+    const conns = await ctx.listConnections('google');
+    expect(conns.map((c) => c.accountLabel)).toEqual(['alpha@example.com', 'beta@example.com']);
+    expect(listGrantedConnections).toHaveBeenCalledWith('google', 'web-analytics', '');
+    // Manifest gate: a provider the agent never declared is refused.
+    await expect(ctx.listConnections('github')).rejects.toThrow(NotConnectedError);
+  });
+
+  it('getTokenFor pins the named connection and filters scopes like getToken', async () => {
+    const getTokenForConnection = jest.fn(async () => ({
+      token: 'at_B', expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      scopes: [GSC, 'https://www.googleapis.com/auth/undeclared.extra'],
+    }));
+    const { ctx } = ctxWith({ getTokenForConnection });
+    const t = await ctx.getTokenFor('google', 'c2');
+    expect(t.token).toBe('at_B');
+    expect(t.scopes).toEqual([GSC]); // undeclared scope filtered, same rule as getToken
+    expect(getTokenForConnection).toHaveBeenCalledWith('google', 'web-analytics', '', 'c2', [GSC]);
+    await expect(ctx.getTokenFor('github', 'c2')).rejects.toThrow(NotConnectedError);
+  });
+});

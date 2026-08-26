@@ -29,6 +29,13 @@ export interface Ga4Binding {
   property: string;
   displayName?: string;
   boundAt?: number;
+  /**
+   * Multiple connected Google accounts (2026-08-26): WHICH account served
+   * this property, so report tools query the right one forever after.
+   * Absent on legacy bindings — those keep the first-grant token path.
+   */
+  connectionId?: string;
+  accountLabel?: string;
 }
 
 export function readBinding(raw: string | undefined): Ga4Binding | undefined {
@@ -82,6 +89,78 @@ export async function getGoogleToken(ctx: AgentContext): Promise<{ token: string
   }
 }
 
+/** A granted account's live token, labelled. */
+interface AccountToken {
+  token: string;
+  connectionId?: string;
+  accountLabel?: string;
+}
+
+/**
+ * Every granted Google account's token — the multi-account widening.
+ * Feature-detected: a credential backend without `listConnections` (or one
+ * account granted) behaves exactly as the single-token path always did.
+ * A connection whose token could not be minted is returned as a FAILURE,
+ * never silently dropped: its properties would otherwise read as
+ * "not there", which is the data-loss shape.
+ */
+export async function getGoogleTokens(ctx: AgentContext): Promise<
+  | { tokens: AccountToken[]; failures: Array<{ accountLabel: string; message: string }> }
+  | { result: ReturnType<typeof ok>; code: Ga4ErrorCode }
+> {
+  const creds = ctx.credentials as typeof ctx.credentials & {
+    listConnections?: (p: string) => Promise<Array<{ connectionId: string; accountLabel: string; status: string }>>;
+    getTokenFor?: (p: string, id: string) => Promise<{ token: string }>;
+  };
+
+  if (creds.listConnections && creds.getTokenFor) {
+    let connections: Array<{ connectionId: string; accountLabel: string; status: string }> = [];
+    try {
+      connections = await creds.listConnections('google');
+    } catch { /* fall through to the single-token path below */ }
+    if (connections.length > 0) {
+      const tokens: AccountToken[] = [];
+      const failures: Array<{ accountLabel: string; message: string }> = [];
+      for (const conn of connections) {
+        try {
+          const t = await creds.getTokenFor('google', conn.connectionId);
+          tokens.push({ token: t.token, connectionId: conn.connectionId, accountLabel: conn.accountLabel });
+        } catch (e: unknown) {
+          failures.push({ accountLabel: conn.accountLabel, message: (e as Error).message });
+        }
+      }
+      if (tokens.length > 0 || failures.length > 0) return { tokens, failures };
+    }
+  }
+
+  const single = await getGoogleToken(ctx);
+  if ('result' in single) return single;
+  return { tokens: [{ token: single.token }], failures: [] };
+}
+
+/** The token for a BOUND property: the binding's own account, or the legacy first-grant path. */
+export async function getGoogleTokenForBinding(
+  ctx: AgentContext,
+  binding: Ga4Binding,
+): Promise<{ token: string } | { result: ReturnType<typeof ok>; code: Ga4ErrorCode }> {
+  const creds = ctx.credentials as typeof ctx.credentials & {
+    getTokenFor?: (p: string, id: string) => Promise<{ token: string }>;
+  };
+  if (binding.connectionId && creds.getTokenFor) {
+    try {
+      const t = await creds.getTokenFor('google', binding.connectionId);
+      return { token: t.token };
+    } catch (e: unknown) {
+      const label = binding.accountLabel ? ` (${binding.accountLabel})` : '';
+      return {
+        code: 'TokenError',
+        result: ok(`⚠ Could not get a token for the Google account this site is bound to${label}: ${(e as Error).message}. Reconnect that account, or re-run map_property to bind against another.`),
+      };
+    }
+  }
+  return getGoogleToken(ctx);
+}
+
 function formatProperties(props: Awaited<ReturnType<typeof listGa4Properties>>, domain?: string): string {
   if (props.length === 0) return 'No GA4 properties found on this Google account.';
   const lines = ['Available GA4 properties:', ''];
@@ -92,15 +171,49 @@ function formatProperties(props: Awaited<ReturnType<typeof listGa4Properties>>, 
   return lines.join('\n');
 }
 
+/** One property row, labelled with the account it came from (labels absent on the legacy path). */
+type LabelledProperty = Awaited<ReturnType<typeof listGa4Properties>>[number] & {
+  connectionId?: string;
+  accountLabel?: string;
+};
+
+/** List properties across EVERY granted account; failures reported per account, never dropped. */
+async function listAllProperties(ctx: AgentContext): Promise<
+  | { properties: LabelledProperty[]; accountErrors: Array<{ accountLabel: string; message: string }> }
+  | { result: ReturnType<typeof ok>; code: Ga4ErrorCode }
+> {
+  const auth = await getGoogleTokens(ctx);
+  if ('result' in auth) return auth;
+  const properties: LabelledProperty[] = [];
+  const accountErrors = [...auth.failures];
+  for (const t of auth.tokens) {
+    try {
+      const props = await listGa4Properties(t.token);
+      for (const p of props) {
+        properties.push({ ...p, connectionId: t.connectionId, accountLabel: t.accountLabel });
+      }
+    } catch (e: unknown) {
+      accountErrors.push({ accountLabel: t.accountLabel ?? 'connected account', message: (e as Error).message });
+    }
+  }
+  if (properties.length === 0 && accountErrors.length > 0 && auth.tokens.length === accountErrors.length) {
+    // Every account failed: that is a ListFailed, not an empty fleet.
+    const message = `Could not list GA4 properties: ${accountErrors.map((f) => `${f.accountLabel}: ${f.message}`).join('; ')}`;
+    return { code: 'ListFailed', result: err(`⚠ ${message}`) as never };
+  }
+  return { properties, accountErrors };
+}
+
 /** Resolve the mapped GA4 property for a site, or a user-facing error result. */
 function getMappedProperty(ctx: AgentContext, siteId?: string):
-  { property: string; siteId: string } | { result: ReturnType<typeof err> } {
+  { property: string; siteId: string; binding: Ga4Binding } | { result: ReturnType<typeof err> } {
   if (!siteId) return { result: err('This tool needs a siteId — the Local site name.') };
   const binding = readBinding(ctx.state.get<string>(ga4PropertyKey(siteId)));
   if (!binding) {
     return { result: err(`⚠ No GA4 property bound to "${siteId}". Bind one on this agent's Sites tab, or run map_property siteId="${siteId}".`) };
   }
-  return { property: binding.property, siteId };
+  // The binding rides along so report tools can query the ACCOUNT it names.
+  return { property: binding.property, siteId, binding };
 }
 
 export default defineAgent({
@@ -133,15 +246,14 @@ export default defineAgent({
         handler: async (args: { format?: 'text' | 'json' }, ctx: AgentContext) => {
           ctx.log.phase('list_properties');
           const json = args?.format === 'json';
-          const auth = await getGoogleToken(ctx);
-          if ('result' in auth) return json ? jsonErr(auth.code, textOf(auth.result)) : auth.result;
-          try {
-            const props = await listGa4Properties(auth.token);
-            return json ? jsonOk({ properties: props }) : ok(formatProperties(props));
-          } catch (e: unknown) {
-            const message = `Could not list GA4 properties: ${(e as Error).message}`;
-            return json ? jsonErr('ListFailed', message) : err(`⚠ ${message}`);
-          }
+          const listed = await listAllProperties(ctx);
+          if ('result' in listed) return json ? jsonErr(listed.code, textOf(listed.result)) : listed.result;
+          const warn = listed.accountErrors.length
+            ? `\n\n⚠ Some connected accounts could not be read: ${listed.accountErrors.map((f) => `${f.accountLabel} (${f.message})`).join('; ')}`
+            : '';
+          return json
+            ? jsonOk({ properties: listed.properties, accountErrors: listed.accountErrors })
+            : ok(formatProperties(listed.properties) + warn);
         },
       },
 
@@ -180,16 +292,9 @@ export default defineAgent({
             return json ? jsonOk({ siteId: args.siteId, binding: null }) : ok(message);
           }
 
-          const auth = await getGoogleToken(ctx);
-          if ('result' in auth) return json ? jsonErr(auth.code, textOf(auth.result)) : auth.result;
-
-          let props;
-          try {
-            props = await listGa4Properties(auth.token);
-          } catch (e: unknown) {
-            const message = `Could not list GA4 properties: ${(e as Error).message}`;
-            return json ? jsonErr('ListFailed', message) : err(`⚠ ${message}`);
-          }
+          const listed = await listAllProperties(ctx);
+          if ('result' in listed) return json ? jsonErr(listed.code, textOf(listed.result)) : listed.result;
+          const props = listed.properties;
 
           if (!args.propertyId) {
             const existing = readBinding(ctx.state.get<string>(ga4PropertyKey(args.siteId)));
@@ -201,7 +306,7 @@ export default defineAgent({
           const normalized = args.propertyId.startsWith('properties/') ? args.propertyId : `properties/${args.propertyId}`;
           const match = props.find(p => p.property === normalized);
           if (!match) {
-            const message = `Property "${args.propertyId}" not found on this account.`;
+            const message = `Property "${args.propertyId}" not found on any connected account.`;
             return json
               ? jsonErr('NotFound', message, { properties: props })
               : err(`⚠ ${message}\n\n${formatProperties(props, args.domain)}`);
@@ -211,6 +316,11 @@ export default defineAgent({
             property: match.property,
             displayName: match.displayName,
             boundAt: Date.now(),
+            // The account that served this property — report tools query it,
+            // not whichever grant happens to be first. Absent only on the
+            // legacy single-account credential backend.
+            ...(match.connectionId ? { connectionId: match.connectionId } : {}),
+            ...(match.accountLabel ? { accountLabel: match.accountLabel } : {}),
           };
           ctx.state.set(ga4PropertyKey(args.siteId), JSON.stringify(binding));
           ctx.log.info(`GA4 property bound: ${args.siteId} → ${match.property}`);
@@ -235,7 +345,8 @@ export default defineAgent({
           ctx.log.phase('traffic_summary');
           const mapped = getMappedProperty(ctx, args.siteId);
           if ('result' in mapped) return mapped.result;
-          const auth = await getGoogleToken(ctx);
+          // The binding's own account — never whichever grant is first.
+          const auth = await getGoogleTokenForBinding(ctx, mapped.binding);
           if ('result' in auth) return auth.result;
           const days = args.days ?? 7;
           try {
@@ -270,7 +381,8 @@ export default defineAgent({
           ctx.log.phase('anomaly_scan');
           const mapped = getMappedProperty(ctx, args.siteId);
           if ('result' in mapped) return mapped.result;
-          const auth = await getGoogleToken(ctx);
+          // The binding's own account — never whichever grant is first.
+          const auth = await getGoogleTokenForBinding(ctx, mapped.binding);
           if ('result' in auth) return auth.result;
           const days = args.days ?? 7;
           const threshold = args.thresholdPct ?? 25;
@@ -310,7 +422,8 @@ export default defineAgent({
           ctx.log.phase('page_performance');
           const mapped = getMappedProperty(ctx, args.siteId);
           if ('result' in mapped) return mapped.result;
-          const auth = await getGoogleToken(ctx);
+          // The binding's own account — never whichever grant is first.
+          const auth = await getGoogleTokenForBinding(ctx, mapped.binding);
           if ('result' in auth) return auth.result;
           try {
             const rows = await runGa4Report(auth.token, mapped.property, {
