@@ -91,6 +91,21 @@ export function agentActorId(agentName: string): string {
   return `act_${agentName.replace(/-/g, '_')}`;
 }
 
+/**
+ * The inverse, for the ONE path that owns it (fixes-082526 phase 2): the
+ * ToolRegistry chokepoint deriving a grant grantee from a task frame whose
+ * actor kind says 'agent'. Mechanical over `act_` ids — underscores back to
+ * hyphens, exact for every shipped agent name, and the round-trip is pinned
+ * beside `agentActorId`'s own pin. NEVER call it on an actor whose kind is
+ * not 'agent': a human or system id would invert to a guessed agent name,
+ * which is why the caller gates on kind first and this refuses non-`act_`
+ * strings as the last net.
+ */
+export function agentNameFromActorId(actorId: string): string | undefined {
+  if (!actorId.startsWith('act_') || actorId.length <= 4) return undefined;
+  return actorId.slice(4).replace(/_/g, '-');
+}
+
 export interface AgentTaskFrame {
   /**
    * `task_<ULID>` — minted in memory at open, and NOT yet written anywhere.

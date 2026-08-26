@@ -26,7 +26,17 @@ import { initIntelligenceCore, IntelligenceCore } from '../bootstrap';
 import { setIntelligenceCore } from '../coreRegistry';
 import { armProcedureRun, forgetProcedureRun, registerProcedureTurn } from '../procedureCursor';
 import { clearArmingRequests, recordArmingRequest } from '../procedureArming';
-import { checkCheckpointSequence } from '../sequenceGuard';
+import { checkCheckpointSequence as guardWithCaller } from '../sequenceGuard';
+
+/**
+ * Phase 2 (fixes-082526) made the guard PER CALLER; this suite's subject is
+ * the sequence/reach rules themselves, so every call asks as 'chat' — the
+ * builtin identity its fixtures grant to. The per-caller semantics have
+ * their own pins in agentGranteeGate.test.ts.
+ */
+const checkCheckpointSequence = (toolName: string, taskId?: string) =>
+  guardWithCaller(toolName, taskId, 'chat');
+
 import { taskId as mintTaskId } from '../../../intelligence';
 import type { Runbook, RunbookStrictness, ToolScope } from '../../../intelligence';
 

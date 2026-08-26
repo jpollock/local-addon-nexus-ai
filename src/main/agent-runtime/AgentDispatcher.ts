@@ -99,7 +99,8 @@ export class AgentDispatcher {
     // wired only there would be a guard with a documented bypass. The name is
     // the QUALIFIED one, matching what the audit and the ledger record, so a
     // runbook claiming a contributed tool must name it the same way.
-    const sequence = checkCheckpointSequence(`${agentName}/${toolName}`, task?.id);
+    // Phase 2 (fixes-082526): the dispatcher knows exactly who is asking.
+    const sequence = checkCheckpointSequence(`${agentName}/${toolName}`, task?.id, agentName);
     if (sequence) {
       try {
         this.services.operationAuditLog?.log({

@@ -5,6 +5,8 @@ import { CloudflareTransmitter, ErrorCategory } from '../telemetry/CloudflareTra
 import { getToolSafety, ConfirmationManager, checkTierThreeConfirmation } from './safety';
 import { recordGatedAction } from '../intelligence-host/actionProducer';
 import { checkCheckpointSequence } from '../intelligence-host/sequenceGuard';
+import { CHAT_GRANTEE, MCP_CLIENT_GRANTEE } from '../intelligence-host/capabilityGrants';
+import { agentNameFromActorId } from '../intelligence-host/agentTaskFrame';
 import { parseTarget } from '../../common/target';
 import { findExternalSites } from './site-resolver';
 import { upsertExternalProfile } from '../external/externalSiteStore';
@@ -175,7 +177,7 @@ export class ToolRegistry {
     name: string,
     args: Record<string, unknown>,
     services: NexusServices,
-    accessMethod?: 'mcp' | 'cli' | 'agent',
+    accessMethod?: 'mcp' | 'cli' | 'agent' | 'chat',
     // Position 5 stays the confirmation gate: two callers already pass it positionally, and
     // demoting a safety parameter below an optional diagnostic id invites passing a runId
     // where a `false` was meant. runId is appended instead.
@@ -245,7 +247,20 @@ export class ToolRegistry {
     // the doctrine WP-19 wrote down. Returns null for every call on every
     // surface until a capability is armed, so the unarmed path below is
     // instruction-for-instruction what it was.
-    const sequence = checkCheckpointSequence(name, task?.id);
+    // Phase 2 (fixes-082526): the caller's grant identity, derived from what
+    // this chokepoint already knows. 'chat' is the docked panel; 'mcp'/'cli'
+    // (and an absent method) are the machine-interface class; 'agent' resolves
+    // through the task frame's actor — gated on the actor KIND first, because
+    // the id inverse must never run on a human or system id (it would invert
+    // to a guessed agent). An agent call with no attributable frame yields
+    // undefined, which the guard treats as holding nothing — fail closed.
+    const grantee =
+      accessMethod === 'chat'
+        ? CHAT_GRANTEE
+        : accessMethod === 'agent'
+          ? (task?.actor?.kind === 'agent' ? agentNameFromActorId(task.actor.id) : undefined)
+          : MCP_CLIENT_GRANTEE;
+    const sequence = checkCheckpointSequence(name, task?.id, grantee);
     if (sequence) {
       // Same convention as the blocked Tier-3 attempt above: a refused gated
       // call leaves a durable trail, or the compliance record shows only the

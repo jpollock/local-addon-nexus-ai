@@ -518,9 +518,10 @@ function notGrantedBecause(capability: string): string {
   }
 }
 
-function reachRefusal(toolName: string): SequenceRefusal | null {
+function reachRefusal(toolName: string, grantee: string | undefined): SequenceRefusal | null {
   try {
     // Reads are untouched — the parity floor, and the same boundary as rule 5.
+    // Per SURFACE, not per identity: an unattributable reader still reads.
     if (!isWriteTool(toolName)) return null;
 
     const runbooks = getIntelligenceCore()?.law?.runbooks;
@@ -531,8 +532,19 @@ function reachRefusal(toolName: string): SequenceRefusal | null {
     if (declaring.length === 0) return null;
 
     const granted = getCapabilityGrants();
-    // The disjunction. ANY declaring capability being granted is reach.
-    if (declaring.some((c) => granted.some((g) => g.capability === c))) return null;
+    // Phase 2 (fixes-082526): reach is PER CALLER. The disjunction survives —
+    // ANY declaring capability is enough — but the grant consulted is the
+    // CALLER's own (grantee, capability). An undefined grantee holds nothing,
+    // by construction: an identity the platform could not establish is not
+    // one it grants things to, and every production surface threads one
+    // (chat, mcp-client, the agent's own name), so undefined here means a
+    // caller outside every known surface.
+    if (
+      grantee !== undefined &&
+      declaring.some((c) => granted.some((g) => g.capability === c && g.grantee === grantee))
+    ) {
+      return null;
+    }
 
     // The door names ONE capability because the payload contract carries one
     // pair — and that is honest here precisely BECAUSE this is a disjunction:
@@ -555,8 +567,26 @@ function reachRefusal(toolName: string): SequenceRefusal | null {
     const others = declaring.slice(1);
     const alternatives = others.length
       ? ` This tool is also declared by ${others.join(', ')}; granting ANY ONE of ` +
-        `${declaring.join(', ')} makes it reachable, and none of them is granted.`
+        `${declaring.join(', ')} to this caller makes it reachable.`
       : '';
+
+    // Who DOES hold a declaring capability — so the refusal names the holder
+    // set beside the asker, which is what makes the remedy findable without a
+    // law review. Empty means nobody holds any of them.
+    const holders = [
+      ...new Set(
+        granted
+          .filter((g) => declaring.includes(g.capability))
+          .map((g) => g.grantee)
+      ),
+    ];
+    const askerLine =
+      grantee === undefined
+        ? ' This call could not be attributed to any surface (no grantee), and an ' +
+          'unattributable caller holds nothing.'
+        : holders.length > 0
+          ? ` It is held by ${holders.join(', ')}; this caller (${grantee}) does not hold it.`
+          : ` No grantee holds it, including this caller (${grantee}).`;
 
     return {
       capability: primary,
@@ -568,9 +598,9 @@ function reachRefusal(toolName: string): SequenceRefusal | null {
       message:
         `REFUSED: ${toolName} is a write that ${primaryRunbook.id} declares at ${claimedBy.id}, ` +
         `so it belongs to ${primary} — and that capability is not granted. ` +
-        `${notGrantedBecause(primary)}${alternatives} Until then this tool cannot run on any ` +
-        'surface, and reaching the same effect through another tool is the thing the grant ' +
-        'exists to gate. Report that the capability is ungranted and stop.',
+        `${notGrantedBecause(primary)}${askerLine}${alternatives} Until then this tool cannot ` +
+        'run on this surface, and reaching the same effect through another tool is the thing ' +
+        'the grant exists to gate. Report that the capability is ungranted and stop.',
     };
   } catch {
     // Not in the path. Never take the tool surface, or rules 1-6, down with it.
@@ -584,13 +614,19 @@ function reachRefusal(toolName: string): SequenceRefusal | null {
  */
 export function checkCheckpointSequence(
   toolName: string,
-  taskId: string | undefined
+  taskId: string | undefined,
+  /**
+   * WHO is asking (fixes-082526 phase 2): an agent name, 'chat', or
+   * 'mcp-client', threaded from the surface that knows. Undefined means the
+   * caller could not be attributed — which holds nothing, fail closed.
+   */
+  grantee?: string
 ): SequenceRefusal | null {
   try {
     // WP-20g rule 7, FIRST: a grant is prior to a run. Every rule below governs
     // the ceremony around a capability someone already holds; this one asks
     // whether they hold it at all, and it must answer with no run in existence.
-    const reach = reachRefusal(toolName);
+    const reach = reachRefusal(toolName, grantee);
     if (reach) return reach;
 
     const run = runForTask(taskId);

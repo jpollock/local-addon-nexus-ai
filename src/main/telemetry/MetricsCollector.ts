@@ -75,7 +75,7 @@ export class MetricsCollector {
     toolName: string,
     duration_ms: number,
     isError: boolean = false,
-    accessMethod?: 'mcp' | 'cli' | 'agent',
+    accessMethod?: 'mcp' | 'cli' | 'agent' | 'chat',
   ): void {
     // Track duration
     const durations = this.toolCalls.get(toolName) || [];
