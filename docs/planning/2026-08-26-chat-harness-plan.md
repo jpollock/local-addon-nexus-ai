@@ -196,7 +196,7 @@ wpe_backup_and_verify, fleet_search, fleet_filter…) — the top of the market
 is the bottom of the dev data, confirming usage-driven ranking would have
 buried jobs 1/2/4. Hierarchy: resident tier ⊂ bucket 1 (the care-plan loop,
 40 tools, 37 enumerated + 3 behind the doc's ellipsis) ⊂ namespace pool.
-Encoded in docs/planning/2026-08-26-tool-inventory.csv (priority column).
+Encoded in docs/planning/2026-08-26-tool-inventory.csv — as of 2026-08-26 the FULL 207-tool assignment (40/64/76/27, per-row rationale), superseding the partial 44-row fill; zero disagreements between the two. This resolves the bucket-1 ellipsis and the bucket 2–4 enumeration.
 Product gap surfaced: job 3 (client reporting) has NO tool — a composed
 care-report tool over nexus_site_audit/wpe_user_audit/traffic_summary/
 fleet_summary would be bucket 1 the day it exists.
