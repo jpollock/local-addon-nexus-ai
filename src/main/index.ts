@@ -421,6 +421,21 @@ export default function main(context: any): void {
     emitIndexProgress: (siteId, data) => {
       try { ipcMain?.emit?.(IPC_CHANNELS.INDEX_PROGRESS, null, { siteId, ...data }); } catch { /* renderer may not be ready */ }
     },
+    // Tier A 8 (fixes-082526): the site-link mirror used to run only at
+    // startup, so an install discovered by a mid-session sweep was invisible
+    // to the entity service until the next restart. The mirror is idempotent;
+    // re-running it after every completed sweep closes that lag. SiteLinkStore
+    // is constructed lazily here because the startup instance is created later
+    // in this file — the store is a thin reader over graph.db either way.
+    onSyncCompleted: () => {
+      const db = graphService.getDb();
+      if (!db) return;
+      runSiteLinkMirror(intelligenceCore, {
+        getLinks: () => new SiteLinkStore(db).list(),
+        getDb: () => db as never,
+        logger: localLogger,
+      });
+    },
     onSyncProgress: (progress) => {
       emitNexusState({ wpeSyncProgress: progress });
     },

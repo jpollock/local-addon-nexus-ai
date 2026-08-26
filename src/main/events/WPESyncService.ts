@@ -88,6 +88,8 @@ export interface WPESyncServiceOptions {
   dnsResolve?: (hostname: string) => Promise<unknown>;
   /** Optional progress callback — broadcasts per-site WPE sync progress to NexusStateManager. */
   onSyncProgress?: (progress: { active: boolean; current: number; total: number; currentSite: string; phase: 'capi' | 'metadata' | 'content' } | null) => void;
+  /** Fired after every completed sweep — see the field doc on the class. */
+  onSyncCompleted?: () => void;
 }
 
 export class WPESyncService {
@@ -102,6 +104,14 @@ export class WPESyncService {
   private emitIndexProgress?: (siteId: string, data: { state: string; progress: number; message: string; documentCount?: number }) => void;
   private dnsResolve?: (hostname: string) => Promise<unknown>;
   private onSyncProgress?: (progress: { active: boolean; current: number; total: number; currentSite: string; phase: 'capi' | 'metadata' | 'content' } | null) => void;
+  /**
+   * Fired after every COMPLETED sweep, never after a failed one (fixes-082526
+   * Tier A 8). index.ts wires this to runSiteLinkMirror so an install
+   * discovered mid-session reaches the entity service without a restart. The
+   * hook is observed work, not part of it: a throw here is logged and cannot
+   * fail the sweep.
+   */
+  private onSyncCompleted?: () => void;
   private currentProgress: WPESyncProgress | null = null;
   private abortRequested = false;
 
@@ -127,6 +137,7 @@ export class WPESyncService {
     this.indexRegistry = options.indexRegistry ?? (options.registryStorage ? new IndexRegistry(options.registryStorage) : undefined);
     this.emitIndexProgress = options.emitIndexProgress;
     this.onSyncProgress = options.onSyncProgress;
+    this.onSyncCompleted = options.onSyncCompleted;
     this.dnsResolve = options.dnsResolve;
   }
 
@@ -388,6 +399,11 @@ export class WPESyncService {
       await Promise.all(syncTasks);
 
       this.currentProgress.status = 'completed';
+      try {
+        this.onSyncCompleted?.();
+      } catch (hookErr: any) {
+        this.logger.warn(`[WPESyncService] onSyncCompleted hook failed (sweep unaffected): ${hookErr?.message ?? hookErr}`);
+      }
       return result;
     } catch (error: any) {
       const errorMsg = error instanceof Error ? error.message : String(error);
