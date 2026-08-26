@@ -39,6 +39,7 @@ import { createAuditLogger } from './mcp/audit';
 import { InstructionRegistry, registerAllInstructions } from './mcp/instructions';
 import { registerIpcHandlers, getAgentSetting, canAutoRun, seedAgentDefaultsIfMissing, getAgentLogLevel } from './ipc-handlers';
 import { EventLog } from './logging/eventLog';
+import { setPipelineRunEventLog } from './intelligence-host/pipelineRunProducer';
 import { resolveLogLevel } from './logging/resolveLogLevel';
 import { applyRetention } from './logging/retention';
 import { initializeProviders } from './chat/providers/index';
@@ -873,6 +874,13 @@ export default function main(context: any): void {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
       const minLevel = resolveLogLevel(settings ?? undefined, process.env);
       eventLog = new EventLog({ root: nexusLogRoot, minLevel, levelFor: (source) => getAgentLogLevel(source) });
+
+      // The observability pull-forward (fixes-082526): every pipeline run —
+      // all eight recordPipelineRun caller files — writes one `pipeline.run`
+      // line here. Registered beside the log's own construction so the
+      // producer never carries a handle; a run recorded before this line
+      // simply has no log yet, which the producer tolerates.
+      setPipelineRunEventLog(eventLog);
 
       // Apply retention on startup and daily — bounds log growth.
       // Policy reads from settings if present, falls back to hardcoded defaults.

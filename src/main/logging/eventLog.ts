@@ -11,7 +11,12 @@ export type EventName =
   | 'phase' | 'action' | 'site' | 'finding' | 'mutation'
   | 'llm.call' | 'llm.error'
   | 'tool.call'
-  | 'credential';
+  | 'credential'
+  // One data-pipeline run over one site (L1/L2/L3), emitted at the
+  // recordPipelineRun chokepoint. Fields: layer, target, kind, outcome,
+  // trigger, duration_ms, reason?. `grep pipeline.run` answers "what has
+  // Local been doing" — the line the 2026-08-25 CPU diagnosis lacked.
+  | 'pipeline.run';
 
 export interface LogEvent {
   level: LogLevelName;

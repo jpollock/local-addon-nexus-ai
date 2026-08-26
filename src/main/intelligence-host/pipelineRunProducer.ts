@@ -29,6 +29,7 @@
  *   ids converge when the mirror catches up).
  */
 import type { IntelligenceCore } from './bootstrap';
+import type { LogEvent } from '../logging/eventLog';
 import { getIntelligenceCore } from './coreRegistry';
 import { environmentEntityId, provisionalEntityId } from './provisionalEntity';
 import {
@@ -55,6 +56,22 @@ export interface PipelineRunObservation {
   site: PipelineSiteRef;
 }
 
+/**
+ * The structured event log, when startup has built one (fixes-082526, the
+ * observability pull-forward). Registered from src/main/index.ts beside the
+ * EventLog's own construction — a registry setter rather than a parameter
+ * because eight caller files already invoke recordPipelineRun and none of
+ * them should have to carry a log handle for it.
+ *
+ * Structural type, not the class: tests hand in a capture, and this module
+ * needs exactly one method.
+ */
+let pipelineEventLog: { write(e: LogEvent): boolean } | undefined;
+
+export function setPipelineRunEventLog(log: { write(e: LogEvent): boolean } | undefined): void {
+  pipelineEventLog = log;
+}
+
 const SYSTEM: Record<PipelineSiteRef['kind'], string> = {
   local: 'pipeline:local',
   wpe: 'pipeline:wpe-ssh',
@@ -70,6 +87,33 @@ export function recordPipelineRun(
   observation: PipelineRunObservation,
   coreOverride?: IntelligenceCore,
 ): void {
+  // The grep-able log line, BEFORE the core check and in its own guard: the
+  // log's whole job is visibility when other layers are dark, so a down
+  // intelligence core must not take the line with it. This is the line that
+  // was missing during the 2026-08-25 CPU diagnosis — an hour of L3 indexing
+  // that `nexus pipeline status` knew about and the log carried zero bytes
+  // of. `target` (not `site`) deliberately: it is the redaction layer's
+  // identity field, so a site id is not masked as an opaque credential run.
+  try {
+    pipelineEventLog?.write({
+      level: observation.outcome === 'fail' ? 'WARN' : 'INFO',
+      source: 'pipeline',
+      sourceKind: 'system',
+      event: 'pipeline.run',
+      fields: {
+        layer: observation.layer,
+        target: observation.site.kind === 'local' ? observation.site.localSiteId : observation.site.graphRowId,
+        kind: observation.site.kind,
+        outcome: observation.outcome,
+        trigger: observation.trigger,
+        duration_ms: Math.max(0, observation.finishedAt - observation.startedAt),
+        ...(observation.reason !== undefined ? { reason: observation.reason } : {}),
+      },
+    });
+  } catch {
+    // A log failure must never fail the run it describes.
+  }
+
   try {
     const core = coreOverride ?? getIntelligenceCore();
     if (!core) return;
