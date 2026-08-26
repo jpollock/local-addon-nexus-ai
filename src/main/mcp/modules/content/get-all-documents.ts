@@ -13,6 +13,7 @@ function error(text: string): McpToolResult {
 export const getAllDocumentsHandler: McpToolHandler = {
   definition: {
     name: 'get_all_site_documents',
+    namespace: 'content',
     description:
       'Returns all indexed documents for a site with optional embeddings. ' +
       'Used for topical clustering and semantic analysis. ' +

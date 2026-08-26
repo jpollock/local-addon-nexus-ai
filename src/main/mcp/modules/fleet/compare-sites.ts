@@ -32,6 +32,7 @@ interface DimensionObservation {
 export const compareSitesHandler: McpToolHandler = {
   definition: {
     name: 'compare_sites',
+    namespace: 'fleet',
     description:
       'Side-by-side comparison of two LOCAL sites — shared and unique plugins, version ' +
       'differences, WordPress/PHP versions, theme differences, user counts and content volume. ' +

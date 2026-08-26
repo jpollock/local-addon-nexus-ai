@@ -78,6 +78,7 @@ function coverageLines(
 export const getIndexStatusHandler: McpToolHandler = {
   definition: {
     name: 'get_index_status',
+    namespace: 'content',
     description:
       'Get the content index status for a specific site — document count, chunk count, last indexed timestamp, and index freshness indicator. Use to confirm a site has been indexed before running search_site_content or fleet searches. If the index is stale, trigger a fresh index with reindex_site.' +
       'last indexed time, indexing duration, and current state.',

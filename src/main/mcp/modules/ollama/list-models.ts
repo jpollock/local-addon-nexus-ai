@@ -8,6 +8,7 @@ import { recommendModel } from './model-recommender';
 export const listOllamaModelsHandler: McpToolHandler = {
   definition: {
     name: 'list_ollama_models',
+    namespace: 'system',
     description:
       'List available Ollama models installed on the local machine — model name, size, and last modified date. ' +
       'Use before ask_ollama to confirm a model is available, or to choose between models based on size and capability. ' +

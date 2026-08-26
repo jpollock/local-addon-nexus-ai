@@ -7,6 +7,7 @@ function ok(text: string): McpToolResult {
 export const manageSiteGroupHandler: McpToolHandler = {
   definition: {
     name: 'manage_site_group',
+    namespace: 'fleet',
     description:
       'Create, rename, or delete a site group, or add/remove sites from a group. Groups are used to organize the fleet for bulk operations and reporting. Use list_site_groups to see existing groups before creating duplicates.',
     inputSchema: {

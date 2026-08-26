@@ -18,6 +18,7 @@ const WC_ITEMS = ['wc_sessions', 'wc_old_logs'];
 export const cleanDatabaseItemsHandler: McpToolHandler = {
   definition: {
     name: 'clean_database_items',
+    namespace: 'db',
     description:
       'Delete database bloat items from a local WordPress site — post revisions, auto-drafts, trashed posts, expired transients, orphaned postmeta, and plugin leftover tables. Defaults to dry_run=true (preview only, no changes made) — always run in dry-run first to confirm counts. Set dry_run=false to apply cleanup. LOCAL SITES ONLY — site must be running. Run scan_database_health first to identify what needs cleaning.',
     inputSchema: {

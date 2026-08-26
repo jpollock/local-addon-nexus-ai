@@ -25,6 +25,7 @@ function error(text: string): McpToolResult {
 export const scanSiteFilesHandler: McpToolHandler = {
   definition: {
     name: 'scan_site_files',
+    namespace: 'security',
     description:
       'Byte-level scan of a local WordPress site — reads files and its mysqldump directly, executes no PHP, and does NOT require the site to be running. ' +
       'Always detects unexpected PHP in mu-plugins. With deep=true, also covers obfuscation chains, unexpected web-root/uploads PHP, ELF binaries, ' +

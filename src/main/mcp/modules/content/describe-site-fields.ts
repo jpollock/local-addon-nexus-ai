@@ -13,6 +13,7 @@ import { WPE_SYNC_REMEDY_METADATA } from '../wpe/sync-remedy';
 export const describeSiteFieldsHandler: McpToolHandler = {
   definition: {
     name: 'describe_site_fields',
+    namespace: 'content',
     description:
       "Discover a site's indexed structured custom fields, grouped by post type, with each " +
       "field's inferred type and value range/enum and coverage. Call this before answering " +

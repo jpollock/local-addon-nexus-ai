@@ -53,6 +53,7 @@ export function createSearchToolsHandler(
   return {
     definition: {
       name: 'search_tools',
+      namespace: 'meta',
       description:
         'Search available tools by intent or keyword. ' +
         'Use this when you are unsure which specific tool to call for an operation. ' +
