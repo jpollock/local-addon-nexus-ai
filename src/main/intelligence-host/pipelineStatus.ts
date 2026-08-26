@@ -145,3 +145,43 @@ function history24h(core: IntelligenceCore, now: number): PipelineStatusReport['
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// The Settings surface's compact read (fixes-082526, observability pull-forward)
+// ---------------------------------------------------------------------------
+
+export interface PipelineActivity {
+  /** The last 24 hours, from the raw ledger — same window the CLI reports. */
+  runs: number;
+  ok: number;
+  skip: number;
+  fail: number;
+  /**
+   * When pipeline work LAST finished, regardless of the window — a different
+   * question from "how much in 24h", and collapsing them would render "no
+   * runs" with no way to tell idle-since-yesterday from never-ran. Null when
+   * the ledger holds no run at all: never a fabricated time.
+   */
+  lastFinishedAt: string | null;
+}
+
+/**
+ * The one rollup the Background Work section renders. Reads the same ledger
+ * `nexus pipeline status` reads, so the two surfaces can never disagree —
+ * which was the 2026-08-25 finding: the CLI knew and the UI carried nothing.
+ */
+export function buildPipelineActivity(core: IntelligenceCore, now: number = Date.now()): PipelineActivity {
+  const counts = history24h(core, now);
+  let lastFinishedAt: string | null = null;
+  try {
+    for (const e of core.ledger.query({ topicPrefix: 'task.run.', order: 'desc', limit: 50 })) {
+      if (e.schema === PIPELINE_RUN_SCHEMA) {
+        lastFinishedAt = e.observed_at;
+        break;
+      }
+    }
+  } catch {
+    /* null stands: an unreadable latest run is not a time */
+  }
+  return { ...counts, lastFinishedAt };
+}

@@ -1884,6 +1884,23 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     }
   });
 
+  safeHandle(IPC_CHANNELS.GET_PIPELINE_ACTIVITY, () => {
+    // The UI half of the 2026-08-25 observability finding. Null = recording
+    // is OFF (core down) — a different fact from "nothing ran", and the
+    // renderer's formatter keeps them apart. Reads the same ledger the CLI's
+    // `nexus pipeline status` reads, so the two surfaces cannot disagree.
+    try {
+      const { getIntelligenceCore } = require('./intelligence-host/coreRegistry');
+      const core = getIntelligenceCore();
+      if (!core) return null;
+      const { buildPipelineActivity } = require('./intelligence-host/pipelineStatus');
+      return buildPipelineActivity(core);
+    } catch (err) {
+      localLogger.error('[NexusAI] GET_PIPELINE_ACTIVITY failed:', (err as Error).message);
+      return null;
+    }
+  });
+
   safeHandle('nexus-ai:get-vector-store-size', () => {
     try {
       const fs = require('fs');

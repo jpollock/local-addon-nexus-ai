@@ -303,3 +303,60 @@ export function computeDerived(input: DerivedInput): Derived {
     paused,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Pipeline activity (fixes-082526, observability pull-forward — UI half)
+// ---------------------------------------------------------------------------
+
+/** Mirror of main's PipelineActivity — the shapes are pinned together by the IPC contract. */
+export interface PipelineActivityData {
+  runs: number;
+  ok: number;
+  skip: number;
+  fail: number;
+  lastFinishedAt: string | null;
+}
+
+/** "just now" / "N min ago" / "N h ago" — coarse on purpose; this is ambience, not audit. */
+function ago(iso: string, now: number): string {
+  const ms = now - Date.parse(iso);
+  if (!Number.isFinite(ms) || ms < 0) return 'just now';
+  if (ms < 60_000) return 'just now';
+  const min = Math.round(ms / 60_000);
+  if (min < 60) return `${min} min ago`;
+  return `${Math.round(min / 60)} h ago`;
+}
+
+/**
+ * The one activity sentence the Background Work section renders — the UI half
+ * of the 2026-08-25 finding (`nexus pipeline status` knew; the log and the UI
+ * carried nothing).
+ *
+ * Distinctions this keeps, each a different fact:
+ *  - null activity: recording is OFF — not "nothing ran";
+ *  - zero runs with a last finish: idle since then — not "never ran";
+ *  - zero runs, no finish ever: nothing recorded yet;
+ *  - zero failures: the failed clause is DROPPED, because "0 failed" is an
+ *    all-clear claim and the skip clause follows the same rule.
+ */
+export function formatPipelineActivityLine(
+  activity: PipelineActivityData | null,
+  now: number,
+): string {
+  if (!activity) {
+    return 'Run history unavailable — background record-keeping is not running.';
+  }
+  if (activity.runs === 0) {
+    return activity.lastFinishedAt
+      ? `No background runs in the last 24 hours · last finished ${ago(activity.lastFinishedAt, now)}`
+      : 'No background runs recorded yet.';
+  }
+  const parts = [
+    `${n(activity.runs)} ${activity.runs === 1 ? 'run' : 'runs'}`,
+    `${n(activity.ok)} ok`,
+  ];
+  if (activity.skip > 0) parts.push(`${n(activity.skip)} skipped`);
+  if (activity.fail > 0) parts.push(`${n(activity.fail)} failed`);
+  if (activity.lastFinishedAt) parts.push(`last finished ${ago(activity.lastFinishedAt, now)}`);
+  return `Last 24 hours: ${parts.join(' · ')}`;
+}

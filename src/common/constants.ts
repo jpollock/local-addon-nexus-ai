@@ -327,6 +327,8 @@ export const IPC_CHANNELS = {
 
   // Job run data (background work scheduler telemetry)
   GET_JOB_RUN_DATA: `${ADDON_PREFIX}:get-job-run-data`,
+  // fixes-082526: the Background Work activity line — 24h pipeline rollup + last finish.
+  GET_PIPELINE_ACTIVITY: `${ADDON_PREFIX}:get-pipeline-activity`,
 
   // AI Assistant (fleet panel, dashboard Ask tab, site tab)
   ASSISTANT_QUERY:   `${ADDON_PREFIX}:assistant:query`,

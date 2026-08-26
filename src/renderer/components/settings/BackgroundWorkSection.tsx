@@ -6,11 +6,14 @@
  * arithmetic, no toLocaleString, no counts in string literals here.
  */
 import * as React from 'react';
-import type { Derived, JobRow, Destination } from './derived';
+import { formatPipelineActivityLine } from './derived';
+import type { Derived, JobRow, Destination, PipelineActivityData } from './derived';
 import type { NexusSettings } from '../../../common/types';
 
 interface Props {
   derived: Derived;
+  /** 24h pipeline rollup from main, or null when record-keeping is down. */
+  activity: PipelineActivityData | null;
   onSave: (patch: Partial<NexusSettings>) => void;
 }
 
@@ -380,6 +383,17 @@ export class BackgroundWorkSection extends React.Component<Props> {
       }, 'Nexus does some work on a schedule so it can answer questions without going out to your sites first. This is what that costs.'),
 
       this.renderMasterSwitch(),
+      // The UI half of the 2026-08-25 observability finding: what the
+      // schedules below have actually been DOING. Formatted in derived.ts
+      // (the every-number-computed-once rule); this component only places it.
+      React.createElement('div', {
+        style: {
+          fontSize: 12,
+          color: 'var(--nxai-card-sub)',
+          margin: '-12px 0 20px',
+        },
+        'data-nexus-pipeline-activity': true,
+      }, formatPipelineActivityLine(this.props.activity, Date.now())),
       this.renderSummary(),
 
       // Three groups

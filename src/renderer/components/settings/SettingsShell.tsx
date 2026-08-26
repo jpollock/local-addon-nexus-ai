@@ -66,6 +66,7 @@ interface SettingsShellState {
   active: Section;
   fleetCounts: { wpe: number; external: number; local: number } | null;
   jobRunData: Record<string, { averageMs: number | null; lastRunAt: number | null }> | null;
+  pipelineActivity: import('./derived').PipelineActivityData | null;
   indexEntries: Array<{ siteId: string; state: string; documentCount?: number }>;
   mcpInfo: { port: number; stdioPath: string } | null;
 }
@@ -84,6 +85,7 @@ export class SettingsShell extends React.Component<SettingsShellProps, SettingsS
     active: 'background',
     fleetCounts: null,
     jobRunData: null,
+    pipelineActivity: null,
     indexEntries: [],
     mcpInfo: null,
   };
@@ -123,7 +125,7 @@ export class SettingsShell extends React.Component<SettingsShellProps, SettingsS
 
   async loadAll(): Promise<void> {
     const ipc = this.props.electron.ipcRenderer;
-    const [settings, sitesResult, accounts, installs, externalHosts, dashboardStats, jobRunData, indexEntries, mcpInfo] = await Promise.all([
+    const [settings, sitesResult, accounts, installs, externalHosts, dashboardStats, jobRunData, pipelineActivity, indexEntries, mcpInfo] = await Promise.all([
       ipc.invoke(IPC_CHANNELS.GET_SETTINGS).catch(() => null),
       ipc.invoke(IPC_CHANNELS.GET_SITES).catch(() => []),
       ipc.invoke(IPC_CHANNELS.GET_WPE_ACCOUNTS).catch(() => []),
@@ -131,6 +133,7 @@ export class SettingsShell extends React.Component<SettingsShellProps, SettingsS
       ipc.invoke(IPC_CHANNELS.GET_EXTERNAL_HOSTS).catch(() => []),
       ipc.invoke(IPC_CHANNELS.GET_DASHBOARD_STATS).catch(() => null),
       ipc.invoke(IPC_CHANNELS.GET_JOB_RUN_DATA).catch(() => ({})),
+      ipc.invoke(IPC_CHANNELS.GET_PIPELINE_ACTIVITY).catch(() => null),
       ipc.invoke(IPC_CHANNELS.GET_FLEET_STATUS).catch(() => []),
       ipc.invoke(IPC_CHANNELS.GET_MCP_INFO).catch(() => null),
     ]);
@@ -152,6 +155,7 @@ export class SettingsShell extends React.Component<SettingsShellProps, SettingsS
       externalHosts: Array.isArray(externalHosts) ? externalHosts : [],
       fleetCounts,
       jobRunData: jobRunData ?? {},
+      pipelineActivity: pipelineActivity ?? null,
       indexEntries: Array.isArray(indexEntries) ? indexEntries : [],
       mcpInfo: mcpInfo ?? null,
       loading: false,
@@ -312,6 +316,7 @@ export class SettingsShell extends React.Component<SettingsShellProps, SettingsS
       } else {
         sectionContent = React.createElement(BackgroundWorkSection, {
           derived,
+          activity: this.state.pipelineActivity ?? null,
           onSave: this.saveSetting,
         });
       }
