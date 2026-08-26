@@ -59,7 +59,7 @@ export class ExternalContentIndexService {
     siteId: string,
     alias: string,
     trigger: PipelineTrigger = 'adhoc',
-  ): Promise<{ documentCount: number }> {
+  ): Promise<{ documentCount: number; emptyReason?: string }> {
     const startTime = Date.now();
     const record = (outcome: 'ok' | 'skip' | 'fail', reason?: string) =>
       recordPipelineRun({
@@ -72,13 +72,35 @@ export class ExternalContentIndexService {
       const extracted = await this.extractor.extract(transport, alias);
 
       if (!extracted.posts || extracted.posts.length === 0) {
+        const coverage = extracted.coverage;
+
+        // D10's second defect, external half (fixes-082526 Tier A 5b; the
+        // WPE sibling is D12 in WPESyncService.syncContent). Zero posts has
+        // two different causes and they were collapsed: `page-failed` means
+        // the READ failed — the host may be full of content we could not
+        // reach — and marking it 'indexed' with a count of zero is the
+        // false "site is empty". Throwing routes it through the same catch
+        // every caller already handles for a mid-extraction failure.
+        if (coverage && coverage.truncatedReason === 'page-failed') {
+          throw new Error(
+            `Could not read content from ${alias}: ${coverage.truncatedDetail ?? 'the read failed'}`,
+          );
+        }
+
+        // Genuinely empty — and say which kind of empty, as the WPE path
+        // does: rows read whose content was not indexable, versus nothing
+        // published at all.
+        const rowsRead = coverage?.rowsReturned ?? 0;
+        const emptyReason = rowsRead > 0
+          ? `${rowsRead} post(s) read, none with indexable content`
+          : 'no published posts';
         this.indexRegistry.update(siteId, {
           siteId, siteName: alias, state: 'indexed',
           lastIndexed: Date.now(), documentCount: 0, chunkCount: 0,
           durationMs: Date.now() - startTime,
         });
-        record('skip', 'no published posts');
-        return { documentCount: 0 };
+        record('skip', emptyReason);
+        return { documentCount: 0, emptyReason };
       }
 
       await writeRowsHonestly(extracted.posts, (post) =>

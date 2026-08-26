@@ -124,7 +124,7 @@ export function createExternalBulkOps(services: any, logger: any) {
         indexRegistry: services.indexRegistry,
         logger,
       });
-      const { documentCount } = await indexService.indexOne(transport, row.id, row.name);
+      const { documentCount, emptyReason } = await indexService.indexOne(transport, row.id, row.name);
 
       // Stamp the staleness column the scheduler reads, so a host indexed here
       // is not redundantly re-indexed on the next cycle. The scheduler is
@@ -143,9 +143,12 @@ export function createExternalBulkOps(services: any, logger: any) {
 
       // `indexOne` marks a zero-post host 'indexed' and returns a count of
       // zero — the same shape as WP Engine's zero-post exit, and the same
-      // reason it must not be reported as a success.
+      // reason it must not be reported as a success. A FAILED read no longer
+      // reaches this line: indexOne throws it (fixes-082526 Tier A 5b), so
+      // the reason here is always the honest emptiness it names — never
+      // "No content returned by the extractor" for a host that was never read.
       return documentCount === 0
-        ? { ran: false, reason: 'No content returned by the extractor' }
+        ? { ran: false, reason: emptyReason ?? 'no published posts' }
         : { ran: true };
     },
   };

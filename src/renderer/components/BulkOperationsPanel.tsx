@@ -117,17 +117,40 @@ const operationMetaStyle: React.CSSProperties = {
   marginTop: '2px',
 };
 
-const BADGE_COLORS: Record<string, { bg: string; text: string }> = {
+export const BADGE_COLORS: Record<string, { bg: string; text: string }> = {
   running: { bg: '#3b82f6', text: '#ffffff' },
   completed: { bg: '#22c55e', text: '#ffffff' },
+  // Explicit, not a fallthrough: this used to fall to the pending colour by
+  // accident, which happened to read amber but claimed so by luck.
+  completed_with_errors: { bg: '#a16207', text: '#ffffff' },
   failed: { bg: '#ef4444', text: '#ffffff' },
   cancelled: { bg: '#6b7280', text: '#ffffff' },
   pending: { bg: '#f59e0b', text: '#ffffff' },
   skipped: { bg: '#a16207', text: '#ffffff' },
 };
 
-const badgeStyle = (state: string): React.CSSProperties => {
-  const colors = BADGE_COLORS[state] || BADGE_COLORS.pending;
+/**
+ * The colour a status badge actually paints — WP-67's colour rule
+ * (fixes-082526 Tier A 5a): "a status word that summarizes a run must not be
+ * greener than the run." A 'completed' operation in which sites were asked
+ * and NONE succeeded keeps its word (the run did complete; what it completed
+ * was nothing) but loses the success colour — it paints amber, the
+ * did-not-run tone the counts beneath it already carry. An empty selection
+ * stays green: nothing was asked, nothing failed.
+ */
+export function badgeToneFor(
+  status: string,
+  summary: BulkOperationSummary,
+): { bg: string; text: string } {
+  const attempted = summary.succeeded + summary.failed + summary.skipped;
+  if (status === 'completed' && attempted > 0 && summary.succeeded === 0) {
+    return BADGE_COLORS.skipped;
+  }
+  return BADGE_COLORS[status] || BADGE_COLORS.pending;
+}
+
+const badgeStyle = (state: string, tone?: { bg: string; text: string }): React.CSSProperties => {
+  const colors = tone ?? BADGE_COLORS[state] ?? BADGE_COLORS.pending;
   return {
     display: 'inline-block',
     padding: '2px 8px',
@@ -377,8 +400,9 @@ export class BulkOperationsPanel extends React.Component<BulkOperationsPanelProp
     return summarizeBulkOperation(op);
   }
 
-  renderBadge(state: string): React.ReactNode {
-    return React.createElement('span', { style: badgeStyle(state) }, state);
+  renderBadge(state: string, summary?: BulkOperationSummary): React.ReactNode {
+    const tone = summary ? badgeToneFor(state, summary) : undefined;
+    return React.createElement('span', { style: badgeStyle(state, tone) }, state);
   }
 
   renderProgressBar(progress: number): React.ReactNode {
@@ -488,7 +512,7 @@ export class BulkOperationsPanel extends React.Component<BulkOperationsPanelProp
         React.createElement(
           'div',
           { style: cardActionsStyle },
-          this.renderBadge(op.status),
+          this.renderBadge(op.status, this.getResultsSummary(op)),
           React.createElement(
             'span',
             { style: { fontSize: '14px', color: 'var(--nxai-status-neutral, #9ca3af)', marginLeft: '6px', userSelect: 'none' } },
