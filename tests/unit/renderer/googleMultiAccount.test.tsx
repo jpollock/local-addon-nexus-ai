@@ -107,3 +107,43 @@ describe('the card lists only THIS agent\'s granted connections', () => {
     expect((c.state as any).googleConnections.map((x: any) => x.id)).toEqual(['c-mine']);
   });
 });
+
+describe('a consent that declined a needed permission', () => {
+  function cardWithConnectResult(result: any) {
+    const invoke = jest.fn(async (channel: string) => {
+      if (channel === 'nexus-ai:credential:connect') return result;
+      if (channel === 'nexus-ai:credential:status') return { connections: [], grantedConnections: [], agentStatus: null };
+      return {};
+    });
+    const c = new AgentWorkspaceSettings({
+      agentId: 'web-analytics',
+      electron: { ipcRenderer: { invoke, on: jest.fn(), removeListener: jest.fn() } },
+      cronExpression: '0 8 * * 1',
+      credentials: [{ provider: 'google', scopes: ['https://www.googleapis.com/auth/analytics.readonly'], reason: 'r' }],
+    } as any);
+    c.setState = (partial: any) => { c.state = { ...c.state, ...(typeof partial === 'function' ? partial(c.state) : partial) }; };
+    return { c, invoke };
+  }
+
+  it('shows the declined-scope message on the card instead of discarding it', async () => {
+    const { c } = cardWithConnectResult({
+      ok: false, reason: 'scopes_declined',
+      message: 'Google connected the account but did not grant: https://www.googleapis.com/auth/analytics.readonly. Reconnect and tick that permission’s checkbox on the consent screen.',
+    });
+    await (c as any).connectGoogle();
+    const tree = (c as any).renderGoogleCard ? (c as any).renderGoogleCard() : (c as any).render();
+    expect(texts(tree)).toContain('did not grant');
+  });
+
+  it('a cancelled sign-in leaves no error on the card — backing out is a choice, not a fault', async () => {
+    const { c } = cardWithConnectResult({ ok: false, reason: 'cancelled' });
+    await (c as any).connectGoogle();
+    expect((c.state as any).googleConnectError ?? null).toBeNull();
+  });
+
+  it('a clean connect leaves no error', async () => {
+    const { c } = cardWithConnectResult({ ok: true });
+    await (c as any).connectGoogle();
+    expect((c.state as any).googleConnectError ?? null).toBeNull();
+  });
+});

@@ -54,6 +54,9 @@ interface SettingsState {
   /** ALL of this provider's usable connections — multiple Google accounts (2026-08-26). */
   googleConnections: GoogleConnection[];
   connectingGoogle: boolean;
+  /** A connect that ended wrong — most importantly scopes_declined, where Google connected the
+   * account but the user left the agent's permission unticked on the consent screen. */
+  googleConnectError: string | null;
   confirmRemove: boolean;
   scopeSites: ScopeSite[];
   scopeLoading: boolean;
@@ -181,6 +184,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     settings: agentStore.getOrInitSettings(this.props.agentId),
     googleConnections: [],
     connectingGoogle: false,
+    googleConnectError: null,
     confirmRemove: false,
     scopeSites: [],
     scopeLoading: false,
@@ -250,15 +254,23 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
   }
 
   private async connectGoogle() {
-    this.setState({ connectingGoogle: true });
+    this.setState({ connectingGoogle: true, googleConnectError: null });
     try {
-      await this.props.electron?.ipcRenderer?.invoke('nexus-ai:credential:connect', {
+      const result = await this.props.electron?.ipcRenderer?.invoke('nexus-ai:credential:connect', {
         provider: 'google',
         agentId: this.props.agentId,
         siteId: '',
         // Verbatim from the agent — asking for more than it declared is over-authorising, and
         // asking for the wrong API's scope fails at the first call.
         scopes: this.googleDecl()?.scopes ?? [],
+      });
+      // Backing out is a choice, not a fault; everything else the user must hear about here —
+      // discarding this result is how a declined Analytics checkbox stayed silent until the
+      // bind picker failed two screens later.
+      this.setState({
+        googleConnectError: result?.ok || result?.reason === 'cancelled'
+          ? null
+          : (result?.message ?? 'Google sign-in did not complete.'),
       });
     } catch { /* handled by credential event */ } finally {
       this.setState({ connectingGoogle: false });
@@ -774,6 +786,13 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
             style: { padding: '6px 14px', background: 'var(--ag-teal)', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, color: 'var(--ag-on-teal)', cursor: connectingGoogle ? 'wait' : 'pointer', opacity: connectingGoogle ? 0.7 : 1 },
           }, connectingGoogle ? 'Connecting…' : (isConnected ? 'Connect another Google account' : 'Connect Google account')),
         ),
+        this.state.googleConnectError && React.createElement('div', {
+          style: {
+            marginTop: 10, padding: '10px 13px', borderRadius: 8, fontSize: 12.5, lineHeight: 1.5,
+            color: 'var(--ag-text-primary)', background: 'rgba(242,181,68,0.09)',
+            border: '1px solid rgba(242,181,68,0.35)',
+          },
+        }, this.state.googleConnectError),
       ),
     );
   }

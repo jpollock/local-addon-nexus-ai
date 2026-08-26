@@ -184,6 +184,20 @@ export class CredentialManager implements ICredentialManager {
     this.store.saveGrant({ connectionId, agentId, siteId, scopes });
 
     this.emitCredentialEvent({ type: 'credential:connected', provider, scopes: result.scopes });
+
+    // Google's granular consent lets the user leave a declared permission unticked while identity
+    // scopes come through automatically. The connection above is still saved — its tokens work for
+    // whatever WAS granted, and a reconnect updates the same row — but reporting success here made
+    // the failure surface two screens later as an opaque scope error (live repro 2026-08-26).
+    const missing = scopes.filter(s => !result.scopes.includes(s));
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        reason: 'scopes_declined',
+        message: `Google connected the account but did not grant: ${missing.join(', ')}. `
+          + 'Reconnect and tick that permission’s checkbox on the consent screen.',
+      };
+    }
     return { ok: true };
   }
 

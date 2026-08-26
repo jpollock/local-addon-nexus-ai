@@ -367,3 +367,46 @@ describe('same-account reconnect', () => {
     expect(manager.listGrantedConnections('google', 'seo-insights', '').map(c => c.id)).toEqual([id]);
   });
 });
+
+describe('scopes declined at consent', () => {
+  const EMAIL_SCOPE = 'https://www.googleapis.com/auth/userinfo.email';
+  const GA_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly';
+
+  it('a consent that omits a declared scope reports it at connect time — not two screens later', async () => {
+    // Live repro 2026-08-26: Google's granular consent defaults the Analytics checkbox to
+    // UNCHECKED; identity scopes come through automatically. The connect "succeeded", and the
+    // scope failure only surfaced when the bind picker tried the token.
+    const flow = {
+      run: jest.fn(async () => ({
+        outcome: 'success', accessToken: 'at_1', refreshToken: 'rt_1', expiresIn: 3600,
+        scopes: ['openid', EMAIL_SCOPE], // the checkbox was left unticked
+        accountLabel: 'user@example.com', accountSub: 'sub-1',
+      })),
+      cancel: jest.fn(),
+    };
+    const manager = makeManager({ flow });
+    const result = await manager.connect('google', 'web-analytics', '', [GA_SCOPE]);
+
+    expect(result.ok).toBe(false);
+    expect((result as any).reason).toBe('scopes_declined');
+    // The message names the missing permission — the user's next consent needs the checkbox.
+    expect((result as any).message).toContain(GA_SCOPE);
+
+    // The connection itself is real and kept: its tokens work for whatever WAS granted, and
+    // reconnecting with the box ticked updates this same row.
+    expect(manager.listConnections()).toHaveLength(1);
+  });
+
+  it('a consent granting everything declared still returns ok', async () => {
+    const flow = {
+      run: jest.fn(async () => ({
+        outcome: 'success', accessToken: 'at_1', refreshToken: 'rt_1', expiresIn: 3600,
+        scopes: [GA_SCOPE, 'openid', EMAIL_SCOPE],
+        accountLabel: 'user@example.com', accountSub: 'sub-1',
+      })),
+      cancel: jest.fn(),
+    };
+    const manager = makeManager({ flow });
+    expect(await manager.connect('google', 'web-analytics', '', [GA_SCOPE])).toEqual({ ok: true });
+  });
+});
