@@ -203,3 +203,37 @@ function cosine(a: Float32Array, b: Float32Array): number {
   }
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
+
+describe('ONNX Runtime telemetry guard', () => {
+  // onnxruntime 1.29.0+ enables telemetry collection on non-Windows platforms
+  // by default (opt-out: ORT_DISABLE_TELEMETRY=1). This addon ships to
+  // customers' machines — the same class of default we disqualified a
+  // framework over. We run 1.24.3 today (telemetry-free), but package.json's
+  // range permits 1.29+, so the guard must exist BEFORE any version bump can
+  // enable it: initialize() sets the opt-out before the runtime loads.
+  const ORIGINAL = process.env.ORT_DISABLE_TELEMETRY;
+  afterEach(() => {
+    if (ORIGINAL === undefined) delete process.env.ORT_DISABLE_TELEMETRY;
+    else process.env.ORT_DISABLE_TELEMETRY = ORIGINAL;
+  });
+
+  test('initialize() sets ORT_DISABLE_TELEMETRY=1 when unset — even on unsupported runtimes', async () => {
+    delete process.env.ORT_DISABLE_TELEMETRY;
+    // ia32 path: returns before the require, and the guard must STILL be set —
+    // it protects whichever code loads ort next, not just this instance.
+    const service = new EmbeddingService(MODEL_DIR, VECTOR_DIMENSIONS, 256, {
+      platform: 'win32', arch: 'ia32',
+    });
+    await service.initialize();
+    expect(process.env.ORT_DISABLE_TELEMETRY).toBe('1');
+  });
+
+  test('an explicit pre-existing value is respected, never clobbered', async () => {
+    process.env.ORT_DISABLE_TELEMETRY = '0'; // someone deliberately opted in
+    const service = new EmbeddingService(MODEL_DIR, VECTOR_DIMENSIONS, 256, {
+      platform: 'win32', arch: 'ia32',
+    });
+    await service.initialize();
+    expect(process.env.ORT_DISABLE_TELEMETRY).toBe('0');
+  });
+});

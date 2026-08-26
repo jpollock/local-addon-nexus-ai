@@ -39,6 +39,17 @@ export class EmbeddingService {
   }
 
   async initialize(): Promise<void> {
+    // Telemetry guard: onnxruntime 1.29.0+ collects telemetry on non-Windows
+    // platforms by default (opt-out env). We run 1.24.x (telemetry-free), but
+    // package.json's range permits newer — this line makes the opt-out hold
+    // through any future version bump, on every customer machine, before the
+    // runtime can load. An explicit pre-existing value (someone deliberately
+    // opting in) is respected. Set before the ia32 early-return on purpose:
+    // it protects whichever code loads ort next, not just this instance.
+    if (process.env.ORT_DISABLE_TELEMETRY === undefined) {
+      process.env.ORT_DISABLE_TELEMETRY = '1';
+    }
+
     if (!isOnnxRuntimeSupported(this.runtime)) {
       this.unavailableReason = 'ONNX Runtime Node does not publish a Windows ia32 native package.';
       console.warn(`[EmbeddingService] Disabled: ${this.unavailableReason}`);
