@@ -17,16 +17,19 @@ const providers = new Map<string, AIProvider>();
 export function initializeProviders(): void {
   const all: AIProvider[] = [
     new OllamaProvider(),
-    // P4.2 — same dark pattern as Power below: hand-rolled default, the AI
-    // SDK implementation (with cache_control breakpoints) behind the flag.
-    process.env.NEXUS_ANTHROPIC_AISDK === '1' ? new AnthropicAiSdkProvider() : new AnthropicProvider(),
+    // FLIPPED 2026-08-26 after the live parity drive: the AI SDK
+    // implementation (with the cache breakpoints — cacheRead=59,455/turn
+    // measured live) is the DEFAULT. NEXUS_ANTHROPIC_AISDK=0 is the escape
+    // hatch to the hand-rolled client, kept one release cycle then deleted.
+    process.env.NEXUS_ANTHROPIC_AISDK === '0' ? new AnthropicProvider() : new AnthropicAiSdkProvider(),
     new OpenAIProvider(),
     new GoogleProvider(),
     new LocalGatewayProvider(),
-    // spike/power-ai-sdk — same 'power' id either way, so ChatService and the
-    // renderer see no difference. Ships dark: hand-rolled adapter stays the
-    // default until the AI SDK implementation is proven against live Power.
-    process.env.NEXUS_POWER_AISDK === '1' ? new PowerAiSdkProvider() : new PowerProvider(),
+    // FLIPPED 2026-08-26 after the live parity drive (streamed chat with
+    // tool calls against real Power): the AI SDK implementation is the
+    // DEFAULT. NEXUS_POWER_AISDK=0 is the escape hatch to the hand-rolled
+    // client, kept one release cycle then deleted.
+    process.env.NEXUS_POWER_AISDK === '0' ? new PowerProvider() : new PowerAiSdkProvider(),
   ];
   for (const p of all) {
     providers.set(p.id, p);

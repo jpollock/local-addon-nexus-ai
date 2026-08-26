@@ -200,8 +200,13 @@ it('surfaces an HTTP error as an Anthropic error, one attempt, no retry loop', a
   expect(err.message).toMatch(/Anthropic error/);
 });
 
-// ── opt-in wiring — ships dark, same pattern as power-aisdk ─────────────────
-describe('provider registry opt-in', () => {
+// ── default wiring — FLIPPED 2026-08-26 after the live parity drive ─────────
+// The AI SDK implementation (with the cache breakpoints) is the default;
+// NEXUS_ANTHROPIC_AISDK=0 is the escape hatch back to the hand-rolled
+// client. Live evidence for the flip: fleet_overview called with 4/4
+// citations resolved, and cacheRead=59,455 tokens on every turn after the
+// first — the P3+P4.2 win measured in the owner's own session.
+describe('provider registry defaults', () => {
   afterEach(() => {
     delete process.env.NEXUS_ANTHROPIC_AISDK;
     jest.resetModules();
@@ -215,19 +220,19 @@ describe('provider registry opt-in', () => {
     return reg;
   }
 
-  it('serves the hand-rolled AnthropicProvider by default', () => {
-    const reg = freshRegistry();
-    const { AnthropicProvider } = require('../../src/main/chat/providers/anthropic');
-    expect(reg.getProvider('anthropic')).toBeInstanceOf(AnthropicProvider);
-  });
-
-  it('serves AnthropicAiSdkProvider under the same id when NEXUS_ANTHROPIC_AISDK=1', () => {
-    process.env.NEXUS_ANTHROPIC_AISDK = '1';
+  it('serves AnthropicAiSdkProvider by default', () => {
     const reg = freshRegistry();
     const { AnthropicAiSdkProvider: Cls } = require('../../src/main/chat/providers/anthropic-aisdk');
     const p = reg.getProvider('anthropic');
     expect(p).toBeInstanceOf(Cls);
     expect(p.id).toBe('anthropic');
+  });
+
+  it('NEXUS_ANTHROPIC_AISDK=0 is the escape hatch to the hand-rolled client', () => {
+    process.env.NEXUS_ANTHROPIC_AISDK = '0';
+    const reg = freshRegistry();
+    const { AnthropicProvider } = require('../../src/main/chat/providers/anthropic');
+    expect(reg.getProvider('anthropic')).toBeInstanceOf(AnthropicProvider);
   });
 });
 

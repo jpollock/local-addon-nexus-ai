@@ -214,11 +214,12 @@ it('makes exactly one attempt — no hidden retry loop on retryable errors', asy
   expect(events.some((e) => e.type === 'error')).toBe(true);
 });
 
-// ── opt-in wiring ───────────────────────────────────────────────────────────
-// The spike ships dark: power.ts stays the default; NEXUS_POWER_AISDK=1
-// swaps the implementation under the same 'power' id, so ChatService and the
-// renderer see no difference either way.
-describe('provider registry opt-in', () => {
+// ── default wiring — FLIPPED 2026-08-26 after the live parity drive ─────────
+// The AI SDK implementation is the default; NEXUS_POWER_AISDK=0 is the
+// escape hatch back to the hand-rolled client (kept for one release cycle,
+// then deleted). Live evidence for the flip: streamed chat with tool calls
+// against real Power, full suite green, owner-verified.
+describe('provider registry defaults', () => {
   afterEach(() => {
     delete process.env.NEXUS_POWER_AISDK;
     jest.resetModules();
@@ -232,19 +233,19 @@ describe('provider registry opt-in', () => {
     return reg;
   }
 
-  it('serves the original PowerProvider by default', () => {
-    const reg = freshRegistry();
-    const { PowerProvider } = require('../../src/main/chat/providers/power');
-    expect(reg.getProvider('power')).toBeInstanceOf(PowerProvider);
-  });
-
-  it('serves PowerAiSdkProvider under the same id when NEXUS_POWER_AISDK=1', () => {
-    process.env.NEXUS_POWER_AISDK = '1';
+  it('serves PowerAiSdkProvider by default', () => {
     const reg = freshRegistry();
     const { PowerAiSdkProvider: Cls } = require('../../src/main/chat/providers/power-aisdk');
     const p = reg.getProvider('power');
     expect(p).toBeInstanceOf(Cls);
     expect(p.id).toBe('power');
+  });
+
+  it('NEXUS_POWER_AISDK=0 is the escape hatch to the hand-rolled client', () => {
+    process.env.NEXUS_POWER_AISDK = '0';
+    const reg = freshRegistry();
+    const { PowerProvider } = require('../../src/main/chat/providers/power');
+    expect(reg.getProvider('power')).toBeInstanceOf(PowerProvider);
   });
 });
 

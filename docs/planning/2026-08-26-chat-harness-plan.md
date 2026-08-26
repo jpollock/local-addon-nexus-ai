@@ -139,8 +139,12 @@ re-derive four compliance properties inside someone else's loop.
 - Dark: `power.ts` default; `NEXUS_POWER_AISDK=1` opts in, same `'power'` id.
 
 **Remaining steps, in order:**
-1. Flip Power default after P1's probe answers and a live parity session.
-2. `@ai-sdk/anthropic` + P3's `cacheControl` — banks the caching win.
+1. ~~Flip Power default~~ **DONE 2026-08-26** — live parity drive (streamed
+   chat + tool calls), defaults flipped, `NEXUS_*_AISDK=0` is the escape
+   hatch for one release cycle, then the hand-rolled clients delete.
+2. ~~`@ai-sdk/anthropic` + cacheControl~~ **DONE + FLIPPED 2026-08-26** —
+   measured live: cacheRead=59,455 tokens/turn from turn 2 (96% of input at
+   ~10% price); `fleet_overview` + 4/4 citations in the owner's session.
 3. `@ai-sdk/openai`, `@ai-sdk/google`. Delete each hand-rolled client as its
    replacement proves out; `http-utils.ts` dies with the last one.
 4. Ollama: **open decision** — community `ai-sdk-ollama` vs keeping the
