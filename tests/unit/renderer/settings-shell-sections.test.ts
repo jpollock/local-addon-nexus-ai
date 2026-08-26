@@ -60,6 +60,7 @@ describe('SettingsShell section dispatch', () => {
       externalHosts: [{ alias: 'h1', site: 's1', environment: 'production', domain: 'example.com', wpPath: '/home/u/s1', allowRoot: false }],
       fleetCounts: { wpe: 1, external: 1, local: 1 },
       jobRunData: {},
+    pipelineActivity: null,
       indexEntries: [],
       mcpInfo: null,
     };
@@ -79,6 +80,7 @@ describe('SettingsShell section dispatch', () => {
       externalHosts: [],
       fleetCounts: null,
       jobRunData: {},
+    pipelineActivity: null,
       indexEntries: [],
       mcpInfo: null,
     };
@@ -98,6 +100,7 @@ describe('SettingsShell section dispatch', () => {
       externalHosts: [],
       fleetCounts: { wpe: 1, external: 1, local: 1 },
       jobRunData: { wpeRefresh: { averageMs: 1000, lastRunAt: Date.now() } },
+      pipelineActivity: null,
       indexEntries: [],
       mcpInfo: null,
     };
@@ -117,6 +120,7 @@ describe('SettingsShell section dispatch', () => {
       externalHosts: [{ alias: 'h1', site: 's1', environment: 'production', domain: 'example.com', wpPath: '/home/u/s1', allowRoot: false }],
       fleetCounts: null,
       jobRunData: {},
+    pipelineActivity: null,
       indexEntries: [],
       mcpInfo: null,
     };
@@ -136,6 +140,7 @@ describe('SettingsShell section dispatch', () => {
       externalHosts: [],
       fleetCounts: null,
       jobRunData: {},
+    pipelineActivity: null,
       indexEntries: [{ siteId: 's1', state: 'indexed', documentCount: 10 }],
       mcpInfo: { port: 13100, stdioPath: '/path/to/stdio.js' },
     };
@@ -161,6 +166,7 @@ describe('SettingsShell passes real data, not placeholders', () => {
     externalHosts: [{ alias: 'h1', site: 's1', environment: 'production', domain: 'example.com' }],
     fleetCounts: { wpe: 412, external: 1, local: 2 },
     jobRunData: { wpeRefresh: { averageMs: 1000, lastRunAt: Date.now() } },
+      pipelineActivity: null,
     indexEntries: [{ siteId: 's1', state: 'indexed', documentCount: 10 }],
     mcpInfo: { port: 13100 },
   };
