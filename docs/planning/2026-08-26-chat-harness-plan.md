@@ -43,24 +43,35 @@ from ambition.
 
 ## Workstreams
 
-### P1 — The Power 400: find the real trigger, then kill the cap
+### P1 — The Power 400 — **CLOSED 2026-08-26: cap deleted; no trigger exists anymore**
 
-**Evidence.** The cap's hypothesis is dead: live probe 2026-08-25 accepted
-**200 dummy tools** (`scripts/spike-power-aisdk-live.mjs`, owner's key).
-`slice(0, 128)` fixed chat by accident. Remaining suspects: a specific
-schema in the dropped tail (content), or total payload bytes (real registry
-147,225B vs ~24KB probed).
+**How it resolved.** Three live probes (owner's key), each killing a
+hypothesis:
+1. `spike-power-aisdk-live.mjs` — **200 dummy tools accepted** → count dead.
+2. `spike-power-real-tools-probe.mjs` — **all 207 real schemas (145,928B)
+   accepted** → content and bytes dead.
+3. `spike-power-matrix-probe.mjs` — one variable at a time off the good
+   baseline: `stream:true` ok, `max_tokens:8192` ok, ~9KB system prompt ok,
+   the exact combined chat shape ok on **sonnet-4-5 AND sonnet-5** → shape
+   and model dead. All five cells pass.
 
-**Plan.** Run `scripts/spike-power-real-tools-probe.mjs` (owner's key). It
-replays the real 207 schemas shaped exactly as `adaptToolsForChat` ships
-them, tests a size-matched dummy payload, then bisects to the offender.
-- Content → fix or Power-exclude that schema; **delete `POWER_MAX_TOOLS`**;
-  update `powerToolCap.test.ts` to pin the new behaviour.
-- Size → replace the count cap with an honest **byte bound**, measured, with
-  the same loud-log rule.
+**Conclusion:** the route was fixed upstream between 2026-08-25 16:20 and
+2026-08-26 morning. The original diagnosis chain (model → route-takes-no-
+tools → 128 count cap) was chasing a moving target; the cap "worked" only
+because the retest happened after sending fewer tools, coincident with or
+after the upstream fix.
 
-**Gate for:** P5's design (one bad schema drops its urgency a tier).
-**Cost:** minutes. **This runs first.**
+**Done:** `POWER_MAX_TOOLS` deleted from `ChatService.ts`;
+`powerToolCap.test.ts` rewritten to pin the FULL toolset (207 sent, no warn)
+with the three-probe history in its header. Regression posture: if the route
+ever rejects again, the failure is `power.ts`'s actionable "incompatible
+with the selected model" sentence — loud, never a silent 79-tool amputation.
+
+**Consequence for P5:** the forcing function is gone; tool selection is now
+purely a quality/cost workstream, not a correctness one. P2 (discovery
+invariant) loses none of its force — the incident happened because
+withholding was silent, and any future bound (grants, selection) can recreate
+that without P2's disclosures.
 
 ### P2 — The discovery invariant: the model must be able to learn what exists
 
