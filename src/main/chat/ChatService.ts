@@ -348,6 +348,19 @@ export class ChatService {
             this.emit(sessionId(session), event);
           } else if (event.type === 'done') {
             stopReason = event.stopReason;
+            // Turn usage through the logger that reaches local-lightning.log —
+            // this line is how the live parity drive proves the P3/P4.2 cache
+            // breakpoints (second turn of a session: cacheRead in the tens of
+            // thousands). Providers that report no usage log nothing.
+            if (event.usage) {
+              const u = event.usage;
+              this.services.logger?.info(
+                `[NexusAI] chat: turn usage provider=${providerId} in=${u.inputTokens ?? '?'} out=${u.outputTokens ?? '?'}` +
+                (u.cacheReadTokens !== undefined || u.cacheWriteTokens !== undefined
+                  ? ` cacheRead=${u.cacheReadTokens ?? 0} cacheWrite=${u.cacheWriteTokens ?? 0}`
+                  : ''),
+              );
+            }
           } else if (event.type === 'error') {
             this.emit(sessionId(session), event);
             this.endTurn(session, 'error', assembly, turnToolCalls);

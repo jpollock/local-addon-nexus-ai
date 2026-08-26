@@ -122,18 +122,17 @@ export class AnthropicAiSdkProvider implements AIProvider {
           case 'finish': {
             const u = part.totalUsage;
             if (u && (u.inputTokens !== undefined || u.outputTokens !== undefined)) {
+              // Cache accounting rides TokenUsage so ChatService can log it
+              // through services.logger — a raw console.log here reaches no
+              // file when Local is launched via `open` (learned live: the
+              // first verification grep came back empty).
+              const details = (u as { inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number } }).inputTokenDetails;
               usage = {
                 ...(u.inputTokens !== undefined ? { inputTokens: u.inputTokens } : {}),
                 ...(u.outputTokens !== undefined ? { outputTokens: u.outputTokens } : {}),
+                ...(details?.cacheReadTokens !== undefined ? { cacheReadTokens: details.cacheReadTokens } : {}),
+                ...(details?.cacheWriteTokens !== undefined ? { cacheWriteTokens: details.cacheWriteTokens } : {}),
               };
-              // The cache breakpoints are unverifiable without this: the live
-              // parity drive's second turn should show cacheRead > 0 (grep
-              // local-lightning.log for "anthropic-aisdk usage").
-              const details = (u as { inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number } }).inputTokenDetails;
-              console.log(
-                `[NexusAI] chat: anthropic-aisdk usage in=${u.inputTokens ?? '?'} out=${u.outputTokens ?? '?'} ` +
-                `cacheRead=${details?.cacheReadTokens ?? 0} cacheWrite=${details?.cacheWriteTokens ?? 0}`,
-              );
             }
             yield { type: 'done', stopReason: FINISH_MAP[part.finishReason] ?? 'end_turn', usage };
             return;

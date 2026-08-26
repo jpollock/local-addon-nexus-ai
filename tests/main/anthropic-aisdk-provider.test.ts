@@ -230,3 +230,29 @@ describe('provider registry opt-in', () => {
     expect(p.id).toBe('anthropic');
   });
 });
+
+// ── cache accounting reaches TokenUsage — the live-verification channel ─────
+// The parity drive proves the P3+P4.2 breakpoints by grepping a per-turn
+// usage log line; that line is only as real as these fields. The SDK's own
+// parser maps Anthropic's cache_read/creation_input_tokens — this pins that
+// they survive into our TokenUsage.
+it('carries cacheRead/cacheWrite tokens through to done.usage', async () => {
+  const { events } = await run({
+    events: [
+      ['message_start', {
+        message: {
+          id: 'msg_1', role: 'assistant', content: [],
+          usage: { input_tokens: 100, output_tokens: 0, cache_read_input_tokens: 40000, cache_creation_input_tokens: 250 },
+        },
+      }],
+      ['content_block_start', { index: 0, content_block: { type: 'text', text: '' } }],
+      ['content_block_delta', { index: 0, delta: { type: 'text_delta', text: 'hi' } }],
+      ['content_block_stop', { index: 0 }],
+      ['message_delta', { delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 5 } }],
+      ['message_stop', {}],
+    ],
+  });
+  const done = events[events.length - 1] as any;
+  expect(done.usage.cacheReadTokens).toBe(40000);
+  expect(done.usage.cacheWriteTokens).toBe(250);
+});
