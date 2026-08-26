@@ -1,8 +1,8 @@
 import { streamText, dynamicTool, jsonSchema } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import type { ModelMessage } from 'ai';
 import type { ChatMessage, ProviderStreamEvent } from '../../../common/chat-types';
 import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from './types';
+import { splitModelMessages, errorText } from './aisdk-shared';
 import { apiRequest } from './http-utils';
 
 // spike/power-ai-sdk — Power behind the Vercel AI SDK.
@@ -26,45 +26,6 @@ const FINISH_MAP: Record<string, 'end_turn' | 'tool_use' | 'max_tokens' | 'error
   'length': 'max_tokens',
   'error': 'error',
 };
-
-/** Flatten an AI SDK stream error (APICallError carries the response body) into one searchable string. */
-function errorText(err: unknown): string {
-  const e = err as { message?: string; responseBody?: string; data?: unknown };
-  return [e?.message, e?.responseBody, e?.data ? JSON.stringify(e.data) : '']
-    .filter(Boolean)
-    .join(' ');
-}
-
-function toModelMessages(messages: ChatMessage[]): ModelMessage[] {
-  return messages.map((m): ModelMessage => {
-    if (m.role === 'tool') {
-      return {
-        role: 'tool',
-        content: [{
-          type: 'tool-result',
-          toolCallId: m.toolCallId ?? '',
-          toolName: m.toolName ?? '',
-          output: { type: 'text', value: m.content },
-        }],
-      };
-    }
-    if (m.role === 'assistant' && m.toolCalls?.length) {
-      return {
-        role: 'assistant',
-        content: [
-          ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
-          ...m.toolCalls.map((tc) => ({
-            type: 'tool-call' as const,
-            toolCallId: tc.id,
-            toolName: tc.name,
-            input: tc.arguments,
-          })),
-        ],
-      };
-    }
-    return { role: m.role as 'system' | 'user' | 'assistant', content: m.content };
-  });
-}
 
 export class PowerAiSdkProvider implements AIProvider {
   readonly id = 'power';
@@ -104,9 +65,11 @@ export class PowerAiSdkProvider implements AIProvider {
       })]),
     );
 
+    const { system, messages: modelMessages } = splitModelMessages(messages);
     const result = streamText({
       model: provider(config.model),
-      messages: toModelMessages(messages),
+      ...(system ? { system: system as never } : {}),
+      messages: modelMessages,
       ...(tools.length > 0 ? { tools: aiTools } : {}),
       ...(config.forceTool ? { toolChoice: { type: 'tool' as const, toolName: config.forceTool } } : {}),
       maxOutputTokens: 8192,

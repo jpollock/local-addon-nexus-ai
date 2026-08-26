@@ -247,3 +247,21 @@ describe('provider registry opt-in', () => {
     expect(p.id).toBe('power');
   });
 });
+
+// ── the v7 system-message seam ──────────────────────────────────────────────
+// AI SDK v7 REJECTS role:'system' inside `messages` ("Use the instructions
+// option instead") — and ChatService always sends one. The original parity
+// suite missed it because no fixture carried a system message; found while
+// building the anthropic provider. The system message must reach the wire
+// via streamText's system/instructions option, not the message array.
+it('carries a system message to the wire instead of erroring on it', async () => {
+  const { events, requestBody } = await run({
+    messages: [
+      { role: 'system', content: 'You are Nexus AI.' },
+      { role: 'user', content: 'hi' },
+    ],
+    frames: [chunk({ content: 'ok' }), chunk({}, 'stop')],
+  });
+  expect(events.find((e) => e.type === 'error')).toBeUndefined();
+  expect(JSON.stringify(requestBody)).toContain('You are Nexus AI.');
+});

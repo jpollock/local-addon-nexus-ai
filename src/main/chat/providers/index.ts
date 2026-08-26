@@ -6,6 +6,7 @@ import { GoogleProvider } from './google';
 import { LocalGatewayProvider } from './local-gateway';
 import { PowerProvider } from './power';
 import { PowerAiSdkProvider } from './power-aisdk';
+import { AnthropicAiSdkProvider } from './anthropic-aisdk';
 
 // ---------------------------------------------------------------------------
 // Provider Registry
@@ -16,7 +17,9 @@ const providers = new Map<string, AIProvider>();
 export function initializeProviders(): void {
   const all: AIProvider[] = [
     new OllamaProvider(),
-    new AnthropicProvider(),
+    // P4.2 — same dark pattern as Power below: hand-rolled default, the AI
+    // SDK implementation (with cache_control breakpoints) behind the flag.
+    process.env.NEXUS_ANTHROPIC_AISDK === '1' ? new AnthropicAiSdkProvider() : new AnthropicProvider(),
     new OpenAIProvider(),
     new GoogleProvider(),
     new LocalGatewayProvider(),
