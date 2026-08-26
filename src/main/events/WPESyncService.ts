@@ -1252,6 +1252,11 @@ export class WPESyncService {
         environment: i.environment ?? 'unknown',
         primaryDomain: i.primaryDomain ?? `${i.name}.wpengine.com`,
         accountName: accountMap.get(i.account?.id ?? '')?.name ?? null,
+        // fixes-082526 phase 4: the account WRITE bound resolves install →
+        // account through this column (installAccountFromCache). A row
+        // without it answers undefined and the gate fails closed while
+        // exclusions exist — so the id rides the cache, not a live CAPI call.
+        accountId: i.account?.id ?? null,
       }));
       this.registryStorage.set(STORAGE_KEYS.WPE_INSTALL_CACHE, { installs: cache, syncedAt: Date.now() });
       this.logger.info(`[WPESyncService] Cached ${cache.length} WPE installs for fleet resource`);

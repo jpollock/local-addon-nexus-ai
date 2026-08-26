@@ -50,15 +50,70 @@ export const DEFAULT_OPERATION_PERMISSIONS: Record<Operation, Record<EnvKey, boo
  *                    bare connection level, so a connection-wide rule covers every site
  *                    under it and a per-site rule overrides it.
  */
+/**
+ * fixes-082526 phase 4 · install → WPE account id, injected from index.ts
+ * (the gate stays dependency-free: the intelligence seam's law translation
+ * imports this module, so it must never pull storage or electron itself).
+ * Unregistered + exclusions configured = writes fail closed: an account the
+ * platform cannot establish is not one it can prove included.
+ */
+let installAccountResolver: ((installName: string) => string | undefined) | undefined;
+
+export function setInstallAccountResolver(
+  fn: ((installName: string) => string | undefined) | undefined
+): void {
+  installAccountResolver = fn;
+}
+
+/** The resolver index.ts registers: the WPE install cache's accountId column. */
+export function installAccountFromCache(storage: {
+  get(key: string): unknown;
+}): (installName: string) => string | undefined {
+  return (installName) => {
+    try {
+      const cache = storage.get(STORAGE_KEYS.WPE_INSTALL_CACHE) as {
+        installs?: Array<{ installName?: string; install_name?: string; accountId?: string }>;
+      } | null;
+      const hit = (cache?.installs ?? []).find(
+        (i) => (i.installName ?? i.install_name) === installName
+      );
+      // A pre-phase-4 cache row carries no accountId: undefined, never a guess
+      // — the caller fails closed while exclusions exist, and a re-sync fills it.
+      return typeof hit?.accountId === 'string' && hit.accountId ? hit.accountId : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+}
+
+/** The operations the account bound covers. `pull` is a write for scope purposes — the sheet's own first example is "Copy a site down". */
+const ACCOUNT_BOUND_WRITES = new Set<Operation>(['pull', 'wpcli', 'push', 'delete']);
+
 export function isOperationAllowed(
   operation: 'pull' | 'wpcli_read' | 'wpcli' | 'push' | 'delete',
   environment: string | undefined,
   settings: Pick<NexusSettings,
     'remoteOperationPermissions' | 'remoteSiteExceptions' |
-    'wpeOperationPermissions' | 'wpeSiteExceptions'>,
+    'wpeOperationPermissions' | 'wpeSiteExceptions' | 'wpeWriteExcludedAccounts'>,
   targetRef?: string,
 ): boolean {
   const env = normaliseEnv(environment);
+
+  // Phase 4 · THE ACCOUNT WRITE BOUND, before everything — an excluded
+  // account is excluded WHOLE (§6), so no per-site allow exception below may
+  // punch through it. Applies to WPE-shaped targets alone: ssh/local refs
+  // are governed by their own machinery, and a write with no target ref is
+  // outside the dimension's reach (documented in the packet spec).
+  const excludedAccounts = settings.wpeWriteExcludedAccounts ?? [];
+  if (excludedAccounts.length > 0 && ACCOUNT_BOUND_WRITES.has(operation) && targetRef) {
+    const ref = targetRef.includes(':') ? targetRef : `wpe:${targetRef}`;
+    if (ref.startsWith('wpe:')) {
+      const account = installAccountResolver?.(ref.slice(4));
+      // Unknown account (no resolver yet, stale cache, unknown install) fails
+      // CLOSED while exclusions exist: unprovable-included is not included.
+      if (account === undefined || excludedAccounts.includes(account)) return false;
+    }
+  }
   const exceptions = settings.remoteSiteExceptions?.length
     ? settings.remoteSiteExceptions
     : (settings.wpeSiteExceptions as any as RemoteSiteException[] | undefined);

@@ -437,6 +437,15 @@ export interface NexusSettings {
   externalContentIndexIntervalHours?: number;    // How often to content-index external SSH hosts (default: 24)
   externalContentIndexAutoEnabled?: boolean;     // Whether external SSH content indexing is enabled (default: false — opt-in)
   wpeAccountFilter?: string[] | null;       // Account IDs to deep-scan; null/undefined = all accounts
+  /**
+   * fixes-082526 phase 4 · THE ACCOUNT WRITE BOUND (owner ruling 2/B). WPE
+   * account IDs whose installs refuse every WRITE (`pull`, `wpcli`, `push`,
+   * `delete`) regardless of environment or per-site exceptions — an excluded
+   * account is excluded whole. `wpcli_read` stays allowed. Empty/absent = the
+   * dimension is inert. NOT the same thing as `wpeAccountFilter` above, which
+   * scopes SYNCING and binds nothing.
+   */
+  wpeWriteExcludedAccounts?: string[];
   dailyUsdBudget?: number;                   // Max estimated LLM spend per local day (USD). 0/undefined = no limit (T-BUDGETS)
   /** WPE environment types Nexus is allowed to access. Default: staging + development only.
    *  Set to include 'production' to enable production access. */

@@ -40,6 +40,7 @@ import { InstructionRegistry, registerAllInstructions } from './mcp/instructions
 import { registerIpcHandlers, getAgentSetting, canAutoRun, seedAgentDefaultsIfMissing, getAgentLogLevel } from './ipc-handlers';
 import { EventLog } from './logging/eventLog';
 import { setPipelineRunEventLog } from './intelligence-host/pipelineRunProducer';
+import { setInstallAccountResolver, installAccountFromCache } from './mcp/utils/operation-permissions';
 import { resolveLogLevel } from './logging/resolveLogLevel';
 import { applyRetention } from './logging/retention';
 import { initializeProviders } from './chat/providers/index';
@@ -874,6 +875,14 @@ export default function main(context: any): void {
       const settings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
       const minLevel = resolveLogLevel(settings ?? undefined, process.env);
       eventLog = new EventLog({ root: nexusLogRoot, minLevel, levelFor: (source) => getAgentLogLevel(source) });
+
+      // fixes-082526 phase 4: the account write bound's install→account
+      // resolver — the WPE install cache's accountId column. Registered as
+      // early as storage exists; before this line a configured exclusion
+      // fails writes closed, which is the ruled direction for the gap.
+      setInstallAccountResolver(installAccountFromCache({
+        get: (k: string) => registryStorage.get(k),
+      }));
 
       // The observability pull-forward (fixes-082526): every pipeline run —
       // all eight recordPipelineRun caller files — writes one `pipeline.run`

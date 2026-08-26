@@ -109,6 +109,10 @@ export const UpdateSettingsSchema = z.object({
   remoteSiteExceptions: z.array(RemoteSiteExceptionSchema).nullable().optional(),
   capabilityGrants: z.array(CapabilityGrantSchema).nullable().optional(),
   wpeAllowedEnvironments: z.array(z.string()).optional(), // legacy — kept for migration
+  // fixes-082526 phase 4: the account WRITE bound (ids). Distinct from
+  // wpeAccountFilter (a sync scope). .strict() eats unlisted keys — this line
+  // is what lets the setting persist at all.
+  wpeWriteExcludedAccounts: z.array(z.string()).optional(),
   wpeBannerDismissed: z.boolean().optional(),
   wpeNotConnectedBannerDismissed: z.boolean().optional(),
   wpeContentIndexAutoEnabled: z.boolean().optional(),
