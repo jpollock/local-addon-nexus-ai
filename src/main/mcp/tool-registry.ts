@@ -175,7 +175,7 @@ export class ToolRegistry {
     name: string,
     args: Record<string, unknown>,
     services: NexusServices,
-    accessMethod?: 'mcp' | 'cli' | 'agent',
+    accessMethod?: 'mcp' | 'cli' | 'agent' | 'chat',
     // Position 5 stays the confirmation gate: two callers already pass it positionally, and
     // demoting a safety parameter below an optional diagnostic id invites passing a runId
     // where a `false` was meant. runId is appended instead.

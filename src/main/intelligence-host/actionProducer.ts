@@ -610,7 +610,11 @@ function actorFor(
 ): { id: string; kind: 'human' | 'agent' | 'ability' | 'system' } {
   // WP-57 · a caller that KNOWS outranks an inference from the surface.
   if (supplied) return supplied;
-  if (accessMethod === 'mcp') return { id: 'act_chat_agent', kind: 'agent' };
+  // 'chat' is the panel chat (labeled correctly since the P5 prereq landed);
+  // 'mcp' still covers external MCP clients AND pre-split rows. Both map to
+  // act_chat_agent for now — splitting external MCP into its own actor id
+  // changes event provenance and needs its own packet.
+  if (accessMethod === 'chat' || accessMethod === 'mcp') return { id: 'act_chat_agent', kind: 'agent' };
   if (accessMethod === 'agent') return { id: 'act_agent_runtime', kind: 'agent' };
   // 'cli' and unknown: a session on this machine drove it. An unknown session
   // is 'system', never a fabricated human.

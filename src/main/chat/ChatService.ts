@@ -582,7 +582,7 @@ export class ChatService {
       // The approval is this act's cause: `causation` makes the chain
       // approval -> action -> outcome readable straight off the ledger.
       const result3 = await this.registry.call(
-        toolCall.name, toolCall.arguments, this.services, 'mcp', false, undefined,
+        toolCall.name, toolCall.arguments, this.services, 'chat', false, undefined,
         { id: taskId, causation: rationaleId },
       );
       const _note3 = await this.teardownSiteLifecycle(_s3, _as3);
@@ -610,7 +610,7 @@ export class ChatService {
     // No approval preceded this one, so no causation rides with it — the
     // absence is the honest record of a call that needed no human decision.
     const result = await this.registry.call(
-      toolCall.name, toolCall.arguments, this.services, 'mcp', true, undefined, { id: taskId },
+      toolCall.name, toolCall.arguments, this.services, 'chat', true, undefined, { id: taskId },
     );
     const _note = await this.teardownSiteLifecycle(_s, _as);
     const text = result.content.map((c) => c.text).join('\n') + _note;
