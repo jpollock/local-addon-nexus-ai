@@ -463,6 +463,15 @@ export class NexusOverview extends React.Component<NexusOverviewProps, NexusOver
       if (door && door.section === 'capabilities') {
         this.setState({ activeTab: 'settings', governDoor: door });
       }
+
+      // The header's ambient needs-you door ("Open Now"). Cleared whether or
+      // not the tab changed, for the same reason every door request is: a
+      // request left in the store re-fires on every unrelated store change.
+      const tabReq = nexusStore.get().overlayTabRequest;
+      if (tabReq) {
+        nexusStore.update({ overlayTabRequest: null });
+        this.setState({ activeTab: tabReq.tab });
+      }
     });
 
     // Refresh indexEntries immediately when any site finishes indexing — don't

@@ -35,6 +35,14 @@ export interface Props {
   railHidden?: boolean;
   /** Begin a vertical drag of the collapsed tab. */
   onRailDragStart?: (e: React.MouseEvent) => void;
+  /**
+   * The needs-you count as a DOOR at ambient weight — its only home since the
+   * 16:09 ruling removed the queue verdict from the chat's opening. Derived by
+   * the container (headerAmbient.ts); null renders nothing. The line shows at
+   * stage width only — a 380px header has no room for both, so the companion
+   * carries the door alone.
+   */
+  ambient?: { line: string; door: string; onOpen: () => void } | null;
 }
 
 interface DockedPanelState {
@@ -262,13 +270,17 @@ const styles = {
     background: 'var(--nxai-card-bg)',
   },
   avatar: {
-    width: 34,
-    height: 34,
+    width: 26,
+    height: 26,
     borderRadius: '50%' as const,
-    background: UI_COLORS.WPE_BRAND,
-    // Unchanged from the star: dark mark on the brand circle. Stated explicitly now
-    // because the glyph no longer carries its own fill.
-    color: UI_COLORS.NEXUS_MARK,
+    // The design's mark in all three new-chat boards: the radial gradient with
+    // the orbit glyph in white. The same identity the transcript's thinking
+    // row paints — the header and the presence avatar are one mark, not two.
+    // (Previously 34px brand-teal with a dark mark, from before the boards.)
+    background: 'radial-gradient(circle at 30% 25%, rgb(14,202,212), rgb(3,155,92))',
+    // action-text, not a literal: white in both themes, and the theme rule
+    // (panel-theme.test.ts) forbids raw hex in panel files.
+    color: 'var(--nxai-action-text)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -374,7 +386,8 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
       React.createElement(
         'div',
         { style: { display: 'flex', flexDirection: 'column' as const, gap: 1 } },
-        React.createElement('span', { style: { fontSize: 15, fontWeight: 600, color: 'var(--nxai-card-text)', lineHeight: 1.2 } }, 'Nexus'),
+        // "Nexus AI" — the design's name in all three new-chat boards.
+        React.createElement('span', { style: { fontSize: 15, fontWeight: 600, color: 'var(--nxai-card-text)', lineHeight: 1.2 } }, 'Nexus AI'),
         // Second line carries live status only. It used to say "Follows you across tabs" —
         // header space spent restating a behaviour the user can already see — and briefly
         // held a site picker, which was removed: the panel's scope is not something the
@@ -388,10 +401,44 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
         // beside the app's name is invisible exactly when it matters.
         null,
       ),
+      // The needs-you count as a door at ambient weight — its only home. One
+      // line, no action, never the subject (new-chat sheet). Stage carries the
+      // line and the door; the 380px companion carries the door alone.
+      this.props.ambient
+        ? React.createElement(
+            'span',
+            { style: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 } },
+            isFull
+              ? React.createElement(
+                  'span',
+                  { style: { fontSize: 12.5, color: 'var(--nxai-card-sub)' } },
+                  this.props.ambient.line,
+                )
+              : null,
+            React.createElement(
+              'button',
+              {
+                style: {
+                  fontSize: 12.5,
+                  fontWeight: 500,
+                  color: 'var(--nxai-action)', // the design's door blue maps to action blue — links are action, not brand
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                },
+                onClick: this.props.ambient.onOpen,
+                'aria-label': `${this.props.ambient.line} — open Now`,
+              },
+              this.props.ambient.door,
+            ),
+          )
+        : null,
       // Control cluster
       React.createElement(
         'div',
-        { style: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 2 } },
+        { style: { marginLeft: this.props.ambient ? 0 : 'auto', display: 'flex', alignItems: 'center', gap: 2 } },
         // #1 Sessions — docked only (null in full)
         isFull ? null : React.createElement(
           'button',

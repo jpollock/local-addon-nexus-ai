@@ -108,6 +108,14 @@ export interface NexusState {
    * re-scopes the panel every time anything else in the store changes.
    */
   nowDoorRequest?: { kind: 'site'; target: string } | null;
+  /**
+   * The header's ambient needs-you door, travelling the other way: the docked
+   * panel asks the DASHBOARD to open on a tab. Same two-roots bridge as
+   * `governDoorRequest`; the panel also sets `window.location.hash` to
+   * `/main/nexus` so the overlay mounts if it was not on screen. Cleared by
+   * NexusOverview once honoured.
+   */
+  overlayTabRequest?: { tab: 'now' } | null;
   credentialConnectRequest?: {
     provider: string;
     agentId: string;

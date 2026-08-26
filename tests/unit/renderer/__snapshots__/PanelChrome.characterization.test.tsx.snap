@@ -103,14 +103,14 @@ exports[`panel chrome — characterization renders docked 1`] = `
           "props": {
             "style": {
               "alignItems": "center",
-              "background": "#0ECAD4",
+              "background": "radial-gradient(circle at 30% 25%, rgb(14,202,212), rgb(3,155,92))",
               "borderRadius": "50%",
-              "color": "#05262e",
+              "color": "var(--nxai-action-text)",
               "display": "flex",
               "flexShrink": 0,
-              "height": 34,
+              "height": 26,
               "justifyContent": "center",
-              "width": 34,
+              "width": 26,
             },
           },
           "type": "div",
@@ -118,7 +118,7 @@ exports[`panel chrome — characterization renders docked 1`] = `
         {
           "children": [
             {
-              "children": "Nexus",
+              "children": "Nexus AI",
               "key": null,
               "props": {
                 "style": {
@@ -142,6 +142,7 @@ exports[`panel chrome — characterization renders docked 1`] = `
           },
           "type": "div",
         },
+        null,
         {
           "children": [
             {
@@ -362,14 +363,14 @@ exports[`panel chrome — characterization renders full 1`] = `
           "props": {
             "style": {
               "alignItems": "center",
-              "background": "#0ECAD4",
+              "background": "radial-gradient(circle at 30% 25%, rgb(14,202,212), rgb(3,155,92))",
               "borderRadius": "50%",
-              "color": "#05262e",
+              "color": "var(--nxai-action-text)",
               "display": "flex",
               "flexShrink": 0,
-              "height": 34,
+              "height": 26,
               "justifyContent": "center",
-              "width": 34,
+              "width": 26,
             },
           },
           "type": "div",
@@ -377,7 +378,7 @@ exports[`panel chrome — characterization renders full 1`] = `
         {
           "children": [
             {
-              "children": "Nexus",
+              "children": "Nexus AI",
               "key": null,
               "props": {
                 "style": {
@@ -401,6 +402,7 @@ exports[`panel chrome — characterization renders full 1`] = `
           },
           "type": "div",
         },
+        null,
         {
           "children": [
             null,
@@ -612,14 +614,14 @@ exports[`panel chrome — characterization renders sessions open 1`] = `
           "props": {
             "style": {
               "alignItems": "center",
-              "background": "#0ECAD4",
+              "background": "radial-gradient(circle at 30% 25%, rgb(14,202,212), rgb(3,155,92))",
               "borderRadius": "50%",
-              "color": "#05262e",
+              "color": "var(--nxai-action-text)",
               "display": "flex",
               "flexShrink": 0,
-              "height": 34,
+              "height": 26,
               "justifyContent": "center",
-              "width": 34,
+              "width": 26,
             },
           },
           "type": "div",
@@ -627,7 +629,7 @@ exports[`panel chrome — characterization renders sessions open 1`] = `
         {
           "children": [
             {
-              "children": "Nexus",
+              "children": "Nexus AI",
               "key": null,
               "props": {
                 "style": {
@@ -651,6 +653,7 @@ exports[`panel chrome — characterization renders sessions open 1`] = `
           },
           "type": "div",
         },
+        null,
         {
           "children": [
             {
@@ -888,14 +891,14 @@ exports[`panel chrome — characterization renders streaming 1`] = `
           "props": {
             "style": {
               "alignItems": "center",
-              "background": "#0ECAD4",
+              "background": "radial-gradient(circle at 30% 25%, rgb(14,202,212), rgb(3,155,92))",
               "borderRadius": "50%",
-              "color": "#05262e",
+              "color": "var(--nxai-action-text)",
               "display": "flex",
               "flexShrink": 0,
-              "height": 34,
+              "height": 26,
               "justifyContent": "center",
-              "width": 34,
+              "width": 26,
             },
           },
           "type": "div",
@@ -903,7 +906,7 @@ exports[`panel chrome — characterization renders streaming 1`] = `
         {
           "children": [
             {
-              "children": "Nexus",
+              "children": "Nexus AI",
               "key": null,
               "props": {
                 "style": {
@@ -927,6 +930,7 @@ exports[`panel chrome — characterization renders streaming 1`] = `
           },
           "type": "div",
         },
+        null,
         {
           "children": [
             {

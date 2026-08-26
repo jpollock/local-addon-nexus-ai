@@ -15,6 +15,7 @@ import {
   type SiteContentStatus,
 } from './siteContextModel';
 import { nexusStore } from '../../store/NexusStateManager';
+import { deriveAmbient } from './headerAmbient';
 import { SessionsSidebar } from './SessionsSidebar';
 import {
   type PanelState,
@@ -414,6 +415,22 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
       activeSessionId: null,
     });
   }
+
+  /**
+   * The ambient door's landing: the dashboard's Now tab. Two React roots, one
+   * store — the request switches the tab if the overview is mounted, and the
+   * hash navigation mounts it if it is not (Local uses HashHistory, so setting
+   * the hash IS the router call). The docked panel stays open: the door reveals
+   * the queue, it does not take the chat away.
+   */
+  private openNowTab = (): void => {
+    nexusStore.update({ overlayTabRequest: { tab: 'now' } });
+    try {
+      if (!String(window.location.hash).includes('/main/nexus')) {
+        window.location.hash = '#/main/nexus';
+      }
+    } catch { /* navigation is best-effort; the store request alone covers the mounted case */ }
+  };
 
   // ── Site context ───────────────────────────────────────────────────────────────
   //
@@ -821,6 +838,10 @@ export class DockedPanelContainer extends React.Component<ContainerProps, Contai
         onToggleSessions: () => this.setState((s) => ({ showSessions: !s.showSessions })),
         streamingStatus: this.state.streamingStatus,
         isOverlay: reflowMode === 'overlay',
+        // The needs-you count's only home (16:09 ruling): the header, at
+        // ambient weight, on a fresh chat only. Derivation and its nulls live
+        // in headerAmbient.ts; the door lands on the dashboard's Now tab.
+        ambient: deriveAmbient(this.state.needsYou, this.state.activeSessionId, this.openNowTab),
         ...this.tabSignals(),
       },
       panelContent,
