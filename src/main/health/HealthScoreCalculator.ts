@@ -176,6 +176,15 @@ export class HealthScoreCalculator {
   async calculateAllScores(
     siteIds: string[],
     siteInfoMap: Record<string, { phpVersion?: string; domain?: string }>,
+    /**
+     * Per-entry routing (fixes-082526 item 5): `factors` narrows the set for
+     * remote entries (absent = the all-five local default), and `dataSiteId`
+     * is the id plugin/factor data is read under — the GRAPH ROW id for a
+     * WPE/external entry, whose index-registry key is an install id that no
+     * plugins row carries. Results stay keyed by the caller's own ids.
+     * Built by `buildFleetScoringInputs` — do not hand-assemble per loop.
+     */
+    perSite?: Record<string, { factors?: FactorName[]; dataSiteId?: string }>,
   ): Promise<Record<string, number>> {
     const results: Record<string, number> = {};
 
@@ -183,7 +192,12 @@ export class HealthScoreCalculator {
       siteIds.map(async (siteId) => {
         try {
           const info = siteInfoMap[siteId] ?? {};
-          const breakdown = await this.calculateScore(siteId, info);
+          const route = perSite?.[siteId];
+          const breakdown = await this.calculateScore(
+            route?.dataSiteId ?? siteId,
+            info,
+            route?.factors,
+          );
           results[siteId] = breakdown.overall;
         } catch {
           results[siteId] = 0;

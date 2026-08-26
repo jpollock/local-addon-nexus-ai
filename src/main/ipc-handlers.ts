@@ -17,6 +17,7 @@ import type { InboxItem } from './inbox/types';
 import { registerBulkHandlers } from './ipc/handlers/bulk';
 import { registerWpeSyncHandlers } from './ipc/handlers/wpe-sync';
 import { localDay } from './logging/eventLog';
+import { buildFleetScoringInputs } from './health/fleetScoring';
 import type { NexusSettings } from '../common/types';
 import type { IndexRegistry, RegistryStorage } from './content/IndexRegistry';
 import type { ContentPipeline } from './content/ContentPipeline';
@@ -3464,21 +3465,18 @@ Answer:`,
     try {
       // Health distribution
       const allEntries = indexRegistry.listAll().filter((e: any) => e.state === 'indexed' || e.state === 'stale');
-      const siteIds = allEntries.map((e: any) => e.siteId);
-      const siteInfoMap: Record<string, any> = {};
-
-      const allSites = siteData.getSites();
-      for (const siteId of siteIds) {
-        const site = allSites[siteId];
-        if (site) {
-          // Local-only path: `site` came from Local's own store, which supplies a
-          // real PHP version. Deliberately NOT the fabricating fallback removed
-          // from the fleet-intelligence modules — see CLAUDE.md, "Fleet counts".
-          siteInfoMap[siteId] = { domain: site.domain || '', phpVersion: site.phpVersion || '8.0' };
-        }
-      }
-
-      const scores = await healthCalculator.calculateAllScores(siteIds, siteInfoMap);
+      // The shared derivation (health/fleetScoring.ts) — same module the
+      // GraphQL and MCP fleet loops consume. Before it, a WPE entry missed
+      // the local-store lookup, was handed an empty info object, and scored
+      // all five factors — maintenance/activity 0 for 35% of its weight, so
+      // the dashboard's "critical" count was an artifact of the join.
+      // Unresolvable entries are excluded, never scored 0 into a bucket.
+      const scoringInputs = buildFleetScoringInputs(
+        allEntries, siteData.getSites() as any, graphService?.getDb?.(),
+      );
+      const scores = await healthCalculator.calculateAllScores(
+        scoringInputs.siteIds, scoringInputs.siteInfoMap, scoringInputs.perSite,
+      );
       let healthy = 0, warning = 0, critical = 0;
       for (const score of Object.values(scores)) {
         if ((score as number) >= 80) healthy++;

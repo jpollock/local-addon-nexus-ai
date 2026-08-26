@@ -12,6 +12,7 @@ import type { AgentDispatcher } from '../agent-runtime/AgentDispatcher';
 import * as ollamaClient from '../helpers/ollama-client';
 import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation-permissions';
 import { remoteHealthFactors } from '../health/remoteFactors';
+import { buildFleetScoringInputs } from '../health/fleetScoring';
 import {
   buildDateRange,
   getUsageCached,
@@ -2792,32 +2793,24 @@ export function createResolvers(context: ResolverContext) {
           // caller can qualify the counts rather than print them bare next to a
           // fleet-wide total several times larger.
           //
-          // Two known defects live in the loop below and are deliberately NOT
-          // fixed here (they predate this branch and want their own change):
-          // `localSiteData[entry.siteId]` misses for every WPE entry, so
-          // `domain` is '' and `phpVersion` falls back to a fabricated '8.0';
-          // and `calculateAllScores` uses the default all-five factor set, so
-          // maintenance and activity score 0 for those same WPE entries — the
-          // very thing nexusFleetSiteHealth's per-target factor list fixes.
+          // The two defects that used to live in this loop (fabricated '8.0'
+          // for every WPE lookup-miss, all-five factors scoring maintenance/
+          // activity 0 for remote entries) are fixed by the shared derivation
+          // (health/fleetScoring.ts) — the same module fleet_health_summary
+          // and DASHBOARD_V2_STATS consume, so the bug cannot survive on one
+          // surface while dead on another. Unresolvable/unscoreable entries
+          // are EXCLUDED and counted, never scored 0 into the critical bucket.
           const entries = services.indexRegistry.listAll().filter((e: any) => e.state === 'indexed');
-          const siteInfoMap: Record<string, any> = {};
-
-          for (const entry of entries) {
-            const site = localSiteData[entry.siteId];
-            siteInfoMap[entry.siteId] = {
-              domain: site?.domain || '',
-              phpVersion: (site as any)?.phpVersion || '8.0',
-            };
-          }
-
-          const indexedSiteIds = entries.map((e: any) => e.siteId);
-          const scores = await services.healthCalculator.calculateAllScores(indexedSiteIds, siteInfoMap);
+          const scoringInputs = buildFleetScoringInputs(entries, localSiteData as any, db);
+          const scores = await services.healthCalculator.calculateAllScores(
+            scoringInputs.siteIds, scoringInputs.siteInfoMap, scoringInputs.perSite,
+          );
 
           let healthyCount = 0;
           let warningCount = 0;
           let criticalCount = 0;
 
-          for (const id of indexedSiteIds) {
+          for (const id of scoringInputs.siteIds) {
             const score = scores[id] || 0;
             if (score >= 80) healthyCount++;
             else if (score >= 50) warningCount++;
@@ -2834,7 +2827,10 @@ export function createResolvers(context: ResolverContext) {
               healthyCount,
               warningCount,
               criticalCount,
-              sitesScored: indexedSiteIds.length,
+              // The honest denominator: entries actually scored. Excluded
+              // entries (unresolvable ids, unrefreshed external hosts) are
+              // not in any bucket above.
+              sitesScored: scoringInputs.siteIds.length,
               totalPlugins,
               outdatedPlugins: null,
               totalThemes,
@@ -3568,6 +3564,11 @@ export function createResolvers(context: ResolverContext) {
 
               const siteInfo = {
                 domain: site.domain || '',
+                // LOCAL path (findLocalSiteExact): Local's own store supplies a
+                // real phpVersion, so this default ~never fires — the same
+                // deliberately-left-alone case as nexusFleetSiteHealth's local
+                // branch. The remote loops' identical default was the item-5
+                // defect and is gone (health/fleetScoring.ts).
                 phpVersion: (allSites[site.id] as any)?.phpVersion || '8.0',
               };
 

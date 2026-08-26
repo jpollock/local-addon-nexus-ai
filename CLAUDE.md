@@ -352,21 +352,23 @@ its entries are theirs. `healthyCount` / `warningCount` / `criticalCount` are
 computed over it, so they are neither a fleet figure nor a Local figure;
 `sitesScored` is their denominator and must be printed with them.
 
-Two pre-existing defects live in that loop and are not yet fixed:
-`localSiteData[entry.siteId]` misses for every WPE entry (so `domain` is `''`
-and `phpVersion` falls back to a fabricated `'8.0'`), and `calculateAllScores`
-uses the default all-five factor set, so maintenance and activity score 0 for
-those same entries — the exact defect the per-target factor list fixes in
-`nexusFleetSiteHealth`. Fixing this means giving `calculateAllScores` a
-per-target factor list too. **This is not unique to `nexusFleetHealth`** — the
-identical `indexRegistry.listAll()` + `siteData.getSites()` lookup-miss pattern,
-with the identical `|| '8.0'` fallback, also lives in
-`src/main/mcp/modules/fleet-intelligence/fleet-health-summary.ts` and in
-`src/main/ipc-handlers.ts`'s `DASHBOARD_V2_STATS` handler. Neither is fixed
-either; fixing one without the other two leaves the bug reachable from a
-different surface. (The *local*-path `|| '8.0'` fallback documented below is a
-separate, deliberately-left-alone case — Local's own store supplies a real
-version there.)
+The two defects that used to live in that loop — the WPE lookup-miss
+fabricating `phpVersion '8.0'`, and `calculateAllScores` scoring all five
+factors so maintenance/activity hit 0 for every remote entry — were fixed
+2026-08-26 by ONE shared derivation, `buildFleetScoringInputs`
+(`src/main/health/fleetScoring.ts`), consumed by all three surfaces
+(`nexusFleetHealth`, `fleet_health_summary`, `DASHBOARD_V2_STATS`), because
+fixing one without the other two left the bug reachable from a different
+surface. Remote entries resolve through the graph and score
+security+performance under their ROW id (where plugin rows live);
+unscoreable/unresolvable entries are EXCLUDED and counted, never scored 0
+into the critical bucket. `calculateAllScores` gained the per-entry routing
+(`perSite`: factors + dataSiteId); `tests/unit/health/
+fleet-scoring-inputs.test.ts` pins the rules and greps the trio for a
+reintroduced `phpVersion || '8.0'` default without a documented LOCAL-path
+justification. (The *local*-path `|| '8.0'` fallback documented below remains
+the separate, deliberately-left-alone case — Local's own store supplies a
+real version there.)
 
 **Measure, do not copy the numbers.** This section previously carried "71 Local
 sites" and "312 of 403", both stale, and both propagated into derived claims.
