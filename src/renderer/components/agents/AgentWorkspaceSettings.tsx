@@ -74,6 +74,22 @@ const CADENCE_OPTIONS = [
   { label: 'Weekly',           value: '0 0 * * 0',    every: 'every week' },
 ];
 
+/**
+ * Per-agent cadence floor (fixes-082526 Tier A 7). security-sentinel's every
+ * run is a production-scale Tier 2/3 investigation; the 2026-08 incident had
+ * it sweeping 375 sites every 15 minutes because this picker offered the
+ * interval. The floor is per-agent, not global — content-shaped agents
+ * legitimately run at 15 minutes.
+ */
+const CADENCE_FLOOR: Record<string, string[]> = {
+  'security-sentinel': ['*/15 * * * *'],
+};
+
+export function cadenceOptionsFor(agentId: string): typeof CADENCE_OPTIONS {
+  const barred = CADENCE_FLOOR[agentId];
+  return barred ? CADENCE_OPTIONS.filter((o) => !barred.includes(o.value)) : CADENCE_OPTIONS;
+}
+
 function formatLastEdited(updatedAt?: number): string {
   if (!updatedAt) return 'Not yet saved';
   const days = Math.floor((Date.now() - updatedAt) / 86_400_000);
@@ -519,8 +535,11 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
 
   private cycleCadence() {
     const { cadence } = this.state.settings;
-    const idx = CADENCE_OPTIONS.findIndex(o => o.value === cadence);
-    const next = CADENCE_OPTIONS[(idx + 1) % CADENCE_OPTIONS.length];
+    // Filtered per agent: a stored floor-breaking cadence (the seeded */15)
+    // misses findIndex and the cycle lands on the first legal option.
+    const options = cadenceOptionsFor(this.props.agentId);
+    const idx = options.findIndex(o => o.value === cadence);
+    const next = options[(idx + 1) % options.length];
     // `cadenceSetAt` is what gives this value authority over the agent's own manifest schedule.
     // Every agent carries a seeded `cadence` from getDefaultSettings that nobody picked; without
     // this stamp the scheduler cannot tell those apart from a real choice, and honouring them
