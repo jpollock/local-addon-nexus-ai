@@ -5,6 +5,7 @@ import { AnthropicProvider } from './anthropic';
 import { GoogleProvider } from './google';
 import { LocalGatewayProvider } from './local-gateway';
 import { PowerProvider } from './power';
+import { PowerAiSdkProvider } from './power-aisdk';
 
 // ---------------------------------------------------------------------------
 // Provider Registry
@@ -19,7 +20,10 @@ export function initializeProviders(): void {
     new OpenAIProvider(),
     new GoogleProvider(),
     new LocalGatewayProvider(),
-    new PowerProvider(),
+    // spike/power-ai-sdk — same 'power' id either way, so ChatService and the
+    // renderer see no difference. Ships dark: hand-rolled adapter stays the
+    // default until the AI SDK implementation is proven against live Power.
+    process.env.NEXUS_POWER_AISDK === '1' ? new PowerAiSdkProvider() : new PowerProvider(),
   ];
   for (const p of all) {
     providers.set(p.id, p);
