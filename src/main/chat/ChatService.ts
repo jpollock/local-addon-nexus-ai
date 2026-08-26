@@ -831,9 +831,15 @@ export class ChatService {
       fleetContextSection = buildWordPressSystemPrompt(fleetCtx, true);
     } catch { /* fleet context unavailable — proceed without it */ }
 
+    // P3 (charter §P3) — prefix order for prompt caching. Caching is a prefix
+    // match, so the most volatile text must ride LAST: the fleet context
+    // (live counts) opened the prompt and repriced ~9KB of static doctrine on
+    // every fleet change. Static doctrine first, fleet context at the tail.
+    // ambientBlock deliberately does NOT move — WP-11's ruling places it
+    // after the untrusted-data directive and before the tool doctrine, and a
+    // recorded semantic ordering outranks cache pressure
+    // (tests/unit/chat/promptPrefixOrder.test.ts pins both orderings).
     const lines = [
-      fleetContextSection,
-      '',
       'You are Nexus AI, a WordPress site management assistant built into the Local development environment.',
       'You have access to tools for managing WordPress sites, checking plugin status, running WP-CLI commands, and more.',
       'Be concise and helpful. When using tools, explain what you are doing.',
@@ -899,6 +905,12 @@ export class ChatService {
       'start/stop automatically in the background. You will see [Auto-lifecycle: ...] notes in tool',
       'results confirming which sites were started and stopped. You do not need to manage this yourself.',
     ];
+
+    // Volatile tail (P3) — fleet context joins the current-site block here,
+    // after every static line, so its churn reprices only the tail.
+    if (fleetContextSection) {
+      lines.push('', fleetContextSection);
+    }
 
     if (siteId) {
       const site = resolveLocalSite(siteId, this.services.siteData, this.services.graphService);
