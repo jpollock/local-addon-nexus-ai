@@ -59,6 +59,14 @@ export class AnthropicAiSdkProvider implements AIProvider {
     // No execute on any tool: ChatService owns the loop (registry.call,
     // tiers, audit). The LAST tool carries the cache breakpoint — Anthropic
     // caches the prefix up to and including it, i.e. the whole tool block.
+    //
+    // ⚠ P5 interaction (charter, tool-context design review 2026-08-26):
+    // when tool deferral lands, this placement becomes a 400 — the API
+    // rejects cache_control and defer_loading on the SAME tool, and under a
+    // resident/deferred split the last tool is almost certainly deferred.
+    // The breakpoint must then move to the last RESIDENT (non-deferred)
+    // tool, and a test must pin that no deferred tool ever carries
+    // cache_control.
     const aiTools = Object.fromEntries(
       tools.map((t, i) => [t.name, dynamicTool({
         description: t.description,

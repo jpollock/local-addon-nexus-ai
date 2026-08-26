@@ -183,9 +183,20 @@ suites, benchmarks) — the owner caught it; it sizes nothing.
 
 ### P6 — Context compaction and token budget: the confirmed gap
 
-**Evidence.** `grep -r "compaction\|trimming\|token budget" src/main/chat
-src/main/agent-runtime` → nothing. No pruning of tool results, no history
-compression, no budget accounting on the chat path.
+**Evidence — CORRECTED 2026-08-26.** This section originally claimed a grep
+for "compaction|trimming|token budget" returned nothing and that no result
+pruning existed. **False negative — wrong grep terms** (the
+verify-the-measurement-method failure): `ChatService.compressStaleToolResults`
+(`ChatService.ts:951`) is live, called every turn (`:247`) — tool results
+older than the last two assistant messages are trimmed 800→600 chars. So
+result AGEING partially exists. Genuinely missing: a per-result byte cap
+with an honest truncation tail ("N rows omitted, re-query with a filter"),
+spill-to-store for large payloads (a fleet_sql over 300 installs should
+never sit in the transcript twice), the never-resend-what-the-model-
+summarized rule, and any token budgeting. Seam correction from the P5 design
+review: result policy belongs at ChatService/AgentAIClient (or registry.call
+to cover all surfaces) — NOT AgentDispatcher, which sees only agent__*
+dispatch, not chat results.
 
 **Direction:** `pruneMessages` (arrives free with P4) for mechanical
 tool-result pruning; LangGraph's `summarizationMiddleware` /
