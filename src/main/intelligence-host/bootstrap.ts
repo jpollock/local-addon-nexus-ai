@@ -22,7 +22,8 @@ import {
   IdentityPort,
   ulid,
 } from '../../intelligence';
-import { draftFromWpEvent } from './wpEventProducer';
+import { draftFromWpEvent, wpDraftGateKey } from './wpEventProducer';
+import { createChangeGate } from './changeGate';
 import { initLawRegistry, LawRegistryHandle } from './permissionsMirror';
 import { syncCapabilityGrants } from './capabilityGrants';
 
@@ -294,10 +295,20 @@ export function initIntelligenceCore(options: {
       onFailure: (message) => recordInitFailure(storage, 'law-registry', new Error(message), new Date()),
     });
 
+    // Tier A 2 (fixes-082526): the tap deduplicates through the change gate
+    // like every other producer — WordPress double-fires hooks and the MU
+    // plugin retries delivery, so identical repeats are the normal case. The
+    // gate needs only the twin view, which exists before the core object does.
+    const twins = new TwinStore(ledger);
+    const shouldEmit = createChangeGate({ twins } as IntelligenceCore);
     const tap: WpEventTap = (siteId, eventType, payload) => {
       try {
         const draft = draftFromWpEvent(siteId, eventType, payload ?? {}, new Date(), entities);
         if (!draft) return;
+        const gateKey = wpDraftGateKey(draft);
+        if (gateKey && !shouldEmit(draft.entity.environment as string, gateKey, draft.payload)) {
+          return; // same snapshot already recorded — change, not repetition
+        }
         emitter.emit(draft);
         scheduleFolds();
       } catch (err) {
@@ -313,7 +324,7 @@ export function initIntelligenceCore(options: {
     const core: IntelligenceCore = {
       ledger,
       emitter,
-      twins: new TwinStore(ledger),
+      twins,
       folds: allFolds,
       entities,
       law,

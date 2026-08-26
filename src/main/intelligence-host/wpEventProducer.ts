@@ -119,3 +119,31 @@ export function draftFromWpEvent(
 
   return null; // unknown event type — the tap ignores rather than guesses
 }
+
+/**
+ * The change-gate key for a webhook draft — or null for drafts the gate must
+ * not touch.
+ *
+ * STATE topics carry a snapshot; a repeat of the same snapshot is repetition,
+ * and "the ledger records change, not repetition" (CLAUDE.md). WordPress
+ * double-fires hooks and the MU plugin retries delivery, so repeats are the
+ * normal case, not a corner.
+ *
+ * `semantic.content.changed` returns null DELIBERATELY: two saves of a post
+ * with identical (id, type, status) are two real edits, and each one is a
+ * re-index trigger — deduping them would silently drop the second edit's
+ * re-index. Event-shaped topics pass; state-shaped topics gate.
+ *
+ * The plugin/theme keys mirror the fold's fact names (`plugin:<slug>`) so the
+ * gate's twin-fact comparison in `createChangeGate` lands on the row the fold
+ * actually materialises — an invented key would reduce the gate to its
+ * in-process cache.
+ */
+export function wpDraftGateKey(draft: EventDraft): string | null {
+  const payload = draft.payload as Record<string, unknown>;
+  if (draft.topic.startsWith('state.plugin.')) return `plugin:${String(payload.slug ?? '')}`;
+  if (draft.topic === 'state.theme.observed') return `theme:${String(payload.slug ?? '')}`;
+  if (draft.topic === 'state.user.observed') return `user:${String(payload.user_id ?? '')}`;
+  if (draft.topic === 'state.site.observed') return 'site';
+  return null; // semantic.* and anything future: ungated until argued otherwise
+}
