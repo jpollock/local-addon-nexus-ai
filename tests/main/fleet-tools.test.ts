@@ -655,7 +655,7 @@ describe('detect_drift', () => {
 // ---------------------------------------------------------------------------
 
 describe('fleet tool registration', () => {
-  test('all 11 fleet tools are registered', () => {
+  test('all 12 fleet tools are registered', () => {
     const registry = new ToolRegistry();
     registerFleetTools(registry);
     const names = registry.allToolNames();
@@ -671,7 +671,8 @@ describe('fleet tool registration', () => {
     expect(names).toContain('nexus_intelligence_health'); // WP-17: the layer reports its own degradation
     expect(names).toContain('nexus_where_am_i'); // WP-21: the four-line "where am I?" status
     expect(names).toContain('nexus_load_procedure'); // WP-20b: P1 path B — the model asks for a procedure
-    expect(names.length).toBe(11);
+    expect(names).toContain('nexus_rebuild_twins'); // fixes-082526 Tier A 1: the ADR-1 rebuild, shipped
+    expect(names.length).toBe(12);
   });
 
   test('all fleet tools are always available (no isAvailable gate)', () => {

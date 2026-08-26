@@ -8,6 +8,7 @@ import { fleetSummaryHandler } from './fleet-summary';
 import { detectDriftHandler } from './detect-drift';
 import { pairingProposalsHandler } from './pairing-proposals';
 import { intelligenceHealthHandler } from './intelligence-health';
+import { rebuildTwinsHandler } from './rebuild-twins';
 import { whereAmIHandler } from './where-am-i';
 import { loadProcedureHandler } from './load-procedure';
 
@@ -26,6 +27,7 @@ export function registerFleetTools(registry: ToolRegistry): void {
   registry.register(detectDriftHandler);
   registry.register(pairingProposalsHandler);
   registry.register(intelligenceHealthHandler);
+  registry.register(rebuildTwinsHandler);
   registry.register(whereAmIHandler);
   registry.register(loadProcedureHandler);
 }
