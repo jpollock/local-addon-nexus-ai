@@ -73,7 +73,7 @@ invariant) loses none of its force — the incident happened because
 withholding was silent, and any future bound (grants, selection) can recreate
 that without P2's disclosures.
 
-### P2 — The discovery invariant: the model must be able to learn what exists
+### P2 — The discovery invariant — **DONE 2026-08-26 (ca2efc87)**
 
 **Evidence.** The system prompt hand-lists eight fleet tools that were not in
 the payload; `search_tools` was itself droppable; no withheld-tools signal.
@@ -95,7 +95,7 @@ set`).
 
 **Confidence:** invariant, not a design choice. No downside identified.
 
-### P3 — Prompt caching, and the prefix built backwards
+### P3 — Prompt caching, and the prefix built backwards — **DONE 2026-08-26** (reorder 8087793e; breakpoints 061ceb61, dark)
 
 **Evidence.** `grep cache_control src/main/chat src/main/ai` → zero hits.
 ~36.8k tokens of schemas are re-sent at full price every loop iteration.
@@ -230,15 +230,21 @@ Genkit, Walt — patterns and disqualifier evidence only.
 
 ## Order and gates
 
-| # | Item | Gates on | Gate for |
-|---|---|---|---|
-| 1 | P1 probe (owner's key, minutes) | — | P1 fix shape; P5 urgency |
-| 2 | P2 discovery invariants | — | — |
-| 3 | P3 prefix reorder (caching config completes with P4.2) | — | — |
-| 4 | `accessMethod: 'chat'` (P5 prereq 1) | — | P5 data clock |
-| 5 | P4.1 flip Power default | P1 answer + live parity session | P4.2–4.3 |
-| 6 | P4.2 Anthropic + `cacheControl` | P4.1 pattern proven | P3 completion |
-| 7 | P5/P6 planning docs | P1 answer; P5 prereq 2; P6 spike | build |
+| # | Item | Status |
+|---|---|---|
+| 1 | P1 probes → cap deleted | **done** (54af4f5e; live-verified by owner) |
+| 2 | P2 discovery invariants | **done** (ca2efc87) |
+| 3 | P3 prefix reorder | **done** (8087793e) |
+| 4 | `accessMethod: 'chat'` | **done** (b9550951) — P5 data clock started |
+| 5 | P4.2 Anthropic + cache breakpoints | **done, dark** (061ceb61) — NEXUS_ANTHROPIC_AISDK=1 |
+| 6 | Flip Power / Anthropic defaults | open — each needs a live session on its flag |
+| 7 | P4.3 openai/google; P4.4 ollama decision | open |
+| 8 | P5/P6 planning docs | open — P5 waits on accrued 'chat'-labeled data; P6 needs its spike |
+
+**v7 lesson recorded:** the AI SDK rejects `role:'system'` in `messages`; the
+system prompt rides streamText's `system` option (`splitModelMessages`,
+aisdk-shared.ts). The spike's parity fixtures missed it by never carrying a
+system message — parity suites must include one from now on.
 
 ## Non-goals
 
