@@ -152,7 +152,20 @@ re-derive four compliance properties inside someone else's loop.
 **Leave on the shelf:** `ToolLoopAgent`. The loop is where tiers, audit, and
 citations live.
 
-### P5 — Tool selection: right problem, not ready to build
+### P5 — Tool selection — stages 1–4 DONE 2026-08-26; stage 5 gated
+
+Stage 1 namespace field (9d390378) · stage 2 B-03 harness (6f4c9c48,
+recall@12 now 3/3 both selectors after the fleet_overview description fix —
+"descriptions are the index," demonstrated) · stage 3 append-only grants
+(3568133e) · stage 4 hybrid ranker, live in search_tools (d8546afe).
+Stage 5 (provider-native deferral) gates on: AI SDK defer_loading
+passthrough verification, the resident/deferred split (owner's bucket-1
+review), and the anthropic dark-flag live flip — plus the breakpoint
+relocation fuse commented in anthropic-aisdk.ts. Grants remain UNPOPULATED
+in production; flipping selection on is a B-03 decision with real cases,
+not a code milestone.
+
+#### Original problem statement
 
 **Evidence of the problem:** 207 tools, 147,225B of schema, no relevance
 strategy. **Evidence gap for the solution:** the 83k-call usage analysis
