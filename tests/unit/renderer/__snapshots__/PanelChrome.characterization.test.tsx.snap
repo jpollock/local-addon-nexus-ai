@@ -915,39 +915,7 @@ exports[`panel chrome — characterization renders streaming 1`] = `
               },
               "type": "span",
             },
-            {
-              "children": [
-                {
-                  "children": null,
-                  "key": null,
-                  "props": {
-                    "className": "nexus-pulse",
-                    "style": {
-                      "background": "#0ECAD4",
-                      "borderRadius": "50%",
-                      "display": "inline-block",
-                      "flexShrink": 0,
-                      "height": 6,
-                      "width": 6,
-                    },
-                  },
-                  "type": "span",
-                },
-                "Thinking…",
-              ],
-              "key": null,
-              "props": {
-                "style": {
-                  "alignItems": "center",
-                  "color": "#0ECAD4",
-                  "display": "flex",
-                  "fontSize": 12,
-                  "gap": 5,
-                  "lineHeight": 1.2,
-                },
-              },
-              "type": "span",
-            },
+            null,
           ],
           "key": null,
           "props": {

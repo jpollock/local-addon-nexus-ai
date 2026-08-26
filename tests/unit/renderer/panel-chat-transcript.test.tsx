@@ -25,6 +25,10 @@ function chat(): any {
 /** Flatten a serialized tree to the ordered list of nodes matching a predicate. */
 function walk(node: any, out: any[] = []): any[] {
   if (!node || typeof node !== 'object') return out;
+  // Arrays are containers, not nodes — descend, don't collect. Spread blocks
+  // (the composer block, the procedure surfaces) nest arrays inside children
+  // arrays, and treating one as a node used to stop the walk at its edge.
+  if (Array.isArray(node)) { for (const k of node) walk(k, out); return out; }
   out.push(node);
   const children = node.children ?? node.props?.children;
   const kids = Array.isArray(children) ? children : [children];
@@ -106,28 +110,38 @@ describe('no empty bubble while tools are running', () => {
   });
 });
 
-describe('the Working… indicator is alive', () => {
-  it('animates the status dot, so a live run is distinguishable from a stalled one', () => {
+describe('presence is alive IN THE TRANSCRIPT — the chrome carries none (board C)', () => {
+  it('the thinking row pulses beside the forming answer', () => {
+    const chat: any = new (PanelChat as any)({
+      electron: { ipcRenderer: { on: jest.fn(), invoke: jest.fn().mockResolvedValue({}), send: jest.fn(), removeListener: jest.fn() } },
+      sessionId: null, onSessionCreated: jest.fn(), onSessionSaved: jest.fn(), onStreamingStatusChange: jest.fn(),
+      siteContext: {}, opening: null,
+    });
+    Object.assign(chat.state, {
+      messages: [
+        { id: '1', role: 'user', content: 'hi' },
+        { id: '2', role: 'assistant', content: '', streaming: true },
+      ],
+      streaming: true, thinkingTick: 0, input: '', offline: false, providerId: 'anthropic', model: 'm',
+    });
+    const flat = walk(serializeTree(chat.render()));
+    const pulsing = flat.filter((n) => n.props?.className === 'nexus-pulse');
+    expect(pulsing).toHaveLength(1);   // the avatar, animated — a live run is distinguishable from a stalled one
+  });
+
+  it('the header renders no busy line even when told one exists', () => {
+    // The busy state used to live under the wordmark — teal, 11px, ~1250px
+    // from where the answer appears. Removed 2026-08-25: presence belongs to
+    // the conversation.
     const panel: any = new (DockedPanel as any)({
       panelState: 'docked',
       onOpen: jest.fn(), onClose: jest.fn(), onSetPanelState: jest.fn(),
       streamingStatus: 'Working…',
       children: null, sessionsSidebar: null,
     });
-
     const flat = walk(serializeTree(panel.render()));
-    const pulsing = flat.filter((n) => n.props?.className === 'nexus-pulse');
-    expect(pulsing).toHaveLength(1);
-  });
-
-  it('shows no status dot at all when nothing is running', () => {
-    const panel: any = new (DockedPanel as any)({
-      panelState: 'docked',
-      onOpen: jest.fn(), onClose: jest.fn(), onSetPanelState: jest.fn(),
-      streamingStatus: null,
-      children: null, sessionsSidebar: null,
-    });
-
-    expect(JSON.stringify(serializeTree(panel.render()))).not.toContain('nexus-pulse');
+    expect(flat.filter((n) => n.props?.className === 'nexus-pulse')).toHaveLength(0);
+    expect(JSON.stringify(serializeTree(panel.render()))).not.toMatch(/Working…/);
   });
 });
+

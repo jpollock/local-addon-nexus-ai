@@ -379,21 +379,14 @@ export class DockedPanel extends React.Component<Props, DockedPanelState> {
         // header space spent restating a behaviour the user can already see — and briefly
         // held a site picker, which was removed: the panel's scope is not something the
         // user manages from here. Nothing to say means nothing rendered.
-        streamingStatus
-          ? React.createElement(
-              'span',
-              { style: { fontSize: 12, color: UI_COLORS.WPE_BRAND, lineHeight: 1.2, display: 'flex', alignItems: 'center', gap: 5 } },
-              // Pulsing, not static. A still dot beside the word "Working…" is
-              // indistinguishable from a stalled panel — the text alone cannot tell you
-              // whether anything is still happening, which is the one thing it is there
-              // to say. Honours prefers-reduced-motion (see agent-console.css).
-              React.createElement('span', {
-                className: 'nexus-pulse',
-                style: { width: 6, height: 6, borderRadius: '50%', background: UI_COLORS.WPE_BRAND, flexShrink: 0, display: 'inline-block' },
-              }),
-              streamingStatus,
-            )
-          : null,
+        // The busy state used to render here — teal, 11px, under the wordmark,
+        // ~1250px from where the answer appears. Removed 2026-08-25: presence
+        // belongs to the CONVERSATION, not the product's identity, so it now
+        // renders in the transcript at the position the answer will occupy
+        // (PanelChat's thinking row, per board C of the new-chat sheet). After
+        // pressing send your eye is on the message you just sent; a status
+        // beside the app's name is invisible exactly when it matters.
+        null,
       ),
       // Control cluster
       React.createElement(

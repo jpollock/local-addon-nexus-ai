@@ -126,3 +126,43 @@ describe('the placeholder is written to the mount width', () => {
     expect(field.props.placeholder).toMatch(/describe what you want done/);
   });
 });
+
+describe('presence lives in the conversation (board C)', () => {
+  const streamingMsgs = [
+    { id: '1', role: 'user', content: 'hi' },
+    { id: '2', role: 'assistant', content: '', streaming: true },
+  ];
+
+  it('the thinking row carries the avatar and a grey line — never brand teal text', () => {
+    const c = chat({}, streamingMsgs as any);
+    Object.assign(c.state, { streaming: true, thinkingTick: 0 });
+    const row = byData(c.render(), 'data-chat-thinking')[0];
+    expect(row).toBeTruthy();
+    const flat = all(row);
+    const avatar = flat.filter((n) => String(n.props?.style?.background ?? '').includes('radial-gradient'))[0];
+    expect(avatar).toBeTruthy();               // presence is the agent's mark…
+    const line = flat.filter((n) => n.props?.style?.color === 'var(--nxai-card-sub)')[0];
+    expect(line).toBeTruthy();                 // …and the words are secondary grey
+    expect(line.props.style.fontSize).toBe(12);
+  });
+
+  it('cycles the design system\'s stand-by lines, unhurried punctuation intact', () => {
+    const texts = [0, 1, 2].map((tick) => {
+      const c = chat({}, streamingMsgs as any);
+      Object.assign(c.state, { streaming: true, thinkingTick: tick });
+      return JSON.stringify(c.render());
+    });
+    expect(texts[0]).toMatch(/Thinking, stand by…/);
+    expect(texts[1]).toMatch(/Pondering, stand by…/);
+    expect(texts[2]).toMatch(/Contemplating, stand by…/);
+  });
+
+  it('no busy line in the header chrome — the DockedPanel renders none', () => {
+    const { DockedPanel } = require('../../../src/renderer/components/DockedPanel/DockedPanel');
+    const tree = new DockedPanel({
+      panelState: 'docked', onOpen: () => {}, onClose: () => {}, onSetPanelState: () => {},
+      streamingStatus: 'Working…',
+    } as any).render();
+    expect(JSON.stringify(tree)).not.toMatch(/Working…/);
+  });
+});

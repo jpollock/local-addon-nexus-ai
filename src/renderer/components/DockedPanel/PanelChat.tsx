@@ -146,6 +146,8 @@ interface State {
   // even before the parent re-render propagates the prop update.
   activeSessionId: string | null;
   offline: boolean;
+  /** Cycles the stand-by line while a reply is forming. */
+  thinkingTick: number;
   // Tracks the DB-persisted action_count so persistSession never resets it to 0.
   actionCount: number;
   // Mirrors chatRetentionDays setting; null means keep forever.
@@ -330,6 +332,18 @@ function truncateAtWord(text: string, maxLen: number): string {
  * prevent. With this type, the next provider added to the union is a COMPILE
  * ERROR here rather than a key on screen.
  */
+/**
+ * The design system's stand-by lines — deliberately unhurried, which is the
+ * right register for a thing that reads a fleet. The system ships five; the
+ * three named on the new-chat sheet are used here, cycled. Ellipsis and the
+ * lowercase after the comma are the system's own punctuation.
+ */
+const THINKING_LINES = [
+  'Thinking, stand by…',
+  'Pondering, stand by…',
+  'Contemplating, stand by…',
+] as const;
+
 const PROVIDER_LABELS: Record<AIProvider, string> = {
   anthropic: 'Claude',
   openai: 'OpenAI',
@@ -429,6 +443,7 @@ export class PanelChat extends React.Component<Props, State> {
       model: 'claude-sonnet-5',
       activeSessionId: props.sessionId,
       offline: false,
+      thinkingTick: 0,
       actionCount: 0,
       retentionDays: 30,
       expandedTools: new Set<string>(),
@@ -481,7 +496,25 @@ export class PanelChat extends React.Component<Props, State> {
     }
   }
 
+  /** The stand-by cycle. ~4s per line, running only while a reply is forming. */
+  private thinkingTimer: ReturnType<typeof setInterval> | null = null;
+
+  private syncThinkingTimer(): void {
+    const needed = this.state.streaming;
+    if (needed && this.thinkingTimer === null) {
+      this.thinkingTimer = setInterval(
+        () => this.setState((s) => ({ thinkingTick: s.thinkingTick + 1 })),
+        4000,
+      );
+    } else if (!needed && this.thinkingTimer !== null) {
+      clearInterval(this.thinkingTimer);
+      this.thinkingTimer = null;
+      this.setState({ thinkingTick: 0 });
+    }
+  }
+
   componentWillUnmount() {
+    if (this.thinkingTimer !== null) { clearInterval(this.thinkingTimer); this.thinkingTimer = null; }
     // Safety net: persist whatever we have so collapsing the panel never loses the active chat.
     // persistSession filters out streaming messages, so a partial save is always safe.
     const { messages, activeSessionId } = this.state;
@@ -511,6 +544,7 @@ export class PanelChat extends React.Component<Props, State> {
   }
 
   componentDidUpdate(prevProps: Props) {
+    this.syncThinkingTimer();
     if (prevProps.sessionId !== this.props.sessionId) {
       if (this.props.sessionId) {
         this.setState({ activeSessionId: this.props.sessionId });
@@ -591,7 +625,9 @@ export class PanelChat extends React.Component<Props, State> {
         });
         return { messages: msgs };
       });
-      this.props.onStreamingStatusChange?.('Working…');
+      // The header no longer renders a busy line — presence is the transcript's
+      // thinking row. The callback stays for the container's bookkeeping only.
+      this.props.onStreamingStatusChange?.(null);
     } else if (event.type === 'tool_call_approval_needed') {
       // Tier-3 destructive tool — upgrade whichever message owns this toolCall id.
       // WP-26: and carry the procedure block through when the platform sent one.
@@ -980,19 +1016,42 @@ export class PanelChat extends React.Component<Props, State> {
   }
 
   renderMessage(msg: UIMessage) {
-    // THE THINKING STATE. A streaming assistant turn with no content yet used
+    // THE THINKING STATE, per board C. A streaming assistant turn with no content yet used
     // to render as nothing at all, so the panel showed a question and then
     // went silent — worse than the empty state, which at least carried an
     // invitation. There is no way to tell whether anything is happening.
     if (msg.role === 'assistant' && msg.streaming && !msg.content && (msg.toolCalls ?? []).length === 0) {
+      // Presence lives with the AVATAR, in the transcript, at the position the
+      // answer will occupy — directly under the message just sent, which is
+      // where the eye already is. (It used to be a teal 11px "Working…" beside
+      // the product name in the chrome, ~1250px away: loud in hue, invisible
+      // in size, and attached to the app's identity instead of the
+      // conversation.) The line is secondary grey — brand teal belongs to the
+      // logomark and the avatar, never to a status line — and the copy cycles
+      // the design system's unhurried stand-by lines.
       return React.createElement(
         'div',
         {
           key: msg.id,
           'data-chat-thinking': 'true',
-          style: { display: 'flex', alignItems: 'center', gap: 8, paddingTop: 2, fontSize: 12, color: 'var(--nxai-card-sub)' },
+          style: { display: 'flex', alignItems: 'center', gap: 8, paddingTop: 2 },
         },
-        this.props.streamingStatusLine ?? 'Thinking, stand by…',
+        React.createElement('span', {
+          className: 'nexus-pulse',
+          'aria-hidden': 'true',
+          style: {
+            width: 26,
+            height: 26,
+            borderRadius: '50%',
+            flexShrink: 0,
+            background: 'radial-gradient(circle at 30% 25%, rgb(14,202,212), rgb(3,155,92))',
+          },
+        }),
+        React.createElement(
+          'span',
+          { style: { fontSize: 12, color: 'var(--nxai-card-sub)' } },
+          THINKING_LINES[this.state.thinkingTick % THINKING_LINES.length],
+        ),
       );
     }
     if (msg.role === 'system') {
