@@ -1,4 +1,5 @@
 import { McpToolHandler, McpToolResult } from '../../types';
+import { remoteHealthFactors } from '../../../health/remoteFactors';
 import { indexFreshnessWarning } from '../../../twin/twin-helpers';
 import { queryQualifiedTarget } from '../../site-resolver';
 
@@ -82,15 +83,13 @@ export const getSiteHealthHandler: McpToolHandler = {
       // performance credit for a PHP version that was never actually observed.
       siteInfo = { domain: row.domain || '', phpVersion: row.php_version || undefined };
 
-      if (row.source === 'wpe') {
-        factorsToEvaluate = ['security', 'performance'];
-      } else {
-        // external — same data-presence gate as nexusFleetSiteHealth: scoreable
-        // only once a refresh has actually populated plugins + php_version.
-        const hasPlugins = (db!.prepare('SELECT COUNT(*) as c FROM plugins WHERE site_id = ?').get(row.id) as { c: number }).c > 0;
-        const externalScoreable = hasPlugins && !!row.php_version;
-        factorsToEvaluate = externalScoreable ? ['security', 'performance'] : [];
-      }
+      // The shared gate (health/remoteFactors.ts) — the same copy the
+      // GraphQL path calls, so the two surfaces cannot drift.
+      factorsToEvaluate = remoteHealthFactors(db!, {
+        id: row.id,
+        source: row.source === 'wpe' ? 'wpe' : 'external',
+        php_version: row.php_version,
+      });
     }
 
     if (factorsToEvaluate.length === 0) {

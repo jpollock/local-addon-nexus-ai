@@ -454,13 +454,14 @@ Note: the remote-branch `|| '8.0'` fallback in `get-site-health.ts` was
 comment naming why). Only the *local* path (~line 51) keeps the pre-existing
 `|| '8.0'`, where Local's store supplies a real version.
 
-**The external health-scoring gate is duplicated** between
-`src/main/graphql/resolvers.ts:3003` (GraphQL/CLI path) and
-`src/main/mcp/modules/fleet-intelligence/get-site-health.ts:91` (MCP path).
-The two are NOT pinned together by any test — a change to one must be mirrored
-to the other. This repo already has that duplicated-rule pattern documented for
-`resolveAgentCron`/`effectiveCadenceExpression` and `localDay`, where a shared
-case table pins the copies; this pair has no such test.
+**The external health-scoring gate exists ONCE**: `remoteHealthFactors`
+(`src/main/health/remoteFactors.ts`), imported by both the GraphQL/CLI path
+(`resolvers.ts`) and the MCP path (`get-site-health.ts`). It was duplicated
+between the two until 2026-08-26; both callers live in the main bundle, so
+unlike `resolveAgentCron`/`effectiveCadenceExpression` (main vs renderer) no
+bundle boundary forces a copy — extraction retired the hand-mirroring order
+that used to stand here. `tests/unit/health/remote-factors.test.ts` pins the
+rule and greps both callers for a reintroduced inline copy.
 
 **The HTTPS check reads `site_url`, not `domain`.** Domains are stored bare —
 zero of 365 active rows carry a scheme — so `domain.startsWith('https')` used

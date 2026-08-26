@@ -11,6 +11,7 @@ import type { ContributedToolRegistry } from '../agent-runtime/ContributedToolRe
 import type { AgentDispatcher } from '../agent-runtime/AgentDispatcher';
 import * as ollamaClient from '../helpers/ollama-client';
 import { isOperationAllowed, getEffectiveSettings } from '../mcp/utils/operation-permissions';
+import { remoteHealthFactors } from '../health/remoteFactors';
 import {
   buildDateRange,
   getUsageCached,
@@ -2926,8 +2927,8 @@ export function createResolvers(context: ResolverContext) {
             //              only writer of that table is the MU-plugin webhook, which
             //              exists on Local sites alone. A remote site can never have an
             //              event, so the factor was a fixed 100 awarded for absent data.
-            //   external → depends on the data actually present, see `externalScoreable`
-            //              below. External hosts DO have a refresh mechanism now
+            //   external → depends on the data actually present — the shared gate
+            //              (health/remoteFactors.ts). External hosts DO have a refresh mechanism now
             //              (ExternalRefreshScheduler / `nexus host refresh`), so a
             //              refreshed host has plugin rows and a php_version and is
             //              scored on security + performance like a WPE install. An
@@ -2995,16 +2996,14 @@ export function createResolvers(context: ResolverContext) {
             wpVersion = row.wp_version || null;
 
             // External hosts become scoreable once L2 data actually exists —
-            // a plugin row (Task 1-6 populate these on demand) and a real
-            // php_version. Otherwise stay at the existing "no data" path.
-            const hasPlugins = isExternal && (db.prepare(
-              'SELECT COUNT(*) as c FROM plugins WHERE site_id = ?'
-            ).get(row.id) as { c: number }).c > 0;
-            const externalScoreable = hasPlugins && !!row.php_version;
-
-            factorsToEvaluate = isExternal
-              ? (externalScoreable ? ['security', 'performance'] : [])
-              : ['security', 'performance'];
+            // the shared gate (health/remoteFactors.ts), which the MCP path
+            // imports too. One copy; the hand-mirroring order in CLAUDE.md
+            // is retired.
+            factorsToEvaluate = remoteHealthFactors(db, {
+              id: row.id,
+              source: isExternal ? 'external' : 'wpe',
+              php_version: row.php_version,
+            });
           } else {
             return {
               success: false,
