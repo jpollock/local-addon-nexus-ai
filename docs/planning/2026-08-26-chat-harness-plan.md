@@ -170,6 +170,29 @@ suites, benchmarks) — the owner caught it; it sizes nothing.
   OpenAI-compatible routes (`wpe_api(resource, action, params)` + a
   discovery tool — the `fleet_sql` pattern, per Walt's templates-as-data).
 
+**Ranking authority (added 2026-08-26).** The market prioritization doc
+(State of WordPress Agencies 2026 + vendor landscape) is the bucket
+authority: 40 / 64 / 76 / 27 across four buckets, rubric = market weight
+first, usage as check, tier as brake. Verified against audit logs: the
+claimed zero-call bucket-1 tools measure 0 (bulk_plugin_update,
+wpe_backup_and_verify, fleet_search, fleet_filter…) — the top of the market
+is the bottom of the dev data, confirming usage-driven ranking would have
+buried jobs 1/2/4. Hierarchy: resident tier ⊂ bucket 1 (the care-plan loop,
+40 tools, 37 enumerated + 3 behind the doc's ellipsis) ⊂ namespace pool.
+Encoded in docs/planning/2026-08-26-tool-inventory.csv (priority column).
+Product gap surfaced: job 3 (client reporting) has NO tool — a composed
+care-report tool over nexus_site_audit/wpe_user_audit/traffic_summary/
+fleet_summary would be bucket 1 the day it exists.
+
+**B-03 harness (tests/eval/b03-tool-selection/) exists as of 2026-08-26:**
+case format, jobs-weighted 50-case plan, lexical-baseline runner
+(mirrors search_tools scoring), recall@k scoring, resident-tier exemption.
+4 seed cases, all traced to real sources (the 2026-08-25 incident is case
+#1, escape-hatch by construction). First baseline run: recall@12 = 2/3 —
+the miss is "how many sites do I have?" → fleet_overview, zero lexical
+overlap, from the owner's own sessions: the hybrid-ranker justification,
+measured. Escape-hatch cases skip until stage 3 (append-only) lands.
+
 **Prerequisites before any build:**
 1. `accessMethod: 'chat'` added to the union and passed at
    `ChatService.ts:612` (currently `'mcp'` — chat is indistinguishable from
