@@ -8,11 +8,16 @@ const shell = (state: any = {}) => {
 };
 
 describe('SettingsShell', () => {
-  test('renders all five section names in the nav', () => {
+  test('renders the five nav names — permissions merged to ONE answering surface (phase 5)', () => {
     const t = shell();
     for (const name of [
-      'Connections', 'Chat', 'Background work', 'What agents may do', 'Advanced',
+      'Connections', 'Chat', 'Background work', 'Permissions', 'Advanced',
     ]) expect(t).toContain(name);
+    // The two old panes' names are GONE from the nav: two surfaces answering
+    // one question was the defect the merge removed. Their editors survive
+    // door-reached ('bound-editor' / 'capabilities'), never as destinations.
+    expect(t).not.toContain('What agents may do');
+    expect(t).not.toContain('Capabilities agents may use');
   });
 
   test('the footer names the one surviving native panel', () => {

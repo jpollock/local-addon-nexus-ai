@@ -14,6 +14,7 @@ import { ConnectionsSection } from './ConnectionsSection';
 import { ChatSection } from './ChatSection';
 import { BackgroundWorkSection } from './BackgroundWorkSection';
 import { PermissionsSection } from './PermissionsSection';
+import { PermissionsPaneSection } from './PermissionsPaneSection';
 import { AdvancedSection } from './AdvancedSection';
 import { GovernSection } from './GovernSection';
 import type { GovernDoorTarget } from '../../../main/intelligence-host/sequenceGuard';
@@ -50,7 +51,11 @@ export interface SectionProps<T> {
 }
 
 /** Exported so a sender can name a section in a type that fails to compile when one is renamed. */
-export type Section = 'connections' | 'chat' | 'background' | 'permissions' | 'capabilities' | 'advanced';
+// 'permissions' is THE pane (fixes-082526 phase 5 — the merge the designer's
+// sheet ruled). 'bound-editor' and 'capabilities' are door-reached editors,
+// deliberately absent from the nav: one surface ANSWERS; the editors are
+// doors away, which is the grants pattern generalized.
+export type Section = 'connections' | 'chat' | 'background' | 'permissions' | 'bound-editor' | 'capabilities' | 'advanced';
 
 interface SiteItem { id: string; name: string; status: string; }
 interface WpeAccount { id: string; name: string; nickname?: string; }
@@ -285,8 +290,9 @@ export class SettingsShell extends React.Component<SettingsShellProps, SettingsS
       navItem('connections', 'Connections'),
       navItem('chat', 'Chat'),
       navItem('background', 'Background work'),
-      navItem('permissions', 'What agents may do'),
-      navItem('capabilities', 'Capabilities agents may use'),
+      // ONE answering surface (the sheet's §8: two panes answering one
+      // question was the defect). The editors are doors inside it.
+      navItem('permissions', 'Permissions'),
       navItem('advanced', 'Advanced'),
     );
 
@@ -321,6 +327,15 @@ export class SettingsShell extends React.Component<SettingsShellProps, SettingsS
         });
       }
     } else if (active === 'permissions') {
+      sectionContent = React.createElement(PermissionsPaneSection, {
+        settings: settings ?? ({} as NexusSettings),
+        wpeAccounts,
+        electron: this.props.electron,
+        onOpenBoundEditor: () => this.setState({ active: 'bound-editor' }),
+        onOpenGovern: () => this.setState({ active: 'capabilities' }),
+      });
+    } else if (active === 'bound-editor') {
+      // The bound's EDITOR — door-reached from the pane, not a nav item.
       const exceptions = (settings?.remoteSiteExceptions ?? []) as any[];
       sectionContent = React.createElement(PermissionsSection, {
         permissions: settings ?? {} as NexusSettings,

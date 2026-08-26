@@ -7,6 +7,7 @@ import { SettingsShell } from '../../../src/renderer/components/settings/Setting
 import { ConnectionsSection } from '../../../src/renderer/components/settings/ConnectionsSection';
 import { ChatSection } from '../../../src/renderer/components/settings/ChatSection';
 import { BackgroundWorkSection } from '../../../src/renderer/components/settings/BackgroundWorkSection';
+import { PermissionsPaneSection } from '../../../src/renderer/components/settings/PermissionsPaneSection';
 import { PermissionsSection } from '../../../src/renderer/components/settings/PermissionsSection';
 import { AdvancedSection } from '../../../src/renderer/components/settings/AdvancedSection';
 import * as React from 'react';
@@ -108,7 +109,7 @@ describe('SettingsShell section dispatch', () => {
     expect(findComponentInTree(tree, BackgroundWorkSection)).toBe(true);
   });
 
-  it('renders PermissionsSection when active=permissions', () => {
+  it('renders the merged PermissionsPaneSection when active=permissions — phase 5, one answering surface', () => {
     const shell = new SettingsShell({ electron: mockElectron });
     shell.state = {
       loading: false,
@@ -125,7 +126,10 @@ describe('SettingsShell section dispatch', () => {
       mcpInfo: null,
     };
     const tree = shell.render();
-    expect(findComponentInTree(tree, PermissionsSection)).toBe(true);
+    expect(findComponentInTree(tree, PermissionsPaneSection)).toBe(true);
+    // The bound's EDITOR survives, door-reached — never a nav destination.
+    shell.state = { ...shell.state, active: 'bound-editor' as never };
+    expect(findComponentInTree(shell.render(), PermissionsSection)).toBe(true);
   });
 
   it('renders AdvancedSection when active=advanced', () => {
@@ -196,7 +200,7 @@ describe('SettingsShell passes real data, not placeholders', () => {
   });
 
   it('gives PermissionsSection the loaded installs, hosts and accounts', () => {
-    const props = sectionProps('permissions', PermissionsSection);
+    const props = sectionProps('bound-editor', PermissionsSection);
     expect(props.wpeInstalls).toBe(loaded.wpeInstalls);
     expect(props.externalHosts).toBe(loaded.externalHosts);
     expect(props.wpeAccounts).toBe(loaded.wpeAccounts);
@@ -222,9 +226,9 @@ describe('SettingsShell passes real data, not placeholders', () => {
       ['advanced', AdvancedSection, 'indexEntries', 'indexEntries'],
       ['connections', ConnectionsSection, 'wpeAccounts', 'wpeAccounts'],
       ['connections', ConnectionsSection, 'externalHosts', 'externalHosts'],
-      ['permissions', PermissionsSection, 'wpeInstalls', 'wpeInstalls'],
-      ['permissions', PermissionsSection, 'externalHosts', 'externalHosts'],
-      ['permissions', PermissionsSection, 'wpeAccounts', 'wpeAccounts'],
+      ['bound-editor', PermissionsSection, 'wpeInstalls', 'wpeInstalls'],
+      ['bound-editor', PermissionsSection, 'externalHosts', 'externalHosts'],
+      ['bound-editor', PermissionsSection, 'wpeAccounts', 'wpeAccounts'],
     ];
     const empty = checks.filter(([active, type, prop]) => {
       const value = sectionProps(active, type)[prop];
