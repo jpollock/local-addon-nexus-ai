@@ -47,6 +47,7 @@ import {
   MATERIALIZED_STORAGE_KEY,
   BUILTIN_GRANTEES,
   readGrantIssuance,
+  readGrantIssuanceByPair,
   requiresExplicitGrant,
   resolveCapabilityGrants,
   syncCapabilityGrants,
@@ -163,6 +164,17 @@ export interface GovernRow {
   consent: boolean;
   /** Whether the capability is IN FORCE. Never the switch's input. */
   inForce: boolean;
+  /**
+   * WHO holds it live (fixes-082526 phase 3) — the set the pane's ruling
+   * renders ("granted to 2 of 3"). Derived from the resolution, never
+   * authored; empty when nobody holds it.
+   */
+  holders: string[];
+  /**
+   * Each holder's OWN act (phase 3), keyed by grantee — a per-grantee surface
+   * cites its own decision, never the first holder's. Only holders appear.
+   */
+  acts: Record<string, GovernIssuance>;
   issuance: GovernIssuance | null;
   document: GovernDocument | null;
   /** The document column, assembled. */
@@ -407,6 +419,8 @@ export function buildGovernMatrix(opts: {
   materialized?: readonly { grantee: string; capability: string }[];
   /** capability → the event that announced its grant. */
   issuance?: Map<string, GovernIssuance>;
+  /** `grantee|capability` → that holder's own act (phase 3). */
+  issuanceByPair?: Map<string, GovernIssuance>;
 }): GovernMatrix {
   const { runbooks } = opts;
   const resolution = resolveCapabilityGrants({
@@ -415,8 +429,15 @@ export function buildGovernMatrix(opts: {
     materialized: opts.materialized,
   });
   const granted = new Map(resolution.grants.map((g) => [g.capability, g]));
+  const holdersOf = new Map<string, string[]>();
+  for (const g of resolution.grants) {
+    const list = holdersOf.get(g.capability) ?? [];
+    if (!list.includes(g.grantee)) list.push(g.grantee);
+    holdersOf.set(g.capability, list);
+  }
   const disarmed = new Map(resolution.disarmed.map((d) => [d.capability, d]));
   const issuance = opts.issuance ?? new Map<string, GovernIssuance>();
+  const issuanceByPair = opts.issuanceByPair ?? new Map<string, GovernIssuance>();
 
   const rows = runbooks.runbooks().map((rb): GovernRow => {
     const capability = rb.capability;
@@ -453,6 +474,13 @@ export function buildGovernMatrix(opts: {
       // CONSENT, not force: a disarmed grant's switch is ON.
       consent: state === 'materialized' || state === 'granted-by-you' || state === 'disarmed',
       inForce: !!grant,
+      holders: holdersOf.get(capability) ?? [],
+      acts: Object.fromEntries(
+        (holdersOf.get(capability) ?? []).flatMap((h) => {
+          const act = issuanceByPair.get(`${h}|${capability}`);
+          return act ? [[h, act]] : [];
+        })
+      ),
       issuance: issued,
       document,
       documentLine: documentLineFor(document),
@@ -606,8 +634,15 @@ export function setCapabilityGrant(opts: {
   capability: string;
   /** true issues, false revokes. */
   grant: boolean;
+  /**
+   * WHO the act is for (fixes-082526 phase 3). Named — an agent id — the act
+   * covers that grantee alone (the AgentWorkspace control). Absent, it covers
+   * the interactive surfaces (chat + mcp-client): that IS what Govern's
+   * capability-wide switch means, not an approximation of something else.
+   */
+  grantee?: string;
 }): GovernActResult {
-  const { core, storage, logger, capability, grant } = opts;
+  const { core, storage, logger, capability, grant, grantee } = opts;
   try {
     const runbooks = core?.law?.runbooks;
     if (!core || !runbooks) return { ok: false, reason: 'no-core', matrix: null };
@@ -621,18 +656,25 @@ export function setCapabilityGrant(opts: {
 
     const settings = (readSettings(storage) ?? {}) as NexusSettings;
     const existing = Array.isArray(settings.capabilityGrants) ? settings.capabilityGrants : [];
-    // INTERIM since the agent-addressing flip (fixes-082526 phase 1): the
-    // Govern control is still the capability-wide switch, so its act covers
-    // the BUILTIN surfaces (chat + mcp-client) — the same set a fresh install
-    // materializes. Agents get their per-agent control in phase 3; nothing
-    // here grants an agent. A grantee-less entry would grant NOBODY, which
-    // would make this switch a lie in the other direction.
-    const entries: CapabilityGrantSetting[] = BUILTIN_GRANTEES.map((grantee) =>
+    // The act's coverage (fixes-082526 phase 3): a NAMED grantee acts alone;
+    // absent means the interactive surfaces (chat + mcp-client) — the same
+    // set a fresh install materializes, which is what Govern's capability-wide
+    // switch means. A grantee-less ENTRY would grant nobody, which would make
+    // either switch a lie in the other direction.
+    const covered = grantee !== undefined ? [grantee] : [...BUILTIN_GRANTEES];
+    const entries: CapabilityGrantSetting[] = covered.map((g) =>
       grant
-        ? { grantee, capability, enabled: true, runbookId: rb.id, runbookHash: rb.hash }
-        : { grantee, capability, enabled: false }
+        ? { grantee: g, capability, enabled: true, runbookId: rb.id, runbookHash: rb.hash }
+        : { grantee: g, capability, enabled: false }
     );
-    const next = [...existing.filter((e) => e?.capability !== capability), ...entries];
+    // Replace only the covered grantees' entries for this capability — a named
+    // act must not clobber another holder's standing grant.
+    const next = [
+      ...existing.filter(
+        (e) => e?.capability !== capability || (e.grantee !== undefined && !covered.includes(e.grantee))
+      ),
+      ...entries,
+    ];
 
     try {
       storage.set(STORAGE_KEYS.SETTINGS, { ...settings, capabilityGrants: next });
@@ -690,6 +732,7 @@ export function readGovernMatrix(opts: {
     settings: readSettings(opts.storage),
     materialized: readMaterialized(opts.storage),
     issuance: readGrantIssuance(opts.storage),
+    issuanceByPair: readGrantIssuanceByPair(opts.storage),
   });
 }
 

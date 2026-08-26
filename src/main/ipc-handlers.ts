@@ -904,6 +904,9 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
       logger: localLogger,
       capability: String(args?.capability ?? ''),
       grant: args?.grant === true,
+      // Phase 3 (fixes-082526): a named grantee acts alone (the AgentWorkspace
+      // control); absent keeps Govern's interactive-surfaces pair.
+      ...(typeof args?.grantee === 'string' && args.grantee ? { grantee: args.grantee } : {}),
     }));
 
   // WP-46 · M6's four reads — the arrival and the re-entry. THE BRIDGE IS THIN

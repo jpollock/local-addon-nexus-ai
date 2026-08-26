@@ -64,6 +64,28 @@ interface SettingsState {
   globalSettings: NexusSettings | null;
   /** Non-null while the one-time "agents send data to your provider" disclosure is open (P0-5). */
   showDataDisclosure: boolean;
+  /**
+   * Phase 3 (fixes-082526, agent-addressed grants): the Govern matrix rows,
+   * for THIS agent's grants section. null = not loaded or record-keeping is
+   * down — the section states the absence rather than rendering an empty
+   * granted-nothing list.
+   */
+  governRows: GovernRowLike[] | null;
+}
+
+/**
+ * The row fields this surface reads, structurally — the seam is imported for
+ * TYPES ONLY elsewhere in this tree (see GovernSection's header for why a
+ * value import of intelligence-host pulls better-sqlite3 into the renderer).
+ */
+interface GovernRowLike {
+  capability: string;
+  label: string;
+  documentLine: string;
+  holders: string[];
+  acts: Record<string, { eventId: string; issuedAt: string }>;
+  chip: string;
+  state: string;
 }
 
 const CADENCE_OPTIONS = [
@@ -166,6 +188,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     driftDismissed: false,
     globalSettings: null,
     showDataDisclosure: false,
+    governRows: null,
   };
   private unsubscribe!: () => void;
   private credEventHandler?: (...args: any[]) => void;
@@ -177,6 +200,7 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
 
     this.loadScopeSites();
     this.loadGlobalSettings();
+    void this.loadGovernRows();
 
     // Load Google connection status if this agent uses Google credentials
     if (this.googleDecl()) {
@@ -579,6 +603,95 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
     return parts.join(' · ');
   }
 
+  /** Phase 3 · load the Govern matrix for the grants section. */
+  private loadGovernRows = async (): Promise<void> => {
+    try {
+      const matrix = await this.props.electron?.ipcRenderer?.invoke('nexus-ai:govern:matrix');
+      this.setState({ governRows: matrix?.rows ?? null });
+    } catch {
+      this.setState({ governRows: null });
+    }
+  };
+
+  /**
+   * Phase 3 · this agent's own grant act. The IPC returns the refreshed
+   * matrix, so the rows on screen are the rows the gate now applies.
+   */
+  private async handleGrantToggle(capability: string, grant: boolean): Promise<void> {
+    try {
+      const result = await this.props.electron?.ipcRenderer?.invoke('nexus-ai:govern:set-grant', {
+        capability,
+        grant,
+        grantee: this.props.agentId,
+      });
+      if (result?.matrix?.rows) this.setState({ governRows: result.matrix.rows });
+      else await this.loadGovernRows();
+    } catch {
+      await this.loadGovernRows();
+    }
+  }
+
+  /**
+   * Phase 3 · "Procedures this agent may run" — the door target the
+   * permissions-pane ruling names: the decision changes INSIDE the agent.
+   * One row per capability the registry serves; the switch is THIS agent's
+   * own (grantee, capability) grant; a held row cites the agent's OWN act
+   * (`acts[agentId]`), never another holder's.
+   */
+  private renderGrantsSection(): React.ReactNode {
+    const { agentId } = this.props;
+    const rows = this.state.governRows;
+
+    if (!rows) {
+      return this.renderCard(
+        React.createElement('div', null,
+          React.createElement('div', { style: { fontSize: 14, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 4 } },
+            'Procedures this agent may run'),
+          React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-secondary)' } },
+            'Grant records are unavailable — background record-keeping is not running. ' +
+            'Grants cannot be shown or changed until it recovers.'),
+        ),
+      );
+    }
+
+    return this.renderCard(
+      React.createElement('div', null,
+        React.createElement('div', { style: { fontSize: 14, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 2 } },
+          'Procedures this agent may run'),
+        React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-text-secondary)', marginBottom: 12 } },
+          'An agent holds only what you grant it here. Each grant is recorded as its own act, ' +
+          'and the platform refuses the agent by name anywhere it acts without one.'),
+        ...rows.map((row) => {
+          const held = row.holders.includes(agentId);
+          const act = row.acts[agentId];
+          return React.createElement('div', {
+            key: row.capability,
+            'data-agent-grant-row': row.capability,
+            'data-held': held,
+            style: {
+              display: 'flex', alignItems: 'flex-start', gap: 12,
+              padding: '10px 0', borderTop: '1px solid var(--ag-border)',
+            },
+          },
+            React.createElement(ToggleSwitch, {
+              checked: held,
+              onChange: (v: boolean) => { void this.handleGrantToggle(row.capability, v); },
+            }),
+            React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+              React.createElement('div', { style: { fontSize: 13, fontWeight: 600, color: 'var(--ag-text-primary)' } }, row.label),
+              React.createElement('div', { style: { fontFamily: 'ui-monospace, monospace', fontSize: 10.5, color: 'var(--ag-text-faint)' } },
+                row.documentLine),
+              held && act
+                ? React.createElement('div', { style: { fontSize: 11, color: 'var(--ag-text-secondary)', marginTop: 2 } },
+                    `granted to this agent · ${act.eventId} · ${act.issuedAt}`)
+                : null,
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
   private renderCard(children: React.ReactNode, dimmed = false) {
     return React.createElement('div', {
       style: {
@@ -836,6 +949,9 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
       // actively misleading copy. Gated on producesApprovals — the same "does this agent have a
       // gated action to pause on" capability, not a separate flag, since the two have coincided
       // for every agent so far and a real decoupling need can introduce its own field later.
+      // Phase 3 (fixes-082526): the agent's own grants — the door target.
+      this.renderGrantsSection(),
+
       (this.props.producesApprovals ?? true) && this.renderCard(
         React.createElement('div', null,
           React.createElement('div', { style: { fontSize: 14.5, fontWeight: 600, color: 'var(--ag-text-primary)', marginBottom: 12 } }, 'Autonomy level'),

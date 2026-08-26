@@ -913,6 +913,28 @@ export function readGrantIssuance(storage: MinimalStorage): Map<string, { eventI
   return out;
 }
 
+/**
+ * The act per (grantee, capability) — phase 3's accessor, keyed
+ * `grantee|capability`. `readGrantIssuance` above stays capability-keyed
+ * (first-wins) for the one-row-per-capability matrix; per-grantee surfaces
+ * cite their OWN act through this instead, because a row that cites another
+ * holder's act misattributes the decision.
+ */
+export function readGrantIssuanceByPair(
+  storage: MinimalStorage
+): Map<string, { eventId: string; issuedAt: string }> {
+  const out = new Map<string, { eventId: string; issuedAt: string }>();
+  for (const entry of readMarker(storage).grants) {
+    if (entry && typeof entry.capability === 'string' && typeof entry.eventId === 'string') {
+      out.set(`${entry.grantee}|${entry.capability}`, {
+        eventId: entry.eventId,
+        issuedAt: typeof entry.issuedAt === 'string' ? entry.issuedAt : '',
+      });
+    }
+  }
+  return out;
+}
+
 function readMarker(storage: MinimalStorage): MarkerState {
   try {
     const raw = storage.get(GRANTS_STORAGE_KEY) as (Partial<MarkerState> & { version?: number }) | null;
