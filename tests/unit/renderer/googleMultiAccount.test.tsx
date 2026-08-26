@@ -74,3 +74,36 @@ describe('multiple Google accounts on the card', () => {
     expect(t).not.toContain('Connect another');
   });
 });
+
+describe('the card lists only THIS agent\'s granted connections', () => {
+  it('loadGoogleStatus asks as the agent and renders the granted list, not the machine list', async () => {
+    const invoke = jest.fn(async (channel: string) => {
+      if (channel === 'nexus-ai:credential:status') {
+        return {
+          connections: [
+            { id: 'c-other', provider: 'google', accountLabel: 'other-agents@example.com', status: 'active' },
+            { id: 'c-mine', provider: 'google', accountLabel: 'mine@example.com', status: 'active' },
+          ],
+          grantedConnections: [
+            { id: 'c-mine', provider: 'google', accountLabel: 'mine@example.com', status: 'active' },
+          ],
+          agentStatus: 'connected',
+        };
+      }
+      return {};
+    });
+    const c = new AgentWorkspaceSettings({
+      agentId: 'web-analytics',
+      electron: { ipcRenderer: { invoke, on: jest.fn(), removeListener: jest.fn() } },
+      cronExpression: '0 8 * * 1',
+      credentials: [{ provider: 'google', scopes: ['https://www.googleapis.com/auth/analytics.readonly'], reason: 'r' }],
+    } as any);
+    c.setState = (partial: any) => { c.state = { ...c.state, ...(typeof partial === 'function' ? partial(c.state) : partial) }; };
+
+    await (c as any).loadGoogleStatus();
+
+    expect(invoke).toHaveBeenCalledWith('nexus-ai:credential:status',
+      expect.objectContaining({ provider: 'google', agentId: 'web-analytics' }));
+    expect((c.state as any).googleConnections.map((x: any) => x.id)).toEqual(['c-mine']);
+  });
+});

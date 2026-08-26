@@ -124,24 +124,54 @@ export class CredentialManager implements ICredentialManager {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  async connect(provider: string, agentId: string, siteId: string, scopes: string[]): Promise<void> {
+  async connect(
+    provider: string,
+    agentId: string,
+    siteId: string,
+    scopes: string[],
+  ): Promise<{ ok: true } | { ok: false; reason: string; message?: string }> {
     const cfg = this.providerRegistry.get(provider);
     if (!cfg) throw new ProviderNotConfiguredError(provider);
 
+    // Identity scopes ride along on the AUTHORIZATION only, so the userinfo call can label the
+    // connection (email) and give it a stable id (sub). Without them a manifest that declares
+    // only e.g. analytics.readonly gets a connection labeled "Google account" that can never be
+    // told apart from any other — fatal once more than one account is connected. The agent's
+    // grant below still carries only its declared scopes.
+    const IDENTITY_SCOPES = ['openid', 'https://www.googleapis.com/auth/userinfo.email'];
+    const authScopes = Array.from(new Set([...scopes, ...IDENTITY_SCOPES]));
+
     const runner = this.flowRunnerFactory();
-    const result = await runner.run(cfg, scopes, this.emitNexusState);
+    const result = await runner.run(cfg, authScopes, this.emitNexusState);
 
-    if (result.outcome !== 'success') return;
+    if (result.outcome !== 'success') {
+      return {
+        ok: false,
+        reason: result.outcome,
+        ...(result.outcome === 'error' ? { message: result.message } : {}),
+      };
+    }
 
-    const connectionId = crypto.randomUUID();
+    // Reconnecting an account that already has a connection updates that row — including a
+    // `revoked` one, which is exactly the repair path after a refresh token dies. Matching is by
+    // Google's stable `sub` when both sides have one, else by email; the "Google account"
+    // fallback label identifies nothing and must never merge two real accounts.
+    const existing = this.store.listConnections().find(c => {
+      if (c.provider !== provider) return false;
+      if (result.accountSub && c.accountSub) return c.accountSub === result.accountSub;
+      return result.accountLabel.includes('@') && c.accountLabel === result.accountLabel;
+    });
+
+    const connectionId = existing?.id ?? crypto.randomUUID();
     const conn: Connection = {
       id: connectionId,
       provider: provider as 'google',
       accountLabel: result.accountLabel,
+      accountSub: result.accountSub ?? existing?.accountSub,
       grantedScopes: result.scopes,
       status: 'active',
-      createdAt: new Date().toISOString(),
-      lastRefreshedAt: null,
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      lastRefreshedAt: existing ? new Date().toISOString() : null,
     };
 
     this.vault.store(connectionId, provider, result.refreshToken);
@@ -154,6 +184,7 @@ export class CredentialManager implements ICredentialManager {
     this.store.saveGrant({ connectionId, agentId, siteId, scopes });
 
     this.emitCredentialEvent({ type: 'credential:connected', provider, scopes: result.scopes });
+    return { ok: true };
   }
 
   async disconnect(connectionId: string): Promise<void> {

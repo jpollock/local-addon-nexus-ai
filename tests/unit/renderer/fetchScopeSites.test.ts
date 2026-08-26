@@ -156,3 +156,22 @@ describe('fetchSitesForAgent', () => {
     expect(sites.map(s => s.name)).toEqual(['prod-site']);
   });
 });
+
+describe('deactivated WPE installs', () => {
+  it('excludes is_active:false rows — a soft-deleted install must not be offered for scoping or binding', async () => {
+    const electron = mockElectron({
+      [IPC_CHANNELS.WPE_GET_SYNCED_SITES]: () => ({
+        sites: [
+          { id: 'wpe-1', name: 'alive', environment: 'production', is_active: true },
+          { id: 'wpe-2', name: 'deleted', environment: 'production', is_active: false },
+          // No is_active field at all (older payload shape) — kept, absence is not deletion.
+          { id: 'wpe-3', name: 'legacy', environment: 'production' },
+        ],
+      }),
+      [IPC_CHANNELS.GET_SITES]: () => ([]),
+    });
+
+    const sites = await fetchScopeSites(electron);
+    expect(sites.map(s => s.name)).toEqual(['alive', 'legacy']);
+  });
+});

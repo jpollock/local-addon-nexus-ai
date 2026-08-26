@@ -249,3 +249,121 @@ describe('multiple connections per provider', () => {
     expect(granted.map((c: any) => c.accountLabel)).toEqual(['beta@example.com']);
   });
 });
+
+describe('same-account reconnect', () => {
+  const EMAIL_SCOPE = 'https://www.googleapis.com/auth/userinfo.email';
+
+  function flowReturning(...results: any[]) {
+    const run = jest.fn();
+    for (const r of results) run.mockResolvedValueOnce(r);
+    return { run, cancel: jest.fn() };
+  }
+
+  const success = (over: Record<string, any> = {}) => ({
+    outcome: 'success', accessToken: 'at_1', refreshToken: 'rt_1',
+    expiresIn: 3600, scopes: [GSC_SCOPE], accountLabel: 'user@example.com', ...over,
+  });
+
+  it('connect resolves {ok:true} on success — the IPC handler and renderer both read it', async () => {
+    const manager = makeManager({ flow: flowReturning(success()) });
+    const result = await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('connect resolves {ok:false, reason} on cancellation instead of void', async () => {
+    const manager = makeManager({ flow: flowReturning({ outcome: 'cancelled' }) });
+    const result = await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+    expect(result).toEqual({ ok: false, reason: 'cancelled' });
+  });
+
+  it('connect carries the flow error message through — a completed consent that failed must say why', async () => {
+    const manager = makeManager({ flow: flowReturning({ outcome: 'error', message: 'Token exchange failed: 400 — invalid_client' }) });
+    const result = await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+    expect(result).toEqual({ ok: false, reason: 'error', message: 'Token exchange failed: 400 — invalid_client' });
+  });
+
+  it('requests identity scopes for labeling, but grants the agent only its declared scopes', async () => {
+    const flow = flowReturning(success({ scopes: [GSC_SCOPE, 'openid', EMAIL_SCOPE] }));
+    const manager = makeManager({ flow });
+    await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+
+    const requested = flow.run.mock.calls[0][1] as string[];
+    expect(requested).toEqual(expect.arrayContaining([GSC_SCOPE, 'openid', EMAIL_SCOPE]));
+
+    const grant = (manager as any).store.getGrant(manager.listConnections()[0].id, 'web-analytics', '');
+    expect(grant.scopes).toEqual([GSC_SCOPE]);
+  });
+
+  it('reconnecting the same account (matched by sub) updates the row in place — no duplicate', async () => {
+    const flow = flowReturning(
+      success({ accountSub: 'sub-123', accessToken: 'at_first', refreshToken: 'rt_first' }),
+      success({ accountSub: 'sub-123', accessToken: 'at_second', refreshToken: 'rt_second', accountLabel: 'renamed@example.com' }),
+    );
+    const manager = makeManager({ flow });
+    await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+    const firstId = manager.listConnections()[0].id;
+    await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+
+    const conns = manager.listConnections();
+    expect(conns).toHaveLength(1);
+    expect(conns[0].id).toBe(firstId);
+    expect(conns[0].accountLabel).toBe('renamed@example.com');
+    const token = await manager.getTokenForConnection('google', 'web-analytics', '', firstId, [GSC_SCOPE]);
+    expect(token.token).toBe('at_second');
+  });
+
+  it('reconnecting the same email dedupes legacy rows that never stored a sub', async () => {
+    const flow = flowReturning(
+      success({ accessToken: 'at_first' }),
+      success({ accountSub: 'sub-123', accessToken: 'at_second' }),
+    );
+    const manager = makeManager({ flow });
+    await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+    await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+    expect(manager.listConnections()).toHaveLength(1);
+    // The reconnect back-fills the stable id for next time.
+    expect((manager.listConnections()[0] as any).accountSub).toBe('sub-123');
+  });
+
+  it('never dedupes on the fallback label — two unlabeled connects stay two connections', async () => {
+    const flow = flowReturning(
+      success({ accountLabel: 'Google account' }),
+      success({ accountLabel: 'Google account' }),
+    );
+    const manager = makeManager({ flow });
+    await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+    await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+    expect(manager.listConnections()).toHaveLength(2);
+  });
+
+  it('a different account still gets its own connection', async () => {
+    const flow = flowReturning(
+      success({ accountSub: 'sub-A', accountLabel: 'alpha@example.com' }),
+      success({ accountSub: 'sub-B', accountLabel: 'beta@example.com' }),
+    );
+    const manager = makeManager({ flow });
+    await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+    await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+    expect(manager.listConnections()).toHaveLength(2);
+  });
+
+  it('reconnecting a revoked account revives the same row — the repair path for a dead client swap', async () => {
+    const flow = flowReturning(
+      success({ accountSub: 'sub-123', refreshToken: 'rt_old' }),
+      success({ accountSub: 'sub-123', accessToken: 'at_new', refreshToken: 'rt_new' }),
+    );
+    const manager = makeManager({ flow });
+    await manager.connect('google', 'seo-insights', '', [GSC_SCOPE]);
+    const id = manager.listConnections()[0].id;
+    await manager.handleRefreshFailure(id, 'invalid_grant');
+    expect(manager.listConnections()[0].status).toBe('revoked');
+
+    await manager.connect('google', 'web-analytics', '', [GSC_SCOPE]);
+    const conns = manager.listConnections();
+    expect(conns).toHaveLength(1);
+    expect(conns[0].id).toBe(id);
+    expect(conns[0].status).toBe('active');
+    // The original agent's grant survived the round trip.
+    expect(manager.listGrantedConnections('google', 'seo-insights', '').map(c => c.id)).toEqual([id]);
+  });
+});

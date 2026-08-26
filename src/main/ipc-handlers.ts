@@ -6527,14 +6527,24 @@ echo json_encode(['total'=>$total,'byType'=>$byType,'lastPostAt'=>$last]);`,
     if (!mgr) return { connections: [], agentStatus: null };
     const connections = mgr.listConnections();
     let agentStatus: string | null = null;
+    // The machine-wide list answers "does an account exist here at all"; the granted list is
+    // what an agent's own card may present as connected — the grant is the reach boundary, and
+    // rendering another agent's connection as this agent's is how seo-insights' account ended
+    // up on web-analytics' Connected Accounts card.
+    let grantedConnections: unknown[] = [];
     if (args?.agentId && args?.provider) {
       try {
         agentStatus = await mgr.getStatusForAgent(args.provider, args.agentId, '');
       } catch {
         agentStatus = null;
       }
+      try {
+        grantedConnections = mgr.listGrantedConnections(args.provider, args.agentId, '');
+      } catch {
+        grantedConnections = [];
+      }
     }
-    return { connections, agentStatus };
+    return { connections, grantedConnections, agentStatus };
   });
 
   safeHandle(IPC_CHANNELS.CREDENTIAL_CONNECT, async (_event: any, args: { provider: string; agentId: string; siteId: string; scopes: string[] }) => {

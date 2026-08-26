@@ -125,7 +125,7 @@ export class OAuthFlowRunner {
     code: string;
     verifier: string;
     redirectUri: string;
-  }): Promise<{ accessToken: string; refreshToken: string; expiresIn: number; scopes: string[]; accountLabel: string }> {
+  }): Promise<{ accessToken: string; refreshToken: string; expiresIn: number; scopes: string[]; accountLabel: string; accountSub?: string }> {
     const body = new URLSearchParams({
       code: opts.code,
       client_id: opts.provider.clientId,
@@ -168,15 +168,18 @@ export class OAuthFlowRunner {
       throw new Error('Token exchange response missing required fields');
     }
 
-    // Fetch account email for display
+    // Fetch account email for display, and `sub` — Google's stable account id, which is what
+    // same-account reconnect dedupe keys on (an email can be renamed; sub cannot).
     let accountLabel = 'Google account';
+    let accountSub: string | undefined;
     try {
       const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
         headers: { Authorization: `Bearer ${data.access_token}` },
       });
       if (infoRes.ok) {
-        const info = await infoRes.json() as { email?: string };
+        const info = await infoRes.json() as { email?: string; sub?: string };
         if (info.email) accountLabel = info.email;
+        if (info.sub) accountSub = info.sub;
       }
     } catch { /* non-fatal */ }
 
@@ -186,6 +189,7 @@ export class OAuthFlowRunner {
       expiresIn: data.expires_in,
       scopes: data.scope ? data.scope.split(' ') : [],
       accountLabel,
+      accountSub,
     };
   }
 }

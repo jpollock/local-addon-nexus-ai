@@ -120,7 +120,10 @@ export class AnalyticsSitesTab extends React.Component<Props, State> {
     const stateLabel = row.bound ? `runs ${this.props.cadenceLabel}` : 'no property bound';
 
     return React.createElement('div', {
-      key: row.name,
+      // Six fleet names exist as BOTH a WPE install and a Local site (the documented collision
+      // set); `row.name` alone was a duplicate React key, which React handles by duplicating
+      // and/or omitting children — the live "seven thelocalshed rows" ghost list.
+      key: `${row.platform}:${row.environment}:${row.name}`,
       style: {
         display: 'flex', gap: 14, alignItems: 'center', padding: '14px 18px',
         borderBottom: '1px solid var(--ag-picker-border-faint)',

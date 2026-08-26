@@ -18,7 +18,14 @@ export interface Ga4Property {
   property: string;
   displayName: string;
   account: string;
+  /** Which connected Google account served this property. Present since multi-account (2026-08). */
+  accountLabel?: string;
+  connectionId?: string;
 }
+
+/** One connected account the agent could not read — its properties are silently missing from
+ * `properties`, which is exactly why it must be shown, not dropped. */
+export interface AccountError { accountLabel?: string; message?: string }
 
 interface Props {
   electron?: any;
@@ -39,6 +46,9 @@ interface Props {
 interface State {
   phase: 'loading' | 'choose' | 'saving';
   properties: Ga4Property[];
+  /** Accounts that failed while others succeeded. A partial read is not an error state — the
+   * healthy accounts' properties still render — but the hole has a name and it is shown. */
+  accountErrors: AccountError[];
   selected: string | null;
   error: { code: string; message: string } | null;
   /** The picker shows the strongest matches first and hides the tail until asked. */
@@ -54,7 +64,7 @@ function parse(result: any): any {
 }
 
 export class Ga4PropertyModal extends React.Component<Props, State> {
-  state: State = { phase: 'loading', properties: [], selected: null, error: null, showAll: false };
+  state: State = { phase: 'loading', properties: [], accountErrors: [], selected: null, error: null, showAll: false };
 
   componentDidMount() { void this.load(); }
 
@@ -77,6 +87,7 @@ export class Ga4PropertyModal extends React.Component<Props, State> {
     this.setState({
       phase: 'choose',
       properties,
+      accountErrors: Array.isArray(data.accountErrors) ? data.accountErrors : [],
       // Pre-select the strongest match if there is a clear one, so the common case is one click.
       // Never auto-applied — the user still confirms.
       selected: this.props.current?.property ?? this.bestGuess(properties),
@@ -194,8 +205,41 @@ export class Ga4PropertyModal extends React.Component<Props, State> {
     );
   }
 
+  /** More than one Google account contributed to this list, so every row must say whose it is. */
+  private multiAccount(): boolean {
+    return new Set(this.state.properties.map(p => p.accountLabel).filter(Boolean)).size > 1;
+  }
+
+  private renderAccountWarnings() {
+    const errs = this.state.accountErrors;
+    if (this.state.phase !== 'choose' || errs.length === 0) return null;
+    return React.createElement('div', {
+      style: {
+        marginBottom: 16, padding: '13px 15px', borderRadius: 10,
+        background: 'rgba(242,181,68,0.07)', border: '1px solid rgba(242,181,68,0.32)',
+      },
+    },
+      React.createElement('div', { style: { fontSize: 13.5, fontWeight: 600, color: 'var(--ag-picker-warning)' } },
+        errs.length === 1
+          ? `${errs[0].accountLabel ?? 'A connected account'} could not be read`
+          : `${errs.length} connected accounts could not be read`),
+      React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-picker-text-secondary)', marginTop: 5, lineHeight: 1.5 } },
+        'Its properties are missing from this list. Reconnect it from the Connected accounts card, then reopen this.'),
+      ...errs.map((e, i) => React.createElement('div', {
+        key: i,
+        style: {
+          marginTop: 8, padding: '7px 10px', borderRadius: 7, fontFamily: MONO, fontSize: 11.5,
+          color: 'var(--ag-picker-text-dim)', background: 'var(--ag-picker-bg-sunken)',
+          border: '1px solid var(--ag-picker-border-faint)', wordBreak: 'break-word' as const,
+        },
+      }, `${e.accountLabel ?? 'connected account'} — ${e.message ?? 'unreadable'}`)),
+    );
+  }
+
   private renderOption(p: Ga4Property, score: number) {
     const picked = this.state.selected === p.property;
+    const subline = [p.property, p.account, this.multiAccount() ? p.accountLabel : null]
+      .filter(Boolean).join(' · ');
     return React.createElement('div', {
       key: p.property,
       role: 'radio',
@@ -219,7 +263,7 @@ export class Ga4PropertyModal extends React.Component<Props, State> {
         React.createElement('div', { style: { fontSize: 13, color: 'var(--ag-picker-text-primary)' } }, p.displayName),
         React.createElement('div', {
           style: { fontFamily: MONO, fontSize: 11.5, color: 'var(--ag-picker-text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
-        }, p.account ? `${p.property} · ${p.account}` : p.property),
+        }, subline),
       ),
       // Named for what it is — a name that looks similar. Never "recommended".
       score >= 2 && React.createElement('span', {
@@ -261,18 +305,23 @@ export class Ga4PropertyModal extends React.Component<Props, State> {
             React.createElement('span', { style: { fontFamily: MONO } }, this.props.siteName),
           ),
           React.createElement('div', { style: { fontSize: 12.5, color: 'var(--ag-picker-text-secondary)', marginTop: 5, lineHeight: 1.5 } },
-            'Properties on the connected Google account. A name match is a hint — confirm it belongs to this site before binding.'),
+            'Properties across your connected Google accounts. A name match is a hint — confirm it belongs to this site before binding.'),
         ),
 
         React.createElement('div', { style: { flex: 1, overflowY: 'auto' as const, padding: '18px 24px' } },
           this.renderError(),
+          this.renderAccountWarnings(),
           phase === 'loading'
             ? React.createElement('div', { style: { fontSize: 13, color: 'var(--ag-picker-text-muted)', padding: '10px 0' } }, 'Reading your GA4 properties…')
             : ranked.length === 0 && !this.state.error
-              ? React.createElement('div', { style: { padding: '24px 0', textAlign: 'center' as const } },
-                  React.createElement('div', { style: { fontSize: 13, color: 'var(--ag-picker-text-secondary)' } }, 'No GA4 properties on this account'),
+              // With a failed account the honest claim is "couldn't read", never "there are none" —
+              // the warning above already names it, so only the flat empty state renders copy here.
+              ? this.state.accountErrors.length > 0
+                ? null
+                : React.createElement('div', { style: { padding: '24px 0', textAlign: 'center' as const } },
+                  React.createElement('div', { style: { fontSize: 13, color: 'var(--ag-picker-text-secondary)' } }, 'No GA4 properties on any connected Google account'),
                   React.createElement('div', { style: { fontSize: 12, color: 'var(--ag-picker-text-muted)', marginTop: 6 } },
-                    'The connected Google account can\'t see any Analytics properties. Connect a different account, or check access in Google Analytics.'),
+                    'None of the connected Google accounts can see any Analytics properties. Connect an account that can, or check access in Google Analytics.'),
                 )
               : React.createElement('div', null,
                   ...visible.map(x => this.renderOption(x.p, x.score)),

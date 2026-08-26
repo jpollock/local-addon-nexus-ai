@@ -236,10 +236,13 @@ export class AgentWorkspaceSettings extends React.Component<SettingsProps, Setti
 
   private async loadGoogleStatus() {
     try {
-      const result = await this.props.electron?.ipcRenderer?.invoke('nexus-ai:credential:status');
-      const connections: GoogleConnection[] = result?.connections ?? [];
-      // ALL usable google connections — `.find` here was the one-account
-      // assumption; the store was always plural.
+      const result = await this.props.electron?.ipcRenderer?.invoke('nexus-ai:credential:status', {
+        provider: 'google',
+        agentId: this.props.agentId,
+      });
+      // The GRANTED list, not the machine list — the grant is the reach boundary, and another
+      // agent's connection rendered here reads as "this agent can use it", which is false.
+      const connections: GoogleConnection[] = result?.grantedConnections ?? [];
       this.setState({
         googleConnections: connections.filter((c: any) => c.provider === 'google' && c.status !== 'revoked'),
       });

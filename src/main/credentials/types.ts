@@ -4,6 +4,9 @@ export interface Connection {
   id: string;
   provider: 'google';
   accountLabel: string;        // Google email, for display only
+  /** Google's stable account id (`sub` from userinfo). The dedupe key for same-account
+   * reconnects; absent on connections made before it was captured. */
+  accountSub?: string;
   grantedScopes: string[];
   status: 'active' | 'revoked' | 'error';
   createdAt: string;           // ISO timestamp
@@ -55,7 +58,7 @@ export type CredentialDeclaration = OAuthCredentialDeclaration | ApiKeyCredentia
 // ─── OAuth flow result ────────────────────────────────────────────────────────
 
 export type FlowResult =
-  | { outcome: 'success'; accessToken: string; refreshToken: string; expiresIn: number; scopes: string[]; accountLabel: string }
+  | { outcome: 'success'; accessToken: string; refreshToken: string; expiresIn: number; scopes: string[]; accountLabel: string; accountSub?: string }
   | { outcome: 'cancelled' }
   | { outcome: 'state_mismatch' }
   /** The user consented but the flow could not be completed — token exchange rejected, network

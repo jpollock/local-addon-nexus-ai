@@ -121,10 +121,10 @@ describe('loading properties', () => {
     expect(instance.state.selected).toBe('properties/288401992');
   });
 
-  it('says so plainly when the account has no properties', async () => {
+  it('says so plainly when no account has properties', async () => {
     const { instance } = makeModal({ properties: [] });
     await instance['load']();
-    expect(textOf(instance.render())).toContain('No GA4 properties on this account');
+    expect(textOf(instance.render())).toContain('No GA4 properties on any connected Google account');
   });
 });
 
@@ -294,5 +294,67 @@ describe('a Google API that is switched off', () => {
     const text = textOf(instance.render());
     expect(text).toContain('Google would not return your properties');
     expect(text).not.toContain('Google Cloud project');
+  });
+});
+
+describe('multiple connected accounts', () => {
+  const TWO_ACCOUNT_PROPS = [
+    { property: 'properties/1', displayName: 'My Loop', account: 'WPE', accountLabel: 'jeremy@wpengine.com', connectionId: 'c1' },
+    { property: 'properties/2', displayName: 'Client Store', account: 'Client', accountLabel: 'client@gmail.com', connectionId: 'c2' },
+  ];
+
+  it('labels each option with the Google account it came from when more than one is connected', async () => {
+    const { instance } = makeModal({ properties: TWO_ACCOUNT_PROPS });
+    await instance['load']();
+    const text = textOf(instance.render());
+    expect(text).toContain('jeremy@wpengine.com');
+    expect(text).toContain('client@gmail.com');
+  });
+
+  it('adds no account label noise when every property is from the same account', async () => {
+    const { instance } = makeModal({
+      properties: [
+        { property: 'properties/1', displayName: 'My Loop', account: 'WPE', accountLabel: 'jeremy@wpengine.com', connectionId: 'c1' },
+        { property: 'properties/2', displayName: 'WPE Marketing', account: 'WPE', accountLabel: 'jeremy@wpengine.com', connectionId: 'c1' },
+      ],
+    });
+    await instance['load']();
+    expect(textOf(instance.render())).not.toContain('jeremy@wpengine.com');
+  });
+
+  it('a failed account is a named warning, not a hidden hole — the healthy account\'s properties still render', async () => {
+    const { instance } = makeModal({
+      listResult: toolResult({
+        ok: true,
+        properties: [TWO_ACCOUNT_PROPS[1]],
+        accountErrors: [{ accountLabel: 'jeremy@wpengine.com', message: 'invalid_grant' }],
+      }),
+    });
+    await instance['load']();
+    const text = textOf(instance.render());
+    expect(text).toContain('jeremy@wpengine.com');
+    expect(text).toContain('Client Store');
+    // The remedy, not just the fault.
+    expect(text.toLowerCase()).toContain('reconnect');
+  });
+
+  it('an empty list with a failed account must not claim there are no properties', async () => {
+    const { instance } = makeModal({
+      listResult: toolResult({
+        ok: true,
+        properties: [],
+        accountErrors: [{ accountLabel: 'jeremy@wpengine.com', message: 'invalid_grant' }],
+      }),
+    });
+    await instance['load']();
+    const text = textOf(instance.render());
+    expect(text).not.toContain('No GA4 properties');
+    expect(text).toContain('jeremy@wpengine.com');
+  });
+
+  it('the truly-empty state speaks of accounts, plural — one connection is no longer an assumption', async () => {
+    const { instance } = makeModal({ properties: [] });
+    await instance['load']();
+    expect(textOf(instance.render())).toContain('any connected Google account');
   });
 });

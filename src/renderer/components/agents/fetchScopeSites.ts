@@ -44,6 +44,10 @@ export async function fetchScopeSites(electron: any): Promise<ScopeSite[]> {
     const wpeResult = await ipc.invoke(IPC_CHANNELS.WPE_GET_SYNCED_SITES).catch(() => null);
     for (const s of (wpeResult?.sites ?? [])) {
       if (!s?.name) continue;
+      // `nexus host remove` and install deletion soft-delete (is_active=0); a dead install
+      // offered for scoping or GA4 binding is a target nothing can run against. Absence of the
+      // field is an older payload shape, not deletion.
+      if (s.is_active === false) continue;
       sites.push({
         id: s.id || s.name,
         name: s.name,

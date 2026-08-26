@@ -345,3 +345,28 @@ describe('a build that cannot sign in at all', () => {
     expect(text).not.toContain('You can try again');
   });
 });
+
+describe('row keys across platforms', () => {
+  it('a name existing as both a WPE install and a Local site gets two DISTINCT keys — duplicate keys make React duplicate or omit rows', () => {
+    // myloop is in the documented wpe/local collision set (CLAUDE.md "Names collide across sources").
+    const state: AnalyticsState = {
+      google: { connected: true, accountExists: true, label: 'jeremy@wpengine.com' },
+      fleet: [site('myloop', 'production', 'WP Engine'), site('myloop', 'local', 'Local')],
+      bindings: {},
+    };
+    const { instance } = makeTab({ state });
+    instance.state.filter = 'all';
+    const tree = instance.render();
+
+    const keys: string[] = [];
+    (function collect(node: any) {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(collect); return; }
+      if (typeof node.key === 'string' && node.key.includes('myloop')) keys.push(node.key);
+      if (node.props?.children) collect(node.props.children);
+    })(tree);
+
+    expect(keys).toHaveLength(2);
+    expect(new Set(keys).size).toBe(2);
+  });
+});
