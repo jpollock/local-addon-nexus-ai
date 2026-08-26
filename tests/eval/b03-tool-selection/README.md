@@ -16,9 +16,11 @@ Two failure modes, measured separately (a single pass/fail hides both):
    set (append-only — the array never shrinks or reorders mid-turn), and the
    model completes the task with it on a later iteration. Not merely that
    the search happened. First half failing is a prompt problem; second half
-   is the append plumbing. **Runner support pending** — it needs the
-   append-only grants implementation (P5 stage 3) and a live provider; the
-   case format is defined now so cases accumulate ahead of the plumbing.
+   is the append plumbing. **The plumbing landed with P5 stage 3**
+   (ChatService turn-scoped grants + discovery append, pinned at unit level
+   by appendOnlyGrants.test.ts's full search→append→call round trip);
+   runner support still needs a live provider loop, so these cases stay
+   skipped in run.mjs until that harness exists.
 
 ## Case distribution — 50 cases, weighted by the twelve jobs
 

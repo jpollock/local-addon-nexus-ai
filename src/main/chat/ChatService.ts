@@ -275,6 +275,22 @@ export class ChatService {
     // turns these into the `name#index` addresses the convention cites.
     const turnToolCalls: string[] = [];
 
+    // P5 stage 3 · append-only grants (charter; Fig. 2 of the tool-context
+    // design). Computed ONCE per turn from the caller's grants (copied —
+    // never mutated), stable order, and grown only at the end: when
+    // search_tools surfaces a tool outside the grant set, it is appended so
+    // the NEXT iteration can call it. Providers only accept calls to
+    // declared tools, so without the append the P2 disclosure ("call
+    // search_tools before concluding a capability is unavailable") points at
+    // tools the model can never call. One cache invalidation per discovery,
+    // only on turns that search; undefined stays undefined — unrestricted
+    // turns are byte-identical to pre-stage-3 behaviour. Pinned by
+    // appendOnlyGrants.test.ts: the array never shrinks or reorders mid-turn.
+    const turnGrants = grants && grants.length > 0 ? [...grants] : undefined;
+    const knownToolNames = turnGrants
+      ? new Set(adaptToolsForChat(this.registry, this.services).map((t) => t.name))
+      : undefined;
+
     for (let iteration = 0; iteration < CHAT_DEFAULTS.MAX_AGENT_ITERATIONS; iteration++) {
       if (session.abortController.signal.aborted) break;
 
@@ -295,7 +311,7 @@ export class ChatService {
       // sentence in power.ts — loud, not a silent amputation. History and
       // probe results: powerToolCap.test.ts header,
       // docs/planning/2026-08-26-chat-harness-plan.md (P1).
-      const tools = adaptToolsForChat(this.registry, this.services, grants);
+      const tools = adaptToolsForChat(this.registry, this.services, turnGrants);
 
       // Stream the LLM response
       let assistantContent = '';
@@ -376,6 +392,20 @@ export class ChatService {
             toolCallId: tc.id,
             toolName: tc.name,
           });
+
+          // P5 stage 3 — discovery append: registry tool names surfaced by a
+          // search_tools result join the turn's grant set at the END, making
+          // them callable from the next iteration. Whole-name matching
+          // against the known registry, dedup'd; visibility only —
+          // registry.call remains the enforcement layer regardless of what
+          // the model can see.
+          if (turnGrants && knownToolNames && tc.name === 'search_tools') {
+            for (const name of knownToolNames) {
+              if (!turnGrants.includes(name) && new RegExp(`\\b${name}\\b`).test(result.text)) {
+                turnGrants.push(name);
+              }
+            }
+          }
 
           // Only count Tier 2/3 (state-changing) ops as actions — Tier 1 reads are invisible
           const actionSafety = getToolSafety(tc.name);

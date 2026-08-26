@@ -36,8 +36,16 @@ export function adaptToolsForChat(
     })),
   ];
 
+  // P5 stage 3 — the granted array follows GRANTS order, not registry order.
+  // Load-bearing for append-only turns: a tool appended to the grant list
+  // must land at the END of the tools array, so the prior array stays a
+  // strict prefix and the cache invalidates once, from the tail. A
+  // registry-order filter (the previous implementation) would insert a
+  // discovered tool mid-array and re-tokenize everything after it. Grants
+  // naming tools the registry lacks are dropped — nothing unsendable is sent.
+  const byName = new Map(allTools.map((t) => [t.name, t]));
   const granted = grants && grants.length > 0
-    ? allTools.filter((tool) => grants.includes(tool.name))
+    ? grants.map((name) => byName.get(name)).filter((t): t is McpToolDefinition => t !== undefined)
     : allTools;
 
   // P2(a) — the discovery invariant: search_tools survives every assembly and
