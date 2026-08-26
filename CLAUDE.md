@@ -1055,21 +1055,21 @@ built and rejected) is in the designer's `handoff_log_sources_v3/DECISIONS.md`.
 ## Known Pitfalls
 
 - **Smart Search MU plugin pitfalls** — `is_plugin_active()` fires too early in WordPress bootstrap; `siteStarted` races MySQL startup. Use filesystem checks in Node.js, not WP-CLI. (Was a link to `feedback_smart_search_mu_plugin.md`, which lives in the session-memory directory, not this repo — inlined 2026-08-25.)
-- **`wpeAllowedEnvironments` is dead code — it blocks nothing.** This entry used to
-  say it "blocks SSH/WP-CLI on excluded environments, default excludes production."
-  That is false: all four exported functions of
-  `src/main/mcp/utils/environment-filter.ts` have **zero callers** outside their own
-  test file. It was superseded by the granular permissions — `types.ts:343` says
-  "Replaces wpeAllowedEnvironments", `schemas.ts:106` marks it "legacy — kept for
-  migration", and `operation-permissions.ts:153` is the one-way converter
-  (`migrateFromLegacyEnvFilter`; lines drift — grep the names).
+- **`environment-filter.ts` was DELETED 2026-08-26** (fixes-082526 item 7),
+  per this entry's own instruction. Its four exported functions had zero
+  callers outside their own test files, and one of those suites claimed to
+  verify "the environment filter logic that WPESyncService applies" — a green
+  suite for a protection that did not run. The legacy `wpeAllowedEnvironments`
+  SETTING survives for migration only: `schemas.ts` keeps the key,
+  `operation-permissions.ts`'s `migrateFromLegacyEnvFilter` is the one-way
+  converter, and `tests/unit/mcp/environment-filter-retired.test.ts` pins the
+  module gone, src import-free, and the migration path alive.
   The gate that actually runs is `isOperationAllowed` against
   `remoteOperationPermissions`, whose defaults
   (`operation-permissions.ts:22`) are: `wpcli_read` **allowed on every
   environment including production**; `wpcli` and `push` refused on production;
   `delete` refused everywhere. So on a production install, reads work and writes
-  do not — SSH is *not* off wholesale. Delete `environment-filter.ts` or wire it
-  up; do not cite it as a live protection.
+  do not — SSH is *not* off wholesale.
 - **This is why security-sentinel's "Remediate" button will not work out of the
   box.** `SentinelExecutor` (`src/main/sentinel/SentinelExecutor.ts`) gates every
   remediation command through the same `isOperationAllowed` check above: an
