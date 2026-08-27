@@ -33481,3 +33481,49 @@ LIVE probe — the assertion whose absence let this stand.
 
 Registered by this receipt: **the `needsYou` driver bundle** — eleven
 acceptance drivers, J-Glance ×3 and J-Act-small ×8. No build entry.
+
+### The `needsYou` driver bundle — first attempt at the other two J-Glance criteria (2026-08-26)
+
+The doors criterion drove and passed (commit `820bca9b`). The other two J-Glance
+criteria were attempted the same day and **withdrawn before commit**, because
+both drivers passed by measuring an empty set.
+
+**The wall, measured:** at the cold-open glance the surface renders **zero
+per-fact ages**. `data-part-age` lives on situation PARTS, and parts render only
+when `openParts[situation.id] === true` (`Arrival.tsx:620`) — a disclosure that
+is closed until someone clicks it. J-Glance is "the app opens cold; the user
+asks nothing", so the parts are closed by construction at exactly the moment
+this journey measures.
+
+Consequences for the two criteria:
+
+- *"Every count and age on screen is derived, and each one is dated or carries
+  its freshness class."* Driven against `data-part-age`, it reported **"0 age(s)
+  on screen"** and PASSED. That verdict is worse than the BLOCKED it replaced: a
+  BLOCKED says nobody checked, a vacuous PASS says checked and fine.
+- *"A fact with no date where its class has an SLO."* Driven by comparing the
+  fold's parts to the rendered ones, it reported 7 facts "whose record HAS a
+  time and whose row shows none" — and FAILED. Also wrong: the parts were not
+  dropped, they were **not disclosed**. The check asserted against the RECORD
+  where the criterion is about the SCREEN.
+
+**The pattern, named because it is now three for three.** Every instrument error
+in this bundle has been the same shape: measuring the record, or the tree,
+rather than what the moment actually renders. The first was `elementsOf(s.arrival)`
+double-walking an already-flat list; the second was a distinctness reading that
+contradicted WP-55's ratified grouping guard; the third is this. A driver here
+is only as good as its answer to "what is on screen at THIS moment".
+
+**What the two criteria need before they can be driven — a reading, not code:**
+at the glance, the counts and lines on screen are the accounting line, the
+verdict and the meta line. Either
+
+1. the criteria are about THOSE, in which case "dated or carries its freshness
+   class" is a question about the accounting line (which carries neither today,
+   while the drift line IS `FRESHNESS.now`) — a real, answerable product
+   question; or
+2. they intend the disclosed state, which is no longer "cold open, no
+   interaction" and contradicts the moment's own framing.
+
+Until that is ruled, both stay BLOCKED on this harness with their reason
+recorded here, which is an honest verdict. Ten of the eleven drivers remain.
