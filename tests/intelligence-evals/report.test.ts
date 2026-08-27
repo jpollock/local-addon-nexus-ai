@@ -175,3 +175,35 @@ describe('renderReport', () => {
     expect(out).toContain('broken.yaml: invalid YAML');
   });
 });
+
+describe('the summary must not mis-state what BLOCKED means', () => {
+  /**
+   * Measured 2026-08-26: the verdict block said all 18 BLOCKED criteria were
+   * "BLOCKED on capabilities that do not exist yet" while 11 of them were
+   * waiting on a driver in THIS HARNESS for a surface that had shipped. The
+   * detail lines were corrected first; a summary that keeps the old claim is
+   * the line a reader quotes, so it is the one that has to be right.
+   */
+  it('separates a product gap from a harness gap when both are present', () => {
+    const verdict = milestoneVerdict(
+      reportOf([
+        { criterion: criterion('a'), verdict: 'PASS', evidence: ['ok'] },
+        { criterion: criterion('b'), verdict: 'BLOCKED', evidence: ['absent'], missing: 'x', blockedOn: 'product' },
+        { criterion: criterion('c'), verdict: 'BLOCKED', evidence: ['shipped'], missing: 'a driver', blockedOn: 'harness' },
+      ])
+    );
+    expect(verdict).toMatch(/1 (?:is|are) BLOCKED on capabilities that do not exist/);
+    expect(verdict).toMatch(/1 .*harness/i);
+  });
+
+  it('keeps the original single sentence when every BLOCKED is a product gap', () => {
+    const verdict = milestoneVerdict(
+      reportOf([
+        { criterion: criterion('b'), verdict: 'BLOCKED', evidence: ['absent'], missing: 'x', blockedOn: 'product' },
+        { criterion: criterion('c'), verdict: 'BLOCKED', evidence: ['absent'], missing: 'y' },
+      ])
+    );
+    expect(verdict).toContain('2 are BLOCKED on capabilities that do not exist yet');
+    expect(verdict).not.toMatch(/harness/i);
+  });
+});

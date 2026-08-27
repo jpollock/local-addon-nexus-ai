@@ -1157,6 +1157,48 @@ function journeyGapCheck(gap: JourneyGap): RegisteredCheck {
       const measured = gap.token
         ? surfaces.evidence.filter((line) => line.includes(`\`${gap.token}\``))
         : [];
+
+      /**
+       * TWO blockers wear one word, and naming the wrong one sends the reader
+       * to the wrong packet.
+       *
+       * Measured 2026-08-26: eleven criteria here reported "the surface does
+       * not exist" against `needsYou`, which `probeRendererSurfaces()` — this
+       * harness's own probe — had been reporting in five renderer files since
+       * WP-46 shipped it on 2026-08-20. The tally those verdicts fed was then
+       * read as "UX build 2 owns eighteen BLOCKED criteria" and used to rank
+       * the next packet. It is the exact stale gap the rule at the head of
+       * `jRefusalDriven` forbids, and it survived because every assertion in
+       * `checks.test.ts` ran these checks against a fixture that says nothing
+       * has shipped.
+       *
+       * So the verdict stays BLOCKED either way — a criterion nobody can walk
+       * must never read as met — but it now says WHICH wall it is against. If
+       * the surface has not shipped, the walk cannot be taken. If it has, the
+       * walk is takeable and what is missing is a driver in this harness:
+       * different owner, different work, and a materially different claim
+       * about what stands between here and a green tally.
+       */
+      const shipped = gap.token ? !surfaces.absentFromRenderer(gap.token) : false;
+
+      if (shipped) {
+        return {
+          blockedOn: 'harness',
+          ...blocked(
+          `a driver: the surface this waits on has SHIPPED, and this harness cannot yet walk it — ` +
+            `what was missing (${gap.missing}) is now present and unexercised`,
+          `an acceptance driver for \`${gap.token}\` in tests/intelligence-evals — the pattern is ` +
+            'the one WP-41 and WP-46 already follow: gate on absentFromRenderer, then drive the ' +
+            'real surface and judge the criterion against it',
+          [
+            ...(gap.standing ? [gap.standing] : []),
+            ...measured,
+            'BLOCKED on this harness, NOT on the product: reporting it as an unbuilt surface ' +
+              'understated what has shipped and mis-addressed the remedy',
+          ]),
+        };
+      }
+
       return blocked(gap.missing, gap.unblockedBy, [
         ...(gap.standing ? [gap.standing] : []),
         ...(measured.length

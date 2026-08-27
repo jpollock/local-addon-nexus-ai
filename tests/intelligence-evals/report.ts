@@ -138,6 +138,31 @@ export function milestoneVerdict(report: RunReport): string {
     ].join('\n');
   }
 
+/**
+ * The BLOCKED sentence, split by which wall. One line while every BLOCKED is a
+ * product gap — the shape this report always had — and two the moment any of
+ * them is waiting on this harness instead, because "the capability does not
+ * exist" and "we cannot walk what shipped" send a reader to different work.
+ */
+function blockedLines(report: RunReport): string[] {
+  const blockedResults = report.specs
+    .flatMap((s: SpecReport) => s.results)
+    .filter((r: CriterionResult) => r.verdict === 'BLOCKED');
+  const harness = blockedResults.filter((r: CriterionResult) => r.blockedOn === 'harness').length;
+  const product = blockedResults.length - harness;
+  const lines: string[] = [];
+  if (product > 0 || harness === 0) {
+    lines.push(`  ${product} are BLOCKED on capabilities that do not exist yet (each names which).`);
+  }
+  if (harness > 0) {
+    lines.push(
+      `  ${harness} are BLOCKED on THIS HARNESS, not on the product: the surface shipped and no ` +
+        'driver walks it yet (each names the token and the pattern to follow).'
+    );
+  }
+  return lines;
+}
+
   if (counts.FAIL > 0) {
     return `MILESTONE VERDICT: NOT MET — ${counts.FAIL} criterion/criteria FAILED against the real core.`;
   }
@@ -145,7 +170,7 @@ export function milestoneVerdict(report: RunReport): string {
     return [
       'MILESTONE VERDICT: NOT MET, and not by a test failure.',
       `  ${counts.PASS} criteria pass against the real core.`,
-      `  ${counts.BLOCKED} are BLOCKED on capabilities that do not exist yet (each names which).`,
+      ...blockedLines(report),
       `  ${counts['OWNER-PENDING']} await the owner's eval sitting (each carries its prompt).`,
       `  ${defects.length} spec-level defect(s) need a ruling before the specs can be run as written.`,
       '  Nothing here is a code regression; the gap is between what the specs assume ships and',

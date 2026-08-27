@@ -83,6 +83,40 @@ columns dropped entirely, which reads as a clean bill of health.
 
 ---
 
+## 1A. Measured, after the fix (2026-08-26, same day)
+
+`journeyGapCheck` now distinguishes the two walls, and the registry was RUN —
+the first receipted run since WP-49 (2026-08-20). **The totals are unchanged:
+50 PASS / 0 FAIL / 18 BLOCKED / 10 OWNER-PENDING**, which is itself a result:
+the grants packet's changes to `probes.ts` knocked no premise out, so §1's
+staleness worry about the tally was a real risk that did not materialize.
+
+**The composition is not what anyone said it was.** Measured breakdown of the
+18:
+
+| blocker | count | note |
+|---|---|---|
+| an acceptance driver for `needsYou` in this harness | **11** | the surface SHIPPED at WP-46; nothing walks it |
+| UX build 1.5 (`refusalTurn`) | 5 | genuinely absent — 0 files under `src/`, renderer or not |
+| WP-18 (an automated runner producing a transcript) | 1 | |
+| a packet joining WP-25's incident producer to the comparator cell | 1 | |
+
+**So UX build 2 owns none of them as a build.** The review said it owned 11 and
+I repeated that; both of us were reading a verdict that named the render. The
+render is present. What stands between here and those 11 is eleven acceptance
+drivers in `tests/intelligence-evals`, following the pattern WP-41 and WP-46
+already use — gate on `absentFromRenderer`, then drive the real surface.
+
+That is a different packet with a different owner, and it moves the eval tally
+by more than any UI work available today. **§5's order is superseded on this
+point: what was step 3 is not a UI build.**
+
+The report's verdict block now says which wall each BLOCKED is against, and
+`CriterionResult` carries a typed `blockedOn: 'product' | 'harness'` so the
+summary cannot drift from the detail again.
+
+---
+
 ## 2. Verified — the review's findings that hold
 
 Recorded so they are not re-litigated:

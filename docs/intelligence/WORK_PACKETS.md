@@ -33436,3 +33436,48 @@ titles, the observability pull-forward (pipeline.run log line + Background
 Work activity line), and the CLAUDE.md-flagged batch (shared scoring gate,
 fleet-loop fabrication trio, host add/remove audit, environment-filter
 deletion).
+
+---
+
+## EVAL REGISTRY · RUN RECEIPT (2026-08-26)
+
+First receipted run since WP-49 (2026-08-20). Run with
+`npx ts-node --project tsconfig.test.json tests/intelligence-evals/run.ts`
+(exit 2, as designed while anything is BLOCKED or OWNER-PENDING).
+
+**50 PASS · 0 FAIL · 18 BLOCKED · 10 OWNER-PENDING** — totals unchanged from
+the 2026-08-25 reading. Notable because `probes.ts` changed on 2026-08-26 (the
+agent-addressed-grants fail-closed flip revokes every platform-wide grant on a
+v1 machine): that is the class of change that knocks a probe premise out and
+converts PASS to BLOCKED through the fallback paths. It did not.
+
+**The composition WAS wrong, and is now measured.** Eleven criteria reported
+"the surface that would render it does not exist" against `needsYou`, which
+this harness's own `probeRendererSurfaces()` had been reporting in five
+renderer files since WP-46 shipped it on 2026-08-20. The verdicts fed a tally
+that was then read as "UX build 2 owns most of the 18 BLOCKED" and used to rank
+the next packet.
+
+It survived six days because every journey assertion in `checks.test.ts` runs
+against `SURFACES_ABSENT` — a fixture that says nothing has shipped — under
+which a stale BLOCKED and a correct one are the same value.
+
+| blocker | count |
+|---|---|
+| an acceptance driver for `needsYou` IN THIS HARNESS (surface shipped, nothing walks it) | 11 |
+| UX build 1.5 (`refusalTurn` — genuinely absent, 0 files under `src/`) | 5 |
+| WP-18 (an automated runner producing a transcript) | 1 |
+| a packet joining WP-25's incident producer to the comparator cell | 1 |
+
+**UX build 2 owns none of the 18 as a build.** What remains is eleven
+acceptance drivers, following the WP-41/WP-46 pattern: gate on
+`absentFromRenderer`, then drive the real surface and judge against it.
+
+Changes made with this run (one commit): `journeyGapCheck` names WHICH wall;
+`CriterionResult.blockedOn: 'product' | 'harness'` is typed rather than
+inferred from prose; the report's verdict block counts the two apart; and
+`checks.test.ts` gained the pin that drives every journey check against the
+LIVE probe — the assertion whose absence let this stand.
+
+Registered by this receipt: **the `needsYou` driver bundle** — eleven
+acceptance drivers, J-Glance ×3 and J-Act-small ×8. No build entry.

@@ -1204,3 +1204,70 @@ describe('WP-42 · the WP-13b sitting verdicts, carried and earned per run', () 
     for (const phrase of carried) expect(printed).toContain(phrase);
   });
 });
+
+/**
+ * The rule this file states at checks.ts:1733 — "a BLOCKED that goes on citing
+ * a shipped surface is the stale gap the harness's own rule forbids" — applied
+ * to the harness itself, and driven by the LIVE probe.
+ *
+ * Why it did not exist before: every journey assertion above runs against
+ * `SURFACES_ABSENT`, a fixture that says nothing has shipped. Under that
+ * fixture a stale BLOCKED is indistinguishable from a correct one, so the
+ * suite stayed green for six days while eleven criteria cited `needsYou` as
+ * unbuilt and `probeRendererSurfaces()` reported it in five renderer files.
+ * WP-41 and WP-46 avoid the trap by gating on `absentFromRenderer`; this pin
+ * is what makes forgetting that a failure rather than a silence.
+ */
+describe('no BLOCKED may cite a surface the live probe says has shipped', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { probeRendererSurfaces } = require('./probes') as typeof import('./probes');
+  const live = probeRendererSurfaces();
+
+  /** Tokens a BLOCKED outcome points at, read from the probe lines it carries. */
+  const tokensCited = (evidence: string[]): string[] =>
+    evidence.flatMap((line) => {
+      const m = /^`([A-Za-z]+)`: \d+ file\(s\) under src\/renderer/.exec(line);
+      return m ? [m[1]] : [];
+    });
+
+  /** Same spec ids the suite above uses; re-stated because that list is block-scoped. */
+  const SPECS = [
+    'J-Glance-cold-open-to-answered',
+    'J-Inspect-divergence-to-scoped-intent',
+    'J-Act-small-one-change-one-site',
+    'J-Return-away-during-a-halt',
+    'J-Refusal-refusal-grant-resume',
+  ];
+
+  const liveCtx = () =>
+    ({
+      fixture: { fleet: [], core: { ledger: { query: () => [] } } },
+      probes: {
+        refusalPayload: { ok: true, refused: true, reason: 'arming-gap', evidence: [] },
+        surfaces: live,
+        widening: { ok: false, premisePresent: false, evidence: ['not driven in this context'] },
+      },
+    }) as never;
+
+  it('every BLOCKED naming an unbuilt RENDER names a token that is genuinely absent', () => {
+    const offenders = CHECKS.filter((c) => SPECS.includes(c.specId))
+      .map((c) => [c, c.run(liveCtx())] as const)
+      .filter(([, o]) => o.verdict === 'BLOCKED')
+      // Anchored on a distinctive phrase from the UX2 constant rather than on
+      // the word "render": the honest replacement branch has to be free to say
+      // `absentFromRenderer` when it names the pattern to follow, and a
+      // keyword filter would have flagged it for using the right word.
+      .filter(([, o]) => (o.unblockedBy ?? '').includes('the RENDER, and nothing else'))
+      .filter(([, o]) => tokensCited(o.evidence).some((t) => !live.absentFromRenderer(t)))
+      .map(([c, o]) => `${c.matches} → ${tokensCited(o.evidence).join(',')}`);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('the live probe still measures something — a probe that found nothing would pass vacuously', () => {
+    expect(Object.keys(live.counts).length).toBeGreaterThan(0);
+    // At least one token IS present today; if this ever goes false the test
+    // above proves nothing and must be re-read rather than trusted.
+    expect(Object.values(live.counts).some((c) => c.renderer > 0)).toBe(true);
+  });
+});

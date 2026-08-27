@@ -88,6 +88,14 @@ export interface CriterionResult {
   missing?: string;
   /** BLOCKED only: the packet or work that would supply it, if known. */
   unblockedBy?: string;
+  /**
+   * BLOCKED only: WHICH wall. `product` — the capability does not exist yet.
+   * `harness` — it does, and this suite cannot yet walk it, so the gap is a
+   * driver here rather than work in the product. Absent reads as `product`,
+   * which is what every pre-2026-08-26 BLOCKED meant. Typed rather than
+   * inferred from prose so the summary cannot drift from the detail again.
+   */
+  blockedOn?: 'product' | 'harness';
   /** OWNER-PENDING only: the verbatim prompt a human runs, and how to run it. */
   ownerPrompt?: string;
   /** SPEC-DEFECT only: what the record must be changed to say. */
