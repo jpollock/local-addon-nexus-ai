@@ -33527,3 +33527,57 @@ verdict and the meta line. Either
 
 Until that is ruled, both stay BLOCKED on this harness with their reason
 recorded here, which is an honest verdict. Ten of the eleven drivers remain.
+
+### OWNER RULING 2026-08-27 — every number on the glance must be dated or freshness-classed
+
+Asked from the rendered screen rather than from the sentence. The cold open was
+driven and every line captured (14 distinct, 4 carrying numbers), then the two
+readings put to the owner:
+
+- *counts need no date; facts carry their own where they live* — which the
+  surface's own drift line argues for, saying exactly that; or
+- **every number on the glance must be dated or freshness-classed** — RULED.
+
+So the clause in *"Every count and age on screen is derived, and each one is
+dated or carries its freshness class"* binds the COUNTS, not the ages alone,
+and the criterion is not satisfied as built.
+
+**Driven under the ruling: 11 count/age-bearing strings on screen, 9 say when,
+2 do not.** FAIL, and it is the honest verdict — "the screen is wrong" rather
+than "the screen is gone".
+
+| undated count line | generator |
+|---|---|
+| `5 things need you, and none of them has changed anything yet` | `nowVerdict` → `LIST_VERDICT.allUnwritten` |
+| `2 findings on ent_env_…` | `nowGroups` caption (XD-28) |
+
+Both are the lines that count the WHOLE LIST, and both are ratified copy
+generated from the designer's `situation-headlines.js`. Supplying the when is
+therefore a designer copy change or a surface change (a freshness marker beside
+the line) — **registered, not made here**: this harness does not edit ratified
+copy to make its own criterion pass.
+
+**Three narrowing passes it took to get an honest verdict, each recorded in the
+check:**
+
+1. `data-part-age` only → "0 age(s) on screen" → vacuous PASS (withdrawn).
+2. any line containing a digit → 20 violations including `Tier 1 · …` and a
+   filename. A tier is an identifier; a criterion flagging it measures the
+   alphabet.
+3. the surface's own count-bearing generators, but refusing `168h` as a "scope
+   window" → 9 violations, five of them dated lines called undated. `metaLine`
+   is `[places, ageLabel(since, now), state, meta, chip]`: that segment IS the
+   row's age.
+
+The settled reading: counts are what the count-bearing generators produce
+(`accountingLine`, `nowVerdict`, `driftLine`, `awayHeadline`, `metaLine`,
+`nowGroups` captions); a line says WHEN by carrying `data-part-age`, the
+freshness class verbatim, one of the surface's own when-words, or an age this
+surface computed with `ageLabel`. Checkpoint positions (`gateLine`,
+`needsLine` — "3 of 8") are excluded: a position is neither a count nor an age.
+
+**Also found, not a judgment call:** `LIST_VERDICT` carries only plural forms,
+so at a count of one the glance reads **"1 things need you"** (and would read
+"1 of them have already written somewhere"). `situationCopy.generated.ts` is
+generated and marked DO NOT EDIT; the fix belongs in the designer's
+`situation-headlines.js`, then a regenerate.

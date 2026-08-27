@@ -1280,17 +1280,6 @@ const JOURNEY_GAPS: JourneyGap[] = [
   // ---- J-Glance · M1 -------------------------------------------------------
   {
     spec: J_GLANCE,
-    kind: 'key_step',
-    matches: 'Every count and age on screen i',
-    token: 'needsYou',
-    missing: 'the Glance surface whose counts the derivation pins would run against',
-    unblockedBy: UX2,
-    standing:
-      'the freshness machinery this criterion leans on DOES exist (per-class SLOs, the ' +
-      'content-age chip); what is absent is the view that must render every count with it',
-  },
-  {
-    spec: J_GLANCE,
     kind: 'must_not',
     matches: 'A fact with no date where its c',
     token: 'needsYou',
@@ -2684,6 +2673,131 @@ const UX2_DRIVEN: RegisteredCheck[] = [
   }),
 
   // ---- J-Glance · M1 — the needs-you row's own criteria ---------------------
+
+  /**
+   * "Every count and age on screen is derived, and each one is dated or carries
+   * its freshness class."
+   *
+   * OWNER RULING 2026-08-27, asked and answered from the rendered screen rather
+   * than from the sentence: *"Every number on the glance must be dated or
+   * freshness-classed."* The clause binds the COUNTS, not the ages alone.
+   *
+   * The first attempt at this criterion drove `data-part-age` and reported
+   * "0 age(s) on screen" — a PASS over an empty set, withdrawn before commit
+   * (see the receipt above). It measured the wrong thing: at the cold open the
+   * per-fact ages are not on screen at all, because parts live behind a
+   * disclosure and J-Glance is the moment before any interaction. What IS on
+   * screen is fourteen lines, four of them carrying numbers.
+   *
+   * So the reading drives the numbers, and a line satisfies the clause when it
+   * says WHEN — by carrying the record's own `data-part-age`, by carrying the
+   * freshness class verbatim (`FRESHNESS.now`), or by stating the time in its
+   * own ratified words. That last list is explicit below rather than a clever
+   * regex, because a permissive matcher here would pass a line for containing
+   * any duration at all: `720h` on the meta line is the scope's WINDOW, not
+   * when anything was observed, and counting it would be this bundle's fourth
+   * instrument error in the same family.
+   */
+  returnDriven({
+    spec: J_GLANCE,
+    kind: 'key_step',
+    matches: 'Every count and age on screen i',
+    missing: 'the Glance surface whose counts the derivation pins would run against',
+    holds: (s) => {
+      /* eslint-disable @typescript-eslint/no-var-requires */
+      const model = require('../../src/renderer/components/return/arrivalModel');
+      const { FRESHNESS } = require('../../src/main/intelligence-host/situationCopy.generated');
+      /* eslint-enable @typescript-eslint/no-var-requires */
+      const els: any[] = s.arrival;
+
+      /**
+       * WHAT COUNTS AS A COUNT — the surface's own count- and age-bearing
+       * generators, called with the fold's own values, never a regex over
+       * digits.
+       *
+       * The first cut of this check took "any rendered line containing a digit"
+       * and reported twenty violations, among them `Tier 1 · nothing is holding
+       * it back but you` and a filename. A tier is an identifier and a filename
+       * is a filename; neither is a count or an age, and a criterion that
+       * flagged them would be measuring the alphabet.
+       *
+       * DELIBERATELY EXCLUDED: `gateLine` and `needsLine`, whose numbers are
+       * checkpoint POSITIONS ("3 of 8"). The criterion binds counts and ages —
+       * a position is neither, and dating it would mean nothing.
+       */
+      const countBearing: string[] = [
+        model.accountingLine(model.arrivalCounts(s.triage, s.inbox)),
+        model.nowVerdict(s.triage, s.inbox),
+        model.driftLine(null),
+        model.awayHeadline(12 * 3_600_000),
+        ...[...s.triage.waiting, ...s.triage.changed].map((x: any) => model.metaLine(x, s.now)),
+        ...model.nowGroups(model.nowRows(s.triage, s.inbox))
+          .filter((g: any) => g.caption)
+          .flatMap((g: any) => [g.caption.label, g.caption.limit]),
+      ].filter((t) => typeof t === 'string' && /\d/.test(t));
+      const countSet = new Set(countBearing);
+
+      /** WHEN, in the surface's own ratified vocabulary. Deliberately short. */
+      const WHEN = /\b(overnight|ago|yesterday|today|just now|last night|this morning|you were away)\b/i;
+      const freshnessWords = Object.values(FRESHNESS).filter((v) => typeof v === 'string' && v.length > 0) as string[];
+
+      /**
+       * THE AGES THE SURFACE ITSELF COMPUTED, accepted as saying when — because
+       * they do. `metaLine` is `[places, ageLabel(since, now), state, meta,
+       * chip]`, so its `168h` segment IS the row's age, not a window. An earlier
+       * cut of this check called that a scope duration and refused it, which
+       * would have reported five dated lines as undated — the same over-broad
+       * mistake as the digit regex, wearing the opposite sign.
+       */
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { ageLabel } = require('../../src/main/intelligence-host/sessionRegistry');
+      const ownAges = new Set<string>(
+        [...s.triage.waiting, ...s.triage.changed]
+          .map((x: any) => (x?.since ? String(ageLabel(x.since, s.now)) : ''))
+          .filter(Boolean),
+      );
+
+      const ownText = (el: any): string => {
+        const kids = el?.props?.children;
+        const arr = Array.isArray(kids) ? kids : [kids];
+        return arr.filter((k: any) => typeof k === 'string' || typeof k === 'number').map(String).join('').trim();
+      };
+
+      const rendered = els.map((el) => ({ el, text: ownText(el) })).filter((x) => x.text.length > 0);
+      const numbered = rendered.filter((x) => countSet.has(x.text) || attr(x.el, 'data-part-age') !== undefined);
+
+      const saysWhen = (x: { el: any; text: string }): boolean =>
+        attr(x.el, 'data-part-age') !== undefined ||
+        WHEN.test(x.text) ||
+        freshnessWords.some((w) => x.text.includes(w)) ||
+        [...ownAges].some((age) => x.text.includes(age));
+
+      const undated = numbered.filter((x) => !saysWhen(x)).map((x) => x.text);
+
+      return {
+        ok: undated.length === 0,
+        evidence: [
+          `${countBearing.length} count/age-bearing string(s) the surface's own generators produce ` +
+            `for this fold; ${numbered.length} of them are ON SCREEN at the cold open, of which ` +
+            `${numbered.length - undated.length} say WHEN`,
+          `${undated.length} carry a count and no when` +
+            `${undated.length ? `: ${JSON.stringify(undated)}` : ''}`,
+          'RULED 2026-08-27: the clause binds every number on the glance, not the ages alone. ' +
+            'A FAIL here is the surface not meeting a criterion, not a regression — the count ' +
+            'lines are ratified copy, so supplying the when is a surface or copy change and not ' +
+            'this harness\'s to make',
+          'the matcher accepts the surface\'s own when-words, the freshness class verbatim, and ' +
+            'any age THIS surface computed with ageLabel() — the meta line\'s `168h` is the row\'s ' +
+            'age by construction, so a line carrying it is dated',
+          'AGES, the criterion\'s other half, are dated by construction wherever they render: the ' +
+            'element carries `data-part-age` = the record\'s own observedAt and its text is ' +
+            'ageLabel() of that value — but none render at THIS moment, parts being disclosed on ' +
+            'demand, so this criterion is carried by the counts here',
+        ],
+      };
+    },
+  }),
+
 
   /**
    * The first of the `needsYou` driver bundle (2026-08-26), registered when the

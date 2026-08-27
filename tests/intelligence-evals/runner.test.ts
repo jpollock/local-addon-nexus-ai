@@ -120,8 +120,38 @@ describe('deterministic results — the executable half of the M2 gate', () => {
     expect(result.evidence.join(' ')).toMatch(/carry a genuinely historical observed_at/);
   });
 
-  it('reports no FAIL anywhere — nothing here is a code regression', () => {
-    expect(results.filter((r) => r.verdict === 'FAIL')).toEqual([]);
+  /**
+   * The claim in the title still holds; its proxy stopped being able to say so.
+   *
+   * "No FAIL anywhere" was a sound reading of the registry while every unbuilt
+   * journey was blanket-BLOCKED: a gap was an absence, so a FAIL could only be
+   * a regression. Since the `needsYou` drivers began walking surfaces that HAVE
+   * shipped, a criterion can fail because the surface does not meet it — "the
+   * screen is wrong", which this harness deliberately distinguishes from "the
+   * screen is gone". That is not a code regression, and asserting zero FAILs
+   * would have forced the eval to soften a finding to stay green, which is the
+   * failure mode the whole registry exists to prevent.
+   *
+   * So it pins the KNOWN ones by criterion id, with the ruling each rests on. A
+   * new FAIL — a real regression — still fails here, loudly, which is what this
+   * test was always for.
+   */
+  it('reports no UNEXPECTED FAIL — a known one is pinned to its ruling, a new one is a regression', () => {
+    /** id → why it fails, and whose ruling makes that the honest verdict. */
+    const KNOWN_FAIL: Record<string, string> = {
+      // Owner ruling 2026-08-27 (WORK_PACKETS.md): every number on the glance
+      // must be dated or freshness-classed. Two lines that count the WHOLE list
+      // carry no when — `nowVerdict` and the `nowGroups` caption — and both are
+      // ratified copy, so the harness registers the gap rather than editing the
+      // copy to make its own criterion pass.
+      'J-Glance-cold-open-to-answered#key_step[1]': 'ruled 2026-08-27; two list-wide counts carry no when',
+    };
+
+    const failed = results.filter((r) => r.verdict === 'FAIL').map((r) => r.criterion.id);
+    expect(failed.filter((id) => !(id in KNOWN_FAIL))).toEqual([]);
+    // And a pin that stops being true must be removed rather than left standing:
+    // a KNOWN_FAIL that now passes is a fixed defect, and the record should say so.
+    expect(Object.keys(KNOWN_FAIL).filter((id) => !failed.includes(id))).toEqual([]);
   });
 });
 
