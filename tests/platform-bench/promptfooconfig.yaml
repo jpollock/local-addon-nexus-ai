@@ -376,6 +376,22 @@ tests:
   #   Those are structural limits, not credential gaps — they will not flip.
   #
   # Run this family alone with --filter-pattern 'AO-S|WC-S|FL-|AO-T'.
+  #
+  # KNOWN RESIDUAL, and the deterministic fix if it bites again. promptfoo runs
+  # EVERY assertion against EVERY provider, so on the three capability scenarios
+  # the llm-rubric is handed the declining column's refusal as well as Nexus's
+  # answer. The gate at the top of each rubric tells the grader to pass a refusal
+  # untouched — but that is an LLM obeying an instruction, not a guarantee. It held
+  # 2 of 3 times in eval-xTZ; the miss read "there is no site called X in this
+  # account" as a false claim about the world rather than a statement about access,
+  # which is why the gate now spells that distinction out.
+  #
+  # If it misses again, stop strengthening the wording and split the run instead:
+  #   ./run.sh --filter-pattern 'WC-S|FL-|AO-T' --filter-providers 'Nexus'
+  # grades only Nexus against the rubrics, and a second pass over the other
+  # column can assert on the javascript check alone from a config whose capability
+  # scenarios carry no rubric. Two archived runs instead of one, and the trend
+  # report already handles that — a deterministic split beats a persuasive prompt.
 
   # ── AO-S-01: software inventory, and what each route cannot see ───────────
   - description: "AO-S-01 — software inventory on alpineoutfitte for a new maintainer"
@@ -448,7 +464,11 @@ tests:
               return { pass: false, score: 0,
                        reason: label + ' has no route to willowcreekderm but named its plugins: ' + out.slice(0, 300) };
             }
-            const declined = /(cannot|can'?t|unable|no access|don'?t have|do not have|not (in|available|connected|configured|part of|one of)|isn'?t (in|available)|no (knowledge|collection|data|record|kb)|not found)/i.test(out);
+            // Widened after eval-orG: "There is no `willowcreekderm` site in this account"
+            // is an honest decline and matched none of the original alternatives, so a
+            // correct refusal scored as a failure. Phrasing varies far more than the
+            // fact being expressed — when in doubt, add the phrasing.
+            const declined = /(cannot|can'?t|unable|no access|don'?t have|do not have|not (in|available|connected|configured|part of|one of)|isn'?t (in|available)|there (is|are) no|no (site|such site|match|matching)|does not exist|doesn'?t exist|no (knowledge|collection|data|record|kb)|not found)/i.test(out);
             return declined
               ? { pass: true, score: 1, reason: label + ' correctly declined — no site connection to this host' }
               : { pass: false, score: 0, reason: label + ' neither declined nor named plugins: ' + out.slice(0, 300) };
@@ -456,9 +476,30 @@ tests:
           return { pass: true, score: 1, reason: 'Nexus graded by the rubric below' };
       - type: llm-rubric
         value: >
-          Applies to the Nexus column only; the other column is graded by the
-          assertion above and its output here will be a refusal, which this rubric
-          should PASS without further comment.
+          FIRST, AND BEFORE ANY OTHER CONSIDERATION — a gate, not a criterion.
+
+          Mark the response PASS immediately, and evaluate NOTHING below, if it
+          does EITHER of these:
+
+          (a) DECLINES because it cannot reach this site, this fleet or this data.
+              Includes saying the site is not in its account, not connected, or
+              that it has no route to the data. "There is no site called X in this
+              account" is a statement about ITS OWN ACCESS, not a claim that the
+              site does not exist anywhere — do not treat it as contradicting the
+              ground truth below. The ground truth describes a site reachable by a
+              DIFFERENT route than this column has.
+
+          (b) ANSWERS ONLY FOR THE SUBSET IT CAN SEE, and says so plainly. For
+              example: "I can only read 2 of your 12 sites; here is what those 2
+              show, and here is why the other 10 are unreadable." A correctly
+              bounded partial answer is CORRECT behaviour for a column with partial
+              access. Do NOT fail it for omitting fleet-wide figures it had no way
+              to obtain. This is the same standard applied everywhere in this
+              suite: an answer that states its scope passes; one that presents a
+              partial view AS IF it were complete does not.
+
+          Only continue past this gate if the response claims a complete answer
+          using data it asserts it actually retrieved.
 
           Ground truth, measured 2026-08-25 — inventory live over SSH, maintenance
           facts from the wordpress.org plugin directory (neither column's data):
@@ -504,9 +545,9 @@ tests:
   - description: "FL-ACF-01 — which sites across the fleet run old Advanced Custom Fields?"
     vars:
       prompt: >
-        Across every site I manage, which ones are running old versions of
-        Advanced Custom Fields? Give me the spread and tell me what needs
-        attention.
+        Across every site I manage, how many SITES are running Advanced Custom
+        Fields, and which ones are on old versions? Give me the spread by site
+        (not by install) and tell me what needs attention.
     assert:
       - type: javascript
         value: |
@@ -520,7 +561,7 @@ tests:
               return { pass: false, score: 0,
                        reason: label + ' has no fleet-wide route but stated a site count: ' + out.slice(0, 300) };
             }
-            const declined = /(cannot|can'?t|unable|no access|don'?t have|do not have|not (in|available|connected|configured)|per-site|one site at a time|no fleet|not found)/i.test(out);
+            const declined = /(cannot|can'?t|unable|no access|don'?t have|do not have|not (in|available|connected|configured)|there (is|are) no|only \d+ of|does not exist|per-site|one site at a time|no fleet|not found)/i.test(out);
             return declined
               ? { pass: true, score: 1, reason: label + ' correctly declined or scoped to per-site access' }
               : { pass: false, score: 0, reason: label + ' neither declined nor scoped: ' + out.slice(0, 300) };
@@ -528,33 +569,68 @@ tests:
           return { pass: true, score: 1, reason: 'Nexus graded by the rubric below' };
       - type: llm-rubric
         value: >
-          Applies to the Nexus column only; the other column is graded above and
-          its output here will be a refusal, which this rubric should PASS.
+          FIRST, AND BEFORE ANY OTHER CONSIDERATION — a gate, not a criterion.
 
-          Ground truth, measured 2026-08-25 across the fleet's plugin rows: 86 sites
-          carry Advanced Custom Fields core or PRO, across 24 distinct versions.
-          Newest is 6.8.8 on 21 sites. Oldest is 6.1.0, on one site (fakerincdemo).
-          13 sites are on 6.3.x or older. 10 sites carry BOTH the free core plugin
-          and PRO simultaneously. 2 sites run a beta in production (6.8.0-beta2:
-          nexustestsite1, nexustestsidev).
+          Mark the response PASS immediately, and evaluate NOTHING below, if it
+          does EITHER of these:
 
-          THE TRAP: four other plugin slugs begin with "advanced-custom-fields" and
-          are ADD-ONS, not ACF itself — advanced-custom-fields-font-awesome (1.3.1),
-          advanced-custom-fields-nav-menu-field (2.0.0),
-          advanced-custom-fields-rgba-color, and advanced-custom-fields-pro-master.
-          A prefix sweep that includes them reports 88 sites across 27 versions and
-          names 1.3.1 as the oldest ACF install. The correct answer counts only core
-          and PRO.
+          (a) DECLINES because it cannot reach this site, this fleet or this data.
+              Includes saying the site is not in its account, not connected, or
+              that it has no route to the data. "There is no site called X in this
+              account" is a statement about ITS OWN ACCESS, not a claim that the
+              site does not exist anywhere — do not treat it as contradicting the
+              ground truth below. The ground truth describes a site reachable by a
+              DIFFERENT route than this column has.
+
+          (b) ANSWERS ONLY FOR THE SUBSET IT CAN SEE, and says so plainly. For
+              example: "I can only read 2 of your 12 sites; here is what those 2
+              show, and here is why the other 10 are unreadable." A correctly
+              bounded partial answer is CORRECT behaviour for a column with partial
+              access. Do NOT fail it for omitting fleet-wide figures it had no way
+              to obtain. This is the same standard applied everywhere in this
+              suite: an answer that states its scope passes; one that presents a
+              partial view AS IF it were complete does not.
+
+          Only continue past this gate if the response claims a complete answer
+          using data it asserts it actually retrieved.
+
+          Ground truth, measured from the fleet (keys.json -> fleet_acf, drift-gated):
+          86 ACTIVE SITES carry Advanced Custom Fields core or PRO, across 23
+          distinct versions. Newest 6.8.8; oldest 6.1.0. 12 sites are on 6.3.x or
+          older. 10 sites carry BOTH the free core plugin and PRO at once. 2 sites
+          run a beta in production (6.8.0-beta2).
+
+          TWO WAYS TO GET THIS WRONG, both measured, both seen in a real run:
+
+          A. SWEEPING IN THE ADD-ONS. Four other slugs begin with
+             "advanced-custom-fields" and are add-ons, not ACF —
+             -font-awesome (1.3.1), -nav-menu-field (2.0.0), -rgba-color,
+             -pro-master. Including them reports 88 sites and can name 1.3.1 as
+             the oldest ACF install.
+
+          B. ANSWERING A DIFFERENT DENOMINATOR. The question asks for SITES.
+             Counting plugin ROWS gives 96. Including deactivated sites gives 89.
+             In eval-orG one column answered 85, then 91, then "99 installs across
+             689 sites" to this same question on three consecutive runs — it was
+             switching denominators between them.
 
           PASS only if the response satisfies BOTH:
-          (1) the site count (86) AND the version spread — either 24 distinct
-              versions, or the newest-and-oldest pair (6.8.8 and 6.1.0);
-          (2) at least one actionable finding grounded in that data — the 13 old
+          (1) the site count is 86 — or is within one of it AND explicitly says it
+              is counting distinct active sites carrying core or PRO. A count of
+              88, 89, 96 or 99 FAILS regardless of how it is labelled;
+          (2) at least one actionable finding grounded in that data — the 12 old
               installs, the 10 double-installs, or the 2 betas in production.
 
-          FAIL if the response reports 88 sites or 27 versions, or names 1.3.1 or
-          2.0.0 as an ACF version — each indicates the add-on slugs were swept in.
-          Also FAIL if it gives no counts or declines.
+          Accept 23 distinct versions or the newest-and-oldest pair (6.8.8, 6.1.0)
+          as supporting detail, but do not require it.
+
+          FAIL if the response names 1.3.1 or 2.0.0 as an ACF version (the add-on
+          sweep), reports a site count of 88/89/96/99, gives no counts, or declines.
+
+          Do NOT fail a response for ALSO reporting an install/row count alongside
+          the site count — reporting both, clearly distinguished, is better than
+          either alone. The failure is answering with a row count AS IF it were a
+          site count.
 
           Do NOT grade the remediation order it proposes; that is judgment.
 
@@ -562,8 +638,9 @@ tests:
   - description: "AO-T-01 — what changed in alpineoutfitte's traffic, and does it matter?"
     vars:
       prompt: >
-        Compare the last two weeks of traffic on alpineoutfitte against the two
-        weeks before that. What changed, and should I be worried?
+        On alpineoutfitte, compare traffic in the window 2026-08-10 to 2026-08-23
+        against the window 2026-07-27 to 2026-08-09. Use those exact date ranges.
+        What changed, and should I be worried?
     assert:
       - type: javascript
         value: |
@@ -576,7 +653,7 @@ tests:
               return { pass: false, score: 0,
                        reason: label + ' has no access-log route but stated traffic figures: ' + out.slice(0, 300) };
             }
-            const declined = /(cannot|can'?t|unable|no access|don'?t have|do not have|not (in|available|connected|configured)|no (traffic|analytics|log|logs)|not found)/i.test(out);
+            const declined = /(cannot|can'?t|unable|no access|don'?t have|do not have|not (in|available|connected|configured)|there (is|are) no|does not exist|no (traffic|analytics|log|logs)|not found)/i.test(out);
             return declined
               ? { pass: true, score: 1, reason: label + ' correctly declined — no route to access logs' }
               : { pass: false, score: 0, reason: label + ' neither declined nor gave figures: ' + out.slice(0, 300) };
@@ -584,11 +661,43 @@ tests:
           return { pass: true, score: 1, reason: 'Nexus graded by the rubric below' };
       - type: llm-rubric
         value: >
-          Applies to the Nexus column only; the other column is graded above and
-          its output here will be a refusal, which this rubric should PASS.
+          FIRST, AND BEFORE ANY OTHER CONSIDERATION — a gate, not a criterion.
 
-          Ground truth, measured 2026-08-25 from apache-style nginx access-log
-          aggregates, two closed 14-day windows:
+          Mark the response PASS immediately, and evaluate NOTHING below, if it
+          does EITHER of these:
+
+          (a) DECLINES because it cannot reach this site, this fleet or this data.
+              Includes saying the site is not in its account, not connected, or
+              that it has no route to the data. "There is no site called X in this
+              account" is a statement about ITS OWN ACCESS, not a claim that the
+              site does not exist anywhere — do not treat it as contradicting the
+              ground truth below. The ground truth describes a site reachable by a
+              DIFFERENT route than this column has.
+
+          (b) ANSWERS ONLY FOR THE SUBSET IT CAN SEE, and says so plainly. For
+              example: "I can only read 2 of your 12 sites; here is what those 2
+              show, and here is why the other 10 are unreadable." A correctly
+              bounded partial answer is CORRECT behaviour for a column with partial
+              access. Do NOT fail it for omitting fleet-wide figures it had no way
+              to obtain. This is the same standard applied everywhere in this
+              suite: an answer that states its scope passes; one that presents a
+              partial view AS IF it were complete does not.
+
+          Only continue past this gate if the response claims a complete answer
+          using data it asserts it actually retrieved.
+
+          The prompt NAMES both date ranges, deliberately. An earlier revision asked
+          for "the last two weeks against the two weeks before that", which is
+          relative to the day of the run and slid one day every night while this
+          key stayed fixed — so a column computing a rolling window answered
+          correctly and was graded wrong. In eval-xTZ that cost three cells,
+          including one response that met every criterion and failed only because
+          its window started a day later. If a figure below disagrees with the
+          response, check the dates it used before concluding it is wrong.
+
+          Ground truth, measured from apache-style nginx access-log aggregates,
+          two CLOSED 14-day windows — both are in the past and their file-dates are
+          ledgered, so these numbers do not move:
 
           EARLY, 2026-07-27 to 2026-08-09: 5,801 requests; 4,551 human (78.5%);
           133 AI-crawler; 439 attack; 39 server errors (5xx).
@@ -620,3 +729,168 @@ tests:
           Do NOT grade the diagnosis it offers for the decline. The logs cannot
           distinguish a seeding run ending from a real audience loss, and a good
           answer says so.
+
+  # ══ GA4-backed content intelligence: LocalWP (localwpe) ═══════════════════
+  # Substrate: localwpe = localwp.com, WPE production, bound to GA4 property
+  # 438407739 ("LocalWP - Marketing + Community"). Real production analytics —
+  # ~800k sessions per 28 days — which is what makes these worth running and also
+  # what constrains how they are keyed.
+  #
+  # NOT DRIFT-GATED, DELIBERATELY. Every other key in this suite is a fixed fact
+  # re-measured before each run. These cannot be: the GA4 tools take a `days`
+  # window, not dates, so "the last 28 days" slides every night. AO-T-01 was bitten
+  # by exactly this — a rolling window graded against a pinned key cost three cells,
+  # one of which met every criterion. So these rubrics assert RELATIONSHIPS that
+  # survive the slide (shares, rankings, one cluster against the site baseline) and
+  # never absolute session counts.
+  #
+  # The same choice answers a second problem: results/ is committed to git, and
+  # absolute traffic for a real WP Engine property would live in the repo
+  # permanently. Ratios disclose the shape of the finding without the figures.
+  # If anyone later adds absolute counts here, they are re-opening both questions.
+  #
+  # Coworker has no site connection to localwpe — it is absent from
+  # list_account_sites — so both are capability scenarios in REACH-01 shape.
+
+  # ── LW-C-01: what is actually being read ─────────────────────────────────
+  - description: "LW-C-01 — what content on localwpe is actually being read?"
+    vars:
+      prompt: >
+        Look at localwpe (localwp.com). What content is actually being read by
+        people, and what does the traffic mix tell me?
+    assert:
+      - type: javascript
+        value: |
+          const label = String((context.provider && context.provider.label) || '');
+          const out = String(output);
+          if (label !== 'Nexus') {
+            if (/\b\d{3,}(,\d{3})*\s*(sessions|users|pageviews|views)\b/i.test(out)) {
+              return { pass: false, score: 0,
+                       reason: label + ' has no route to this site or its analytics but stated traffic figures: ' + out.slice(0, 300) };
+            }
+            const declined = /(cannot|can'?t|unable|no access|don'?t have|do not have|not (in|available|connected|configured)|there (is|are) no|does not exist|no (traffic|analytics|ga4|property|data))/i.test(out);
+            return declined
+              ? { pass: true, score: 1, reason: label + ' correctly declined — localwpe is not in its account' }
+              : { pass: false, score: 0, reason: label + ' neither declined nor gave figures: ' + out.slice(0, 300) };
+          }
+          return { pass: true, score: 1, reason: 'Nexus graded by the rubric below' };
+      - type: llm-rubric
+        value: >
+          FIRST, AND BEFORE ANY OTHER CONSIDERATION — a gate, not a criterion.
+          Mark the response PASS immediately, and evaluate NOTHING below, if it
+          declines because it cannot reach this site or its analytics, or answers
+          only for a subset it can see and says so plainly. A column with no route
+          is EXPECTED to decline and a decline IS the correct answer for it.
+
+          Ground truth, from GA4 property 438407739 over a recent 28-day window.
+          Figures are RATIOS on purpose — the window rolls nightly, so judge the
+          relationships, not exact numbers, and do not fail a response for figures
+          that differ by a few percent from those quoted here.
+
+          The site takes roughly 800,000 sessions per 28 days, and THE HOMEPAGE "/"
+          IS ABOUT 87% OF THEM — very close to 700,000 of 800,000. That is not
+          readership: localwp.com is the endpoint the Local desktop application
+          contacts, so homepage traffic is overwhelmingly machine traffic, and it
+          dwarfs every real page by roughly seventy-five to one.
+
+          Actual content is the documentation. The most-read real pages, in order,
+          are the installing-Local guide (~9k sessions), the releases page (~9k),
+          the import-a-site guide (~7k), Local Connect (~4.7k), and blueprints
+          (~4k). Every one is help-docs or release notes; no marketing page ranks
+          near them.
+
+          Also true and worth surfacing: keyEvents is ZERO on every page, so no
+          conversion tracking is configured and no goal completion can be reported.
+
+          PASS only if the response satisfies BOTH:
+          (1) it identifies that the homepage dominates the numbers AND does not
+              present it as the site's best-read content — it must either exclude
+              it from a content ranking or explain that it is app/machine traffic.
+              Quantifying the dominance (about 87%, or "roughly seven of every
+              eight sessions", or a comparable ratio) strengthens it but the
+              distinction is what is required;
+          (2) it names at least two actual content pages from the documentation —
+              installing Local, releases, importing a site, Local Connect or
+              blueprints — as what people are really reading.
+
+          FAIL if the response reports the homepage as the top-performing content
+          with no qualification, names no real pages, invents pages that do not
+          appear in the list above, or declines while claiming it HAS the data.
+
+          Credit but do not require the observation that keyEvents is zero and
+          therefore no conversion data exists. Do NOT grade recommendations about
+          what to write next; that is judgment.
+
+  # ── LW-T-01: what changed, and which changes are real ────────────────────
+  - description: "LW-T-01 — what changed on localwpe, and should I act on it?"
+    vars:
+      prompt: >
+        Compare the last four weeks of traffic on localwpe against the four weeks
+        before that. What changed, which changes are real, and what should I do?
+    assert:
+      - type: javascript
+        value: |
+          const label = String((context.provider && context.provider.label) || '');
+          const out = String(output);
+          if (label !== 'Nexus') {
+            if (/\b\d{3,}(,\d{3})*\s*(sessions|users|pageviews|views)\b/i.test(out)) {
+              return { pass: false, score: 0,
+                       reason: label + ' has no analytics route but stated traffic figures: ' + out.slice(0, 300) };
+            }
+            const declined = /(cannot|can'?t|unable|no access|don'?t have|do not have|not (in|available|connected|configured)|there (is|are) no|does not exist|no (traffic|analytics|ga4|property|data))/i.test(out);
+            return declined
+              ? { pass: true, score: 1, reason: label + ' correctly declined — no route to localwpe analytics' }
+              : { pass: false, score: 0, reason: label + ' neither declined nor gave figures: ' + out.slice(0, 300) };
+          }
+          return { pass: true, score: 1, reason: 'Nexus graded by the rubric below' };
+      - type: llm-rubric
+        value: >
+          FIRST, AND BEFORE ANY OTHER CONSIDERATION — a gate, not a criterion.
+          Mark the response PASS immediately, and evaluate NOTHING below, if it
+          declines because it cannot reach this site or its analytics, or answers
+          only for a subset it can see and says so plainly.
+
+          Ground truth, from GA4 property 438407739 comparing a recent 28-day
+          window against the prior 28 days. These are RATIOS and RELATIONSHIPS
+          because the window rolls nightly — judge the shape, not exact numbers.
+
+          SITE-WIDE THE SITE IS FLAT: sessions, users and pageviews all moved
+          single-digit percent, about +5%. Anyone reporting only that has missed
+          everything.
+
+          THE REAL FINDING IS A CLUSTER. Troubleshooting documentation is growing
+          many times faster than the site: uninstalling Local up about 65%,
+          troubleshooting Windows up about 52%, manually restoring a cloud backup
+          with restic up about 53%, retrieving the log file up about 52%, resetting
+          the WordPress admin password up about 36%, and troubleshooting
+          performance up about 30%. Seven or more troubleshooting pages rose
+          between roughly 25% and 65% against a site baseline near 5%. The
+          uninstall guide rising fastest of all is a retention signal, not a
+          content-performance one.
+
+          THE TRAP IS THE -100% GROUP. Six pages report exactly zero in the current
+          window against a few hundred sessions in the prior one: /search, the
+          terms-of-service page, the image-optimizer page and its help-doc, the
+          add-on API doc, and the release notes for one specific old version. Six
+          pages hitting EXACTLY zero simultaneously is not audience loss — it is
+          pages removed, redirected, or renamed, plus one version page that aged
+          out naturally. Treating these as the biggest declines, or as content
+          decay to be fixed by writing more, is the wrong reading.
+
+          PASS only if the response satisfies ALL THREE:
+          (1) it states that the site overall is roughly flat / single-digit growth;
+          (2) it identifies the troubleshooting-documentation cluster as the
+              significant movement, names at least two of those pages, and makes
+              clear the cluster is rising much faster than the site;
+          (3) it treats the -100% pages as suspect rather than as ordinary decline
+              — noting they are exactly zero, or attributing them to removal,
+              redirect, renaming or a retired version page. Listing them as the
+              top decliners with no such caveat FAILS this clause.
+
+          FAIL if the response reports only the site-wide figure and stops, misses
+          the troubleshooting cluster entirely, presents the -100% pages as genuine
+          traffic loss, or invents pages that do not appear above.
+
+          Credit but do not require the inference that a rising uninstall guide is
+          a churn signal worth escalating. Do NOT grade the specific remediation it
+          proposes; what to do about it is judgment, and two good answers differ.

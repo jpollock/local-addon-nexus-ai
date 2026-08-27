@@ -4,8 +4,25 @@ Companion to `2026-08-25-platform-benchmark-v2.md`. That doc governs grading,
 pinning and fairness; this one governs **what we choose to measure** and why the
 portfolio currently has a hole in it.
 
-Status: drafts. Nothing here is wired into `promptfooconfig.yaml` yet — §6 lists
-what has to be settled first.
+**Status, 2026-08-25 15:2x — WIRED.** All four scenarios are in
+`promptfooconfig.yaml` (11 tests total) and their keys are measured by
+`ground-truth.js` into `keys.json`. What that does and does not mean:
+
+- **Runnable, not yet run.** No archived run contains them. Filter the family with
+  `--filter-pattern 'AO-S|WC-S|FL-|AO-T'`.
+- **AO-S-01 needs `COWORKER_ABILITIES=1` and a personal key** to be the comparison
+  it is graded as. Run without those and the Coworker column has no plugin route,
+  so it will lose for a reason we caused — see §3.1 and §6.1.
+- **Arming abilities re-baselines the suite.** Every archived run used the KB-only
+  scaffolding; the manifest now stamps a note saying so.
+- **AO-U-01 (updates) is still not drafted.** It is no longer blocked on the
+  false-update defect — that landed and is verified — but it targets the WPE install
+  `alpineoutfitte`, which is not ability-connected yet (its connect URL was one of
+  the two `http://` ones that failed). Note also that "Alpine Outfitters" in the
+  local plugin audit is a *different site* from the WPE install: 13 plugins against
+  21. Another name collision.
+
+§6 lists what remains.
 
 ---
 
@@ -52,6 +69,10 @@ or break it out, but decide deliberately rather than letting it leak in.
 | **In-site** | AO-A-01, AO-B-01, AO-C-01, CV-G-01 | **empty** |
 | **Fleet** | CV-A-01, CV-B-01 | REACH-01 only |
 
+Drafted in §4 to fill it: AO-S-01 and WC-S-01 (in-site x site), FL-ACF-01
+(fleet x site), AO-T-01 (the first temporal). A fifth, AO-U-01, fell out of the
+§6.1 probe and is described at the end of §4.1 but not yet drafted.
+
 By task type: 4 lookups, 3 audits, 0 temporal, 0 synthesis.
 
 REACH-01 is a *control* — can you see the site at all — not an audit of what is
@@ -60,34 +81,73 @@ question an agency developer actually asks on a Monday morning lands in it.
 
 ---
 
-## 3. Comparison scenarios and capability scenarios are different things
+## 3. Which quadrants are comparisons — measured, not assumed
 
-`providers/coworker.js` advertises exactly three tools: `search_knowledge_base`,
-`fetch_knowledge_base_document`, `list_account_sites`. No plugin data, no
-versions, no disk, no access logs. So as the columns stand:
+**This section previously argued that the site half of the matrix was
+Nexus-only by construction. That was wrong, and it was wrong in the direction
+that would have flattered us.** Probed live 2026-08-25: given a **personal** API
+key and a per-site **WordPress account connection**, Coworker reaches plugin,
+environment and site-health data through WordPress abilities. The site quadrant
+is a **comparison**, not a capability demonstration.
 
-- **Content quadrants are comparisons.** Both columns have a real route; a
-  Nexus win means something.
-- **Site quadrants are capability demonstrations.** Nexus-only by construction.
+What `run_site_ability` returned for `power-coworker/list-plugins` on
+summitdermatol:
 
-This is not a reason to skip the site half — it is most of the job — but it
-changes the grading shape. A shared `llm-rubric` across a quadrant one column
-structurally cannot reach produces a 100%-0% column that reads as rigged even
-when it is honest. Site-quadrant scenarios must use **REACH-01's shape**: a
-`javascript` assertion keyed on `context.provider.label`, with opposite
-expectations per column, and an explicit fabrication check for the column that
-has no route.
+```
+total_count: 6, active_count: 5, inactive_count: 1,
+updates_available_count: 2, updates_allowed: true,
+update_check: { checked: true, last_checked_gmt: "2026-08-25T17:56:52Z" }
+```
 
-**Open before any of this goes live:** the real Coworker MCP also exposes
-`list_site_abilities`, `run_site_ability` and `get_site_knowledge_base`, which
-the bench provider does not offer. If WP abilities reach plugin or environment
-data, part of the site half becomes a genuine comparison and should be graded as
-one. Probe before declaring the quadrant Nexus-only — the fairness claim "we
-built scenarios for their strengths" has to stay literally true.
+with per-plugin `update_status` and `new_version`. The same site also exposes
+`core/get-environment-info`, `power-coworker/get-site-info` and
+`power-coworker/get-site-health`.
 
----
+### 3.1 What this obliges us to do
 
-## 4. Three drafts
+- **`coworker.js` must be widened.** It advertises three tools; the column needs
+  the abilities route or every site-quadrant decline is one *we* caused. Until
+  it is widened, no site-quadrant result may be published.
+- **The bench key must change class.** `COWORKER_API_KEY` in `nexus.env.local`
+  is a **project** key (34 chars). A project key resolves no WordPress user and
+  can never run an ability — it returns `unauthorized`. Every run in the ledger
+  to date used it. The column needs a **personal** key plus a completed
+  per-site connection.
+- **Record which WordPress user the column ran as.** Abilities execute as the
+  connected person's WordPress user with that user's capabilities, and the
+  site's logs name them. So the column is not "Coworker" in the abstract, it is
+  "Coworker as a specific connected user" — pin it in the manifest the way model
+  and grader are pinned, or the result is not reproducible.
+- **Decide the mutation question deliberately.** The ability set includes
+  `create` / `update` / `delete` for posts, pages and every CPT, plus
+  `activate-plugin` and `update-plugin`. Wiring the full set gives a benchmark
+  column live write access to real sites. Recommendation: expose a **read-only
+  subset**, and state in the fairness note that it was trimmed and why — a
+  withheld *write* tool cannot affect a read-only scenario's outcome, so this
+  costs the comparison nothing.
+
+### 3.2 What is still capability-only, and why
+
+- **Sites Coworker has no site connection for.** willowcreekderm does not appear
+  in `list_account_sites` at all and, at WordPress 6.9.7, sits below the hub's
+  7.0 floor, so it cannot get one. REACH-01's premise, holding on a second site.
+- **Data classes no ability exposes.** Access logs (AO-T-01), anything
+  fleet-wide (FL-ACF-01), and WP Engine CAPI data. Abilities are per-site by
+  construction; there is no ability that spans installs.
+
+### 3.3 Ability sets are per-site and not uniform
+
+ridgeline exposes **50** abilities but **none of the plugin ones** — no
+`list-plugins`, no `get-site-health`. summitdermatol exposes **45**, including
+them. Both run `mcp-adapter` 0.6.1 and `power-coworker` 0.7.0. The cause is not
+yet known.
+
+This is a trap for scenario design: choose the wrong substrate site and you will
+conclude Coworker cannot do something it demonstrably can. **Enumerate abilities
+per site before declaring any expected advantage**, and record the enumeration
+beside the key.
+
+## 4. Four drafts
 
 Every figure below was measured 2026-08-25, method named per scenario. Nothing
 is copied from a column's output.
@@ -100,39 +160,88 @@ is copied from a column's output.
 
 **Measured, live over SSH (`wp plugin list`) 2026-08-25 — not from graph.db:**
 
-- 20 plugins installed.
-- **9 active**, **1 inactive** (`ai-provider-for-local-gateway`), **8 must-use**,
+- 21 plugins installed *(re-measured 2026-08-25 14:08 after `mcp-adapter` 0.6.1
+  was installed and activated here — see §6.1; the pre-install figures were
+  20 / 9 active)*.
+- **10 active**, **1 inactive** (`ai-provider-for-local-gateway`), **8 must-use**,
   **2 drop-ins** (`advanced-cache.php`, `object-cache.php`).
 - WordPress 7.1, PHP 8.4.
 - ACF PRO 6.8.8; WooCommerce 11.0.1 active with 181 products in 9 categories.
 
-**The discriminator, and why this scenario is worth building.** Nexus's own
-graph cache stores plugin state as a single `is_active` integer, which collapses
-must-use and drop-ins into `0`. Read from the cache, the honest-looking answer is
-"9 active, 11 inactive" — and it is wrong twice over: only one plugin is
-genuinely inactive, and eight of the eleven cannot be deactivated at all. An
-answer that reports 11 inactive plugins has read a cache and called it a site.
+**And measured from Coworker's side, 2026-08-25** — because this scenario is a
+comparison, both views belong in the key. `power-coworker/list-plugins` uses the
+WordPress plugins REST API, which returns **regular plugins only**: for the
+structurally identical summitdermatol it reported `total_count: 6` where
+`wp plugin list` reports 15, the difference being exactly the must-use plugins
+and drop-ins. On alpineoutfitte the same ability should therefore report **11**
+(10 active + 1 inactive) against SSH's 21. It also returns `update_status` and
+`new_version` per plugin, which Nexus does not persist at all.
+
+**The discriminator — three views, and none of them is complete on its own.**
+
+| view | total | active | inactive | sees must-use / drop-ins | sees updates |
+|---|---|---|---|---|---|
+| `wp plugin list` over SSH | 21 | 10 | 1 | yes, classified | no |
+| Nexus graph cache | 21 rows | 10 | **11** | no — collapses both to `is_active=0` | no |
+| Coworker `list-plugins` | 11 | 10 | 1 | **no — invisible entirely** | **yes** |
+
+Two different failures are reachable here, one per column, and that is what
+makes the scenario worth running:
+
+- **Nexus's failure is mislabelling.** Read from the graph cache, the
+  honest-looking answer is "10 active, 11 inactive" — wrong twice over: only one
+  plugin is genuinely inactive, and eight of the eleven *cannot be deactivated
+  at all*. An answer reporting 11 inactive has read a cache and called it a site.
+- **Coworker's failure would be silent incompleteness.** Its route cannot see
+  the 8 must-use plugins or the 2 drop-ins. Reporting "11 plugins" is not wrong
+  — reporting it *as the whole inventory* is.
+
+So the scenario grades **scope honesty, not raw completeness**. A scoped answer
+that says what it covers is a pass; an unscoped answer that implies it covered
+everything is not.
 
 PASS requires all three:
 
-1. the total (20) and the active count (9);
-2. a breakdown that does **not** describe must-use or drop-in plugins as
-   inactive — either by naming those classes, or by giving the genuinely
-   inactive count as 1;
-3. the platform versions (WordPress 7.1, PHP 8.4) or the ACF/WooCommerce
-   versions, grounded in the inventory.
+1. **active = 10 and inactive = 1.** Both columns can reach this and it is the
+   one figure where the two routes agree.
+2. **Scope is either complete or declared.** Either the 8 must-use plugins and 2
+   drop-ins are accounted for (a total of 21, or those classes named), **or**
+   the response states that its count covers regular plugins only. Silence about
+   scope, presented as a full inventory, fails this clause.
+3. **Platform grounding** — WordPress 7.1 and PHP 8.4, or the ACF PRO 6.8.8 /
+   WooCommerce 11.0.1 versions.
 
-FAIL on: reporting 11 inactive plugins (or any inactive count above 1); naming
-plugins that are not installed; giving no counts; declining.
+FAIL on: any inactive count above 1 — 11 and 12 are the specific wrong answers
+the graph cache produces; presenting a regular-plugins-only count as the
+complete inventory with no scope statement; naming plugins that are not
+installed; giving no counts; declining.
 
 Do NOT grade which findings the response chooses to flag — a new maintainer's
 priorities are judgment. Do NOT fail a response for noting that most of this
 stack is platform or instrumentation rather than a typical client site; that is
-true, and see the caveat below.
+true, and see the caveat below. Do NOT require update availability here; it is a
+real asymmetry but it belongs to its own scenario (see below), not smuggled into
+an inventory rubric.
 
-**Grading shape:** REACH-01 per-provider. Nexus must produce the inventory; a
-column with no route must decline and must **not** state a plugin count or a
-version — with no plugin route, either is fabricated whether or not it is right.
+**Grading shape:** a shared `llm-rubric` — both columns graded on the same
+expectation. **Not** REACH-01 per-provider; an earlier revision specified that,
+on the assumption Coworker had no plugin route, and §3 disproved it.
+
+**Expected advantage: neutral, leaning Nexus.** Nexus can produce the complete
+inventory, Coworker can only produce a correct scoped one — but the failure that
+actually loses this scenario, mislabelling must-use as inactive, is available
+only to Nexus. Declared before the first run.
+
+**A scenario this finding hands us, not yet drafted: AO-U-01, "which plugins on
+alpineoutfitte need updating?" — expected advantage COWORKER, strongly.**
+Coworker returns `update_status` and `new_version` live per plugin. CLAUDE.md is
+explicit that Nexus persists no update availability anywhere and that fleet-wide
+outdated counts must be reported as `null`, never `0`. This is the
+designed-from-their-strengths scenario the v2 portfolio asks for (§4, SEM/META/
+DOC-01), and it arrives from measurement rather than guesswork. It also sharpens
+WC-S-01 rather than weakening it: the best available answer there is "2 updates
+available, otherwise current" — which still misses an eight-year-abandoned
+plugin throwing PHP warnings.
 
 **Caveat, and its limit.** alpineoutfitte's plugin set is benchmark and platform
 instrumentation (`alpine-seeder`, `nexus-ai-connector`, `power-coworker`,
@@ -295,8 +404,10 @@ clinic data.
 **Measured 2026-08-25 — plugin inventory live over SSH, maintenance facts from
 the wp.org plugin API:**
 
-- 7 plugin entries: **5 active**, **1 must-use** (`spinupwp-debug-log-path`),
-  **1 drop-in** (`object-cache.php`). Site runs WordPress 6.9.7.
+- 8 plugin entries: **6 active**, **1 must-use** (`spinupwp-debug-log-path`),
+  **1 drop-in** (`object-cache.php`). Site runs WordPress 6.9.7. *(Re-measured
+  2026-08-25 14:08 after `mcp-adapter` 0.6.1 was installed and activated here —
+  see §6.1; the pre-install figures were 7 / 5 active.)*
 - **Every plugin is already at its latest published version. Zero updates are
   available.**
 - `search-everything` 8.1.9 — latest release, **last updated 2017-11-28**,
@@ -306,6 +417,14 @@ the wp.org plugin API:**
   2026-08-12** (13 days before measurement), tested to 7.0.4. Healthy.
 - `advanced-custom-fields-pro` 6.8.8 (commercial, the fleet's newest ACF),
   `spinupwp` 1.9.1 (host platform), `cedar-vale-seeder` (ours).
+
+**It is not merely stale — it is erroring, live.** Every WP-CLI invocation on
+this site now emits `Warning: Trying to access array offset on false in
+.../search-everything/config.php on line 29`, observed 2026-08-25 during the
+`mcp-adapter` activation. A plugin written for WordPress 4.7 is throwing PHP
+warnings on 6.9.7. This is the consequence the update count cannot see,
+happening already, and it is an even better answer than the dates — a response
+that surfaces it has read the site rather than a version table.
 
 **The discriminator, and why this is the strongest of the four drafts.** Two
 plugins on this site are *both* at their latest version. An update check — "how
@@ -323,6 +442,11 @@ PASS requires all three:
    update;
 3. the enumeration it was drawn from — the plugin count, or the fact that no
    updates are available.
+
+Credit, do not require, a response that surfaces the live PHP warning from
+`config.php` line 29 — it is the strongest available evidence but reaching it
+means reading site output rather than metadata, and a correct answer can be
+built from the dates alone.
 
 FAIL on: reporting the site healthy because everything is current; claiming an
 update is available for `search-everything` (there is none); naming
@@ -342,9 +466,18 @@ the 2017 date cannot move. `limit-login-attempts-reloaded` *will* ship again, so
 pin the contrast on the abandoned side and re-measure the healthy comparator
 with the rest of the keys.
 
-**Grading shape:** REACH-01 per-provider. willowcreekderm is external SSH with
-no Coworker collection at all, so a decline there is ambiguous — it could mean
-"no route to plugin data" or "no route to this site". If that ambiguity matters,
+**Grading shape:** REACH-01 per-provider — and here the decline is structural
+and nameable rather than a tooling gap. willowcreekderm does not appear in
+Coworker's `list_account_sites` at all: it has no Power site connection, and at
+WordPress 6.9.7 it is below the hub's 7.0 floor, so it cannot get one. That is
+REACH-01's premise holding on a second site, and it is why this scenario stays
+a capability test even if §6.1's personal-connection work later turns the rest
+of the quadrant into a comparison. State it in the scenario comment so no
+reader mistakes the decline for a withheld tool.
+
+Because willowcreekderm has no collection at all, a decline there cannot
+distinguish "no route to plugin data" from "no route to this site". If that
+ambiguity matters,
 run the same scenario against ridgeline (`hostinger-test`), which Coworker
 *does* have a collection for and which carries its own realistic stack:
 Elementor 4.2.1, LiteSpeed Cache 7.9, four Hostinger platform plugins — and
@@ -362,8 +495,8 @@ fleet atoms fit the existing shape.
 "sites": {
   "alpineoutfitte": {
     // AO-S-01 — measured by `wp plugin list --format=json` over SSH
-    "plugins_total": 20,
-    "plugins_active": 9,
+    "plugins_total": 21,
+    "plugins_active": 10,
     "plugins_inactive": 1,
     "plugins_mustuse": 8,
     "plugins_dropin": 2,
@@ -394,8 +527,8 @@ fleet atoms fit the existing shape.
 },
 // WC-S-01 — inventory over SSH; maintenance facts from the wp.org plugin API
 "willowcreekderm_plugins": {
-  "entries_total": 7,
-  "active": 5,
+  "entries_total": 8,
+  "active": 6,
   "mustuse": 1,
   "dropin": 1,
   "wp_version": "6.9.7",
@@ -405,7 +538,8 @@ fleet atoms fit the existing shape.
     "version": "8.1.9",
     "is_latest": true,
     "last_updated": "2017-11-28",
-    "tested_up_to": "4.7.35"
+    "tested_up_to": "4.7.35",
+    "live_php_warning": "Trying to access array offset on false in wp-content/plugins/search-everything/config.php on line 29"
   },
   "healthy_comparator": {
     "slug": "limit-login-attempts-reloaded",
@@ -431,21 +565,92 @@ fleet atoms fit the existing shape.
 
 ## 6. Settle before these go live
 
-1. **Probe what Coworker can actually reach.** If `list_site_abilities` /
-   `run_site_ability` reach plugin or environment data, AO-S-01 is a comparison
-   and must be graded as one (§3).
+1. ~~**Probe what Coworker can actually reach.**~~ **RESOLVED 2026-08-25 — the
+   answer is yes, and it inverts what this section assumed.** Full reasoning and
+   consequences in §3; the short version and the work it leaves:
+
+   **What was found.** With a **personal** API key and a completed per-site
+   WordPress account connection, Coworker runs WordPress abilities that reach
+   plugin, environment and site-health data. `list-plugins` returns counts,
+   per-plugin versions **and update availability**. The two blockers found
+   earlier were one root cause — no personal credential, no per-site consent —
+   and both are now cleared on two of four sites.
+
+   **How the two credentials differ, for whoever reads this next.** The
+   discriminator is the error from `list_site_abilities`, not a field on
+   `list_account_sites`:
+
+   | key | result |
+   |---|---|
+   | project (`COWORKER_API_KEY`, 34 char) | `unauthorized` — "a personal API key is required for this tool" |
+   | personal (38 char) | `not_personally_connected` + a `connect_url`, until consent is given |
+   | personal + consent | the abilities |
+
+   **`wp_connection_status` is documented but not returned.** WP Engine's
+   connections doc says `list_account_sites` reports it per site and that its
+   absence means a project key. It is absent under **both** key classes, so it
+   cannot be used as a signal. An earlier revision of this item read that
+   omission as the project-key tell and was wrong. Worth reporting to whoever
+   owns the doc.
+
+   **Connection state, 2026-08-25:**
+
+   | site | abilities | plugin abilities | connect URL scheme |
+   |---|---|---|---|
+   | summitdermatol | 45 | **yes** | https ✓ |
+   | ridgeline | 50 | **no** | https ✓ |
+   | cedarvalehealt | — `not_personally_connected` | — | http ✗ |
+   | alpineoutfitte | — `not_personally_connected` | — | http ✗ |
+
+   The two that failed are exactly the two whose connect URLs were plain
+   `http://`. Retry over https:
+   `https://cedarvalehealt.wpenginepowered.com/wp-admin/admin.php?page=power-overview&action=trigger_wp_connection`
+   and the same path on `alpineoutfitte`.
+
+   **Work this leaves, and none of it is optional before a site-quadrant result
+   is published:**
+
+   1. Widen `coworker.js` to the abilities route — **read-only subset** (§3.1).
+   2. Move the bench to a personal key; keep it out of the repo
+      (`nexus.env.local` is gitignored) and record the key *class* in the
+      manifest, never the value.
+   3. Pin the connected WordPress user in the manifest alongside model and
+      grader.
+   4. Connect the remaining two sites, then **enumerate abilities per site** and
+      store the enumeration beside the keys — ridgeline proves the sets are not
+      uniform (§3.3).
+   5. Re-declare expected advantage for every site-quadrant scenario. AO-S-01 is
+      now neutral-leaning-Nexus, not Nexus-only; AO-U-01 (updates) is a
+      declared **Coworker** favourite.
+
+   *Note:* `mcp-adapter` 0.6.1 was installed and activated on alpineoutfitte and
+   willowcreekderm on 2026-08-25 so the abilities route stays open across the
+   Coworker-visible substrate. It moved the AO-S-01 and WC-S-01 keys, which are
+   re-measured above.
+
 2. **Decide FL-ACF-01's key source** (§4.2) — but the choice is cheaper than
    §4.2 first suggested, and for a reason that was measured after it was
    written. Two defects were conflated there. *Cache-vs-world* is largely moot:
    of the 86 ACF-bearing sites, 66 have plugin rows under a day old and the rest
    are 1-7 days, so the graph currently does describe the fleet. *Circularity*
    remains — but what survives it is the add-on-slug trap, which is a **reasoning**
-   failure a column can commit with perfect data in front of it, and today the
-   quadrant is a capability scenario anyway because Coworker has no plugin route
-   to out-retrieve. **Recommendation: keep the graph as key source, label the
+   failure a column can commit with perfect data in front of it.
+
+   **The abilities finding does not reach this scenario, and the reason matters.**
+   §3 showed Coworker reads plugin data on a connected site — but abilities are
+   **per-site by construction**. There is no ability that spans installs, and
+   answering "which of my 86 sites run old ACF" would mean 86 separate
+   `run_site_ability` calls against 86 separately-consented sites, only some of
+   which Coworker has a site connection for at all. **Fleet x site therefore
+   stays capability-only even though in-site x site did not** — and that is a
+   structural property of the abilities model, not a credential gap, so it will
+   not flip the way §6.1 did.
+
+   **Recommendation: keep the graph as key source, label the
    scenario capability + reasoning, and add a bounded SSH spot-check of ~10 sites
    spanning the version range** (including the 6.1.0 outlier and one of the beta
-   pair). Escalate to the full sweep only if the quadrant becomes a comparison.
+   pair). Escalate to the full sweep only if a fleet route appears on their
+   side.
    Prefer wp.org-anchored plugin facts where the scenario allows it — WC-S-01
    shows that route is genuinely independent of both columns.
 3. **Run each once before pinning the grading.** REACH-01's per-provider

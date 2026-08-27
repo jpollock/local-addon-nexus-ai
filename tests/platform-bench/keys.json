@@ -1,5 +1,17 @@
 {
-  "measuredAt": "2026-08-25T22:27:20.249Z",
+  "measuredAt": "2026-08-26T01:59:13.786Z",
+  "fleet_acf": {
+    "sites_with_acf": 86,
+    "distinct_versions": 23,
+    "sites_le_6_3": 12,
+    "sites_with_both_core_and_pro": 10,
+    "sites_on_beta": 2,
+    "newest": "6.8.8",
+    "oldest": "6.1.0",
+    "wrong_prefix_sweep": 88,
+    "wrong_including_inactive": 89,
+    "wrong_rows_not_sites": 96
+  },
   "sites": {
     "cedarvalehealt": {
       "providers_total": 60,

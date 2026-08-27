@@ -71,6 +71,47 @@ function sshRaw(hostKey, remoteCmd) {
  * dropins are invisible to it entirely. Neither view is complete; the key holds the
  * truth both are measured against.
  */
+/**
+ * Fleet-wide ACF spread, read from the graph via the sqlite3 CLI.
+ *
+ * Two things to know before trusting these numbers.
+ *
+ * PROVENANCE. Every other key here is measured over SSH from the site itself,
+ * independent of anything Nexus caches. This one is not: it reads Nexus's own
+ * graph, which is the system under test, so it cannot falsify the Nexus column's
+ * RETRIEVAL. What it can still falsify is the column's REASONING — the add-on-slug
+ * trap and the sites-vs-installs confusion are both errors a column commits with
+ * perfect data in front of it, and eval-orG caught the second one three times.
+ *
+ * WHY THE CLI, NOT better-sqlite3. The module in node_modules is compiled for
+ * whichever runtime last built it — Electron after `npm run rebuild`, system Node
+ * after `npm install`. ground-truth.js runs under system Node and must not care
+ * which state the tree is in, so it shells out.
+ */
+function fleetAcfSpread() {
+  const DB = path.join(process.env.HOME, 'Library/Application Support/Local/nexus-ai/graph.db');
+  const q = (sql) => execFileSync('sqlite3', [DB, sql], { encoding: 'utf8', timeout: 15_000 }).trim();
+  const CORE_PRO = "p.slug IN ('advanced-custom-fields','advanced-custom-fields-pro')";
+  const num = (sql) => Number(q(sql));
+  return {
+    // The answer to the scenario's question, as asked: distinct ACTIVE sites.
+    sites_with_acf: num(`SELECT COUNT(DISTINCT p.site_id) FROM plugins p JOIN sites s ON s.id=p.site_id WHERE s.is_active=1 AND ${CORE_PRO};`),
+    distinct_versions: num(`SELECT COUNT(DISTINCT p.version) FROM plugins p JOIN sites s ON s.id=p.site_id WHERE s.is_active=1 AND ${CORE_PRO};`),
+    sites_le_6_3: num(`SELECT COUNT(DISTINCT p.site_id) FROM plugins p JOIN sites s ON s.id=p.site_id WHERE s.is_active=1 AND ${CORE_PRO} AND (p.version LIKE '6.1%' OR p.version LIKE '6.2%' OR p.version LIKE '6.3%');`),
+    sites_with_both_core_and_pro: num(`SELECT COUNT(*) FROM (SELECT p.site_id FROM plugins p JOIN sites s ON s.id=p.site_id WHERE s.is_active=1 AND ${CORE_PRO} GROUP BY p.site_id HAVING COUNT(DISTINCT p.slug)=2);`),
+    sites_on_beta: num(`SELECT COUNT(DISTINCT p.site_id) FROM plugins p JOIN sites s ON s.id=p.site_id WHERE s.is_active=1 AND ${CORE_PRO} AND p.version LIKE '%beta%';`),
+    newest: q(`SELECT p.version FROM plugins p JOIN sites s ON s.id=p.site_id WHERE s.is_active=1 AND ${CORE_PRO} GROUP BY p.version ORDER BY COUNT(*) DESC LIMIT 1;`),
+    oldest: q(`SELECT p.version FROM plugins p JOIN sites s ON s.id=p.site_id WHERE s.is_active=1 AND ${CORE_PRO} ORDER BY CAST(substr(p.version,1,instr(p.version,'.')-1) AS INT), CAST(substr(p.version, instr(p.version,'.')+1) AS INT) LIMIT 1;`),
+    // The wrong answers, measured — so the rubric can name them instead of guessing.
+    // eval-orG: Nexus answered 85, then 91, then "99 installs across 689 sites" to
+    // the SAME question. It was switching denominators between runs, so the rubric
+    // has to say which denominator it means and what the near-misses look like.
+    wrong_prefix_sweep: num(`SELECT COUNT(DISTINCT p.site_id) FROM plugins p JOIN sites s ON s.id=p.site_id WHERE s.is_active=1 AND p.slug LIKE 'advanced-custom-fields%';`),
+    wrong_including_inactive: num(`SELECT COUNT(DISTINCT p.site_id) FROM plugins p JOIN sites s ON s.id=p.site_id WHERE ${CORE_PRO};`),
+    wrong_rows_not_sites: num(`SELECT COUNT(*) FROM plugins p JOIN sites s ON s.id=p.site_id WHERE s.is_active=1 AND ${CORE_PRO};`),
+  };
+}
+
 /** Installed version of one slug from a census, or null if absent. */
 function versionOf(census, slug) {
   const hit = census.roster.find((r) => r.slug === slug);
@@ -274,8 +315,12 @@ async function measure() {
   const overlapNpis = Object.keys(rgProviders.npis).filter((npi) => npi in cvProviders.npis);
   const overlapNames = overlapNpis.map((npi) => cvProviders.npis[npi]).sort();
 
+  process.stderr.write('measuring fleet ACF spread…\n');
+  const acf = fleetAcfSpread();
+
   return {
     measuredAt: new Date().toISOString(),
+    fleet_acf: acf,
     sites: {
       cedarvalehealt: {
         providers_total: cvProviders.total, providers_accepting: cvProviders.accepting,
@@ -374,6 +419,22 @@ async function main() {
 main().catch((err) => {
   // A measurement that threw is not a passing gate. Fail loudly: a silent zero here
   // would let a run grade against a stale key and call the result verified.
-  process.stderr.write(`GROUND TRUTH FAILED: ${err && err.message ? err.message : err}\n`);
+  //
+  // But say WHICH kind of failure it is. Both a transient SSH timeout and a real
+  // substrate change exit 1, and run.sh prints "see mismatches above" either way —
+  // so a flaky host reads as substrate corruption and invites someone to reach for
+  // BENCH_SKIP_DRIFT, which is the one thing that must never become routine.
+  // Measured 2026-08-26: one host stopped answering inside the 90s budget and the
+  // gate reported failure with no mismatches printed at all.
+  const msg = err && err.message ? err.message : String(err);
+  const transient = /ETIMEDOUT|ECONNRESET|ECONNREFUSED|EHOSTUNREACH|Connection closed|kill.?ed|SIGTERM/i.test(msg);
+  if (transient) {
+    process.stderr.write(`GROUND TRUTH COULD NOT BE MEASURED (transient): ${msg}\n`);
+    process.stderr.write('This is a REACHABILITY failure, not substrate drift — no key was compared.\n');
+    process.stderr.write('Retry. If it repeats, check the host before suspecting the substrate,\n');
+    process.stderr.write('and do NOT reach for BENCH_SKIP_DRIFT: an unmeasured gate is not a passed one.\n');
+  } else {
+    process.stderr.write(`GROUND TRUTH FAILED: ${msg}\n`);
+  }
   process.exit(1);
 });
