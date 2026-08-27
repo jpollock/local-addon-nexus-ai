@@ -1291,14 +1291,6 @@ const JOURNEY_GAPS: JourneyGap[] = [
   },
   {
     spec: J_GLANCE,
-    kind: 'key_step',
-    matches: 'Exactly one door per fact, and',
-    token: 'needsYou',
-    missing: 'the fact-level routes a route-exists pin would resolve',
-    unblockedBy: UX2,
-  },
-  {
-    spec: J_GLANCE,
     kind: 'must_not',
     matches: 'A fact with no date where its c',
     token: 'needsYou',
@@ -2692,6 +2684,98 @@ const UX2_DRIVEN: RegisteredCheck[] = [
   }),
 
   // ---- J-Glance · M1 — the needs-you row's own criteria ---------------------
+
+  /**
+   * The first of the `needsYou` driver bundle (2026-08-26), registered when the
+   * run receipt found eleven criteria blocked on this harness rather than on
+   * the product. The surface shipped at WP-46; this criterion had never been
+   * walked against it.
+   *
+   * "Exactly one door per fact, and the door arrives at the fact rather than at
+   * the section containing it" — mechanized as three readings of the tree, each
+   * one a way the criterion could be false:
+   *
+   *  1. no row carries TWO doors (the "exactly one" half, upward);
+   *  2. no door lives outside a row (a door in a caption or at the surface root
+   *     is a door to the section, which is the half the criterion names);
+   *  3. every door target is non-empty — a door that routes nowhere arrives at
+   *     nothing, let alone at the fact.
+   *
+   * NOT MEASURED HERE, and the omission is a ruling I do not have rather than
+   * an oversight. A fourth reading suggests itself — no two rows share a door
+   * target — and it is WRONG on this surface: `nowGroups` exists precisely
+   * because two or more rows CAN share one, and WP-55 item 4 ratified the guard
+   * that captions them and states the limit ("a shared target is a FACT and a
+   * shared cause is a VERDICT"). Driven with that reading, this criterion FAILs
+   * on two findings that share a site — which is a ratified state, so the
+   * failure would be the eval contradicting a ruling, not the surface breaking
+   * one. What remains genuinely open is whether a `kind: 'site'` door arriving
+   * at the SITE satisfies "arrives at the fact" for a finding ON that site.
+   * That is a designer/owner question, and until it is answered this check
+   * measures the three readings above and says so rather than guessing a
+   * fourth.
+   */
+  returnDriven({
+    spec: J_GLANCE,
+    kind: 'key_step',
+    matches: 'Exactly one door per fact, and',
+    missing: 'the fact-level routes a route-exists pin would resolve',
+    holds: (s) => {
+      // `s.arrival` IS the flattened element list — `elementsOf` here would walk
+      // each element again as its ancestors' descendant, counting one row five
+      // times and reporting the duplicates as rows sharing a door. Measured:
+      // that mistake turned a satisfied criterion into a FAIL naming the same
+      // situation id repeatedly, which is what a self-collision looks like.
+      const els: any[] = s.arrival;
+      const rowAttr = (e: any): string | undefined => {
+        const sit = attr(e, 'data-situation');
+        const inbox = attr(e, 'data-inbox-row');
+        return sit !== undefined ? `situation:${sit}` : inbox !== undefined ? `inbox:${inbox}` : undefined;
+      };
+      const rows = els.filter((e) => rowAttr(e) !== undefined);
+
+      // Doors, and which row each sits inside.
+      const doorsIn = (row: any): any[] => withAttr(elementsOf(row), 'data-door');
+      const twoDoored = rows.filter((r) => doorsIn(r).length > 1)
+        .map((r) => `${rowAttr(r)} (${doorsIn(r).length} doors)`);
+
+      const allDoors = withAttr(els, 'data-door');
+      const doorsInsideRows = new Set(rows.flatMap((r) => doorsIn(r)));
+      const orphanDoors = allDoors.filter((d) => !doorsInsideRows.has(d))
+        .map((d) => String(attr(d, 'data-door')));
+
+      // Targets, per row. A row with no door is not a violation — the surface
+      // gives a row with no destination none rather than inventing one.
+      const targets = rows
+        .map((r) => ({ row: rowAttr(r)!, target: doorsIn(r).map((d) => String(attr(d, 'data-door')))[0] }))
+        .filter((t) => t.target !== undefined);
+      const routeless = targets.filter((t) => !t.target || t.target === 'undefined').map((t) => t.row);
+      const byTarget = new Map<string, string[]>();
+      for (const t of targets) byTarget.set(t.target, [...(byTarget.get(t.target) ?? []), t.row]);
+      const shared = [...byTarget.entries()].filter(([, rs]) => rs.length > 1)
+        .map(([target, rs]) => `${target} ← ${rs.join(' + ')}`);
+
+      return {
+        ok: twoDoored.length === 0 && orphanDoors.length === 0 && routeless.length === 0,
+        evidence: [
+          `${rows.length} fact row(s) on the surface, ${targets.length} of them carrying a door — ` +
+            'a row the fold gives no destination renders none rather than inventing one',
+          `${twoDoored.length} row(s) with more than one door${twoDoored.length ? `: ${twoDoored.join(', ')}` : ''}`,
+          `${orphanDoors.length} door(s) outside any row${orphanDoors.length ? `: ${orphanDoors.join(', ')}` : ''} ` +
+            '— a door in a caption or at the root is a door to the SECTION, which is what this criterion forbids',
+          `${routeless.length} door(s) routing nowhere — a door with no target arrives at nothing`,
+          `${shared.length} target(s) reached from more than one row${shared.length ? `: ${shared.join('; ')}` : ''}. ` +
+            'REPORTED, NOT JUDGED: `nowGroups` captions rows that share a target and states the ' +
+            'limit (WP-55 item 4, ratified), so a shared site target is a designed state here. ' +
+            'Whether a site-kind door satisfies "arrives at the fact" for a finding ON that site ' +
+            'is the open question this check will not answer by guessing',
+          `${withAttr(els, 'data-part-door').length} part door(s), exempt from the shared-target reading: a ` +
+            "coalesced situation's parts sit on the situation's own target by construction",
+        ],
+      };
+    },
+  }),
+
   returnDriven({
     spec: J_GLANCE,
     kind: 'key_step',
