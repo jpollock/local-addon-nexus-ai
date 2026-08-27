@@ -518,7 +518,16 @@ function notGrantedBecause(capability: string): string {
   }
 }
 
-function reachRefusal(toolName: string, grantee: string | undefined): SequenceRefusal | null {
+/**
+ * §D.7 · the parties to one call. A bare string is a single-party surface
+ * (chat, mcp-client, an agent calling its own tool); an array is a contributed
+ * dispatch, where the CALLER initiated and the CONTRIBUTOR executes. Owner
+ * ruling 2026-08-26 (C, the conjunction): every party must hold the SAME
+ * declaring capability. Spec: docs/planning/2026-08-26-cross-agent-reach.md
+ */
+export type ReachParties = string | readonly (string | undefined)[];
+
+function reachRefusal(toolName: string, grantee: ReachParties | undefined): SequenceRefusal | null {
   try {
     // Reads are untouched — the parity floor, and the same boundary as rule 5.
     // Per SURFACE, not per identity: an unattributable reader still reads.
@@ -539,10 +548,20 @@ function reachRefusal(toolName: string, grantee: string | undefined): SequenceRe
     // one it grants things to, and every production surface threads one
     // (chat, mcp-client, the agent's own name), so undefined here means a
     // caller outside every known surface.
-    if (
-      grantee !== undefined &&
-      declaring.some((c) => granted.some((g) => g.capability === c && g.grantee === grantee))
-    ) {
+    //
+    // §D.7 (ruled 2026-08-26): a contributed dispatch has TWO parties, and the
+    // disjunction is PER PARTY, never ACROSS them — the same capability must be
+    // held by every one. Letting the caller hold c1 while the contributor holds
+    // c2 would assemble an authority neither was granted out of two partial
+    // ones. Deduped, so caller === contributor collapses to the single check
+    // and that path stays byte-identical.
+    const parties: readonly (string | undefined)[] = [
+      ...new Set(Array.isArray(grantee) ? grantee : [grantee as string | undefined]),
+    ];
+    const holdsCapability = (p: string | undefined, c: string): boolean =>
+      p !== undefined && granted.some((g) => g.capability === c && g.grantee === p);
+
+    if (declaring.some((c) => parties.every((p) => holdsCapability(p, c)))) {
       return null;
     }
 
@@ -565,9 +584,10 @@ function reachRefusal(toolName: string, grantee: string | undefined): SequenceRe
     if (!claimedBy) return null;
 
     const others = declaring.slice(1);
+    const singleParty = parties.length === 1;
     const alternatives = others.length
       ? ` This tool is also declared by ${others.join(', ')}; granting ANY ONE of ` +
-        `${declaring.join(', ')} to this caller makes it reachable.`
+        `${declaring.join(', ')} to ${singleParty ? 'this caller' : 'EVERY party'} makes it reachable.`
       : '';
 
     // Who DOES hold a declaring capability — so the refusal names the holder
@@ -580,13 +600,39 @@ function reachRefusal(toolName: string, grantee: string | undefined): SequenceRe
           .map((g) => g.grantee)
       ),
     ];
-    const askerLine =
-      grantee === undefined
+    // Which parties hold NONE of the declaring capabilities. Distinct from the
+    // refusal itself: with more than one party the call can fail while every
+    // party holds something, because they hold DIFFERENT somethings.
+    const holdsAny = (p: string | undefined): boolean => declaring.some((c) => holdsCapability(p, c));
+    const lacking = parties.filter((p) => !holdsAny(p));
+    const named = (p: string | undefined): string => p ?? 'an unattributable party';
+
+    const singlePartyLine = (only: string | undefined): string =>
+      only === undefined
         ? ' This call could not be attributed to any surface (no grantee), and an ' +
           'unattributable caller holds nothing.'
         : holders.length > 0
-          ? ` It is held by ${holders.join(', ')}; this caller (${grantee}) does not hold it.`
-          : ` No grantee holds it, including this caller (${grantee}).`;
+          ? ` It is held by ${holders.join(', ')}; this caller (${only}) does not hold it.`
+          : ` No grantee holds it, including this caller (${only}).`;
+
+    const multiPartyLine = (): string => {
+      const chain = parties.map(named).join(' → ');
+      const heldBy = holders.length > 0 ? ` It is held by ${holders.join(', ')}.` : '';
+      if (parties.some((p) => p === undefined)) {
+        return `${heldBy} This call is ${chain}, and every party must hold the same capability` +
+          ' — one of them could not be attributed to any surface, and an unattributable party' +
+          ' holds nothing.';
+      }
+      if (lacking.length > 0) {
+        return `${heldBy} This call is ${chain}, and every party must hold the same capability;` +
+          ` ${lacking.map(named).join(' and ')} ${lacking.length === 1 ? 'does' : 'do'} not hold it.`;
+      }
+      // Every party holds one — just not the same one.
+      return `${heldBy} This call is ${chain}: every party holds a declaring capability, but not` +
+        ' the SAME one, and two partial authorities do not combine into one neither was granted.';
+    };
+
+    const askerLine = singleParty ? singlePartyLine(parties[0]) : multiPartyLine();
 
     return {
       capability: primary,
@@ -619,8 +665,11 @@ export function checkCheckpointSequence(
    * WHO is asking (fixes-082526 phase 2): an agent name, 'chat', or
    * 'mcp-client', threaded from the surface that knows. Undefined means the
    * caller could not be attributed — which holds nothing, fail closed.
+   *
+   * §D.7 (ruled 2026-08-26): several, for a contributed dispatch — every party
+   * to the call must hold the same declaring capability. See `ReachParties`.
    */
-  grantee?: string
+  grantee?: ReachParties
 ): SequenceRefusal | null {
   try {
     // WP-20g rule 7, FIRST: a grant is prior to a run. Every rule below governs

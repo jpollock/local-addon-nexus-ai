@@ -71,6 +71,17 @@ export class AgentDispatcher {
     toolName: string,
     args: unknown,
     task?: { id?: string; causation?: string },
+    /**
+     * §D.7 (ruled 2026-08-26, C): WHO initiated this call — an agent name,
+     * `chat`, or `mcp-client`. `agentName` above is the tool's OWNER, never
+     * the caller: `contributedRegistry.get(agentName, toolName)` requires the
+     * pair to match, so the two coincide only when an agent calls its own
+     * tool. Omitting it is UNATTRIBUTED, not "the contributor asked" — a
+     * caller the platform cannot establish holds nothing, and crediting the
+     * contributor is the escape this ruling closes.
+     * Spec: docs/planning/2026-08-26-cross-agent-reach.md
+     */
+    caller?: string,
   ): Promise<McpToolResult> {
     // A disabled agent must not run via ANY path — checked before tool lookup so a
     // disabled agent never leaks which tools it has. This mirrors the guard already
@@ -99,12 +110,23 @@ export class AgentDispatcher {
     // wired only there would be a guard with a documented bypass. The name is
     // the QUALIFIED one, matching what the audit and the ledger record, so a
     // runbook claiming a contributed tool must name it the same way.
-    // Phase 2 (fixes-082526): the dispatcher knows exactly who is asking.
-    const sequence = checkCheckpointSequence(`${agentName}/${toolName}`, task?.id, agentName);
+    // Phase 2 (fixes-082526): the dispatcher is TOLD who is asking. It cannot
+    // infer it — this comment used to claim it knew, while passing the tool's
+    // owner, which is the §D.7 default nobody ruled (corrected 2026-08-26).
+    // Both parties go to the gate; it requires one capability held by all.
+    const parties = caller === agentName ? [agentName] : [caller, agentName];
+    const sequence = checkCheckpointSequence(`${agentName}/${toolName}`, task?.id, parties);
     if (sequence) {
       try {
         this.services.operationAuditLog?.log({
           operation: `${agentName}/${toolName}`,
+          // The compliance record's question is "who asked", and until this
+          // packet a cross-agent act read as if the contributor did it
+          // unprompted. Only when they differ: a same-agent call gains nothing
+          // from repeating itself. (The LEDGER's `actor` is deliberately left
+          // as the executor — executor-vs-initiator has ADR weight and is
+          // unruled; see the spec's Scope section.)
+          ...(caller && caller !== agentName ? { initiatedBy: caller } : {}),
           target: args && typeof args === 'object'
             ? String((args as Record<string, unknown>).site ?? 'unknown')
             : 'unknown',

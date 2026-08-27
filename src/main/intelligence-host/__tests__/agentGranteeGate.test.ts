@@ -114,3 +114,86 @@ describe('agentNameFromActorId — the pinned inverse', () => {
     expect(agentNameFromActorId('')).toBeUndefined();
   });
 });
+
+/**
+ * §D.7 · cross-agent reach — the conjunction (owner ruling 2026-08-26, C).
+ * Spec: docs/planning/2026-08-26-cross-agent-reach.md
+ *
+ * A contributed-tool call has TWO parties: the caller that initiated and the
+ * contributor whose code executes. Actor-scoping shipped checking only the
+ * contributor, which is the escape §D.7 named — a capability granted to
+ * log-processor reachable by anything that declares one of its tools.
+ */
+describe('every party to a contributed call must hold the SAME capability', () => {
+  const CALLER = 'seo-insights';
+  const CONTRIBUTOR = 'log-processor';
+  // Declared by BOTH cap.promote_environment and cap.bulk_plugin_update
+  // (law/runbooks/promotion-execute.md:48, bulk-plugin-update.md:49) — the
+  // only shape that can tell a per-party disjunction from a cross-party one.
+  const BACKUP_TOOL = 'wpe_backup_and_verify';
+  const BULK = 'cap.bulk_plugin_update';
+
+  function grantPairs(...pairs: Array<[string, string]>): void {
+    kv.set(STORAGE_KEYS.SETTINGS, {
+      capabilityGrants: pairs.map(([grantee, capability]) => ({ grantee, capability, enabled: true })),
+    });
+    syncCapabilityGrants({ core, storage: storage(), logger: silent });
+  }
+
+  it('THE SHIPPED HOLE: the contributor holding it does not open the tool for the caller', () => {
+    grantPairs([CONTRIBUTOR, PROMOTE]);
+    const refusal = checkCheckpointSequence(PROMOTE_TOOL, undefined, [CALLER, CONTRIBUTOR])!;
+    expect(refusal.reason).toBe('not-granted');
+    // The remedy is only findable if the message says WHICH party is missing it.
+    expect(refusal.message).toContain(CALLER);
+  });
+
+  it('the caller alone is not enough either — the contributor executes, so it holds it too', () => {
+    grantPairs([CALLER, PROMOTE]);
+    const refusal = checkCheckpointSequence(PROMOTE_TOOL, undefined, [CALLER, CONTRIBUTOR])!;
+    expect(refusal.reason).toBe('not-granted');
+    expect(refusal.message).toContain(CONTRIBUTOR);
+  });
+
+  it('both parties holding the same declaring capability passes', () => {
+    grantPairs([CALLER, PROMOTE], [CONTRIBUTOR, PROMOTE]);
+    expect(checkCheckpointSequence(PROMOTE_TOOL, undefined, [CALLER, CONTRIBUTOR])?.reason ?? null)
+      .not.toBe('not-granted');
+  });
+
+  it('two DIFFERENT declaring capabilities do not combine into an authority neither was granted', () => {
+    grantPairs([CALLER, PROMOTE], [CONTRIBUTOR, BULK]);
+    expect(checkCheckpointSequence(BACKUP_TOOL, undefined, [CALLER, CONTRIBUTOR])?.reason)
+      .toBe('not-granted');
+    // …and the same pair on ONE capability is the passing case, so the refusal
+    // above is the combination rule and not the tool being unreachable.
+    grantPairs([CALLER, BULK], [CONTRIBUTOR, BULK]);
+    expect(checkCheckpointSequence(BACKUP_TOOL, undefined, [CALLER, CONTRIBUTOR])?.reason ?? null)
+      .not.toBe('not-granted');
+  });
+
+  it('an unattributable party refuses the call however well-granted the other is', () => {
+    grantPairs([CONTRIBUTOR, PROMOTE]);
+    const refusal = checkCheckpointSequence(PROMOTE_TOOL, undefined, [undefined, CONTRIBUTOR])!;
+    expect(refusal.reason).toBe('not-granted');
+    expect(refusal.message).toMatch(/unattributable|could not be attributed/i);
+  });
+
+  it('caller === contributor collapses to the single check — the same-agent path is unchanged', () => {
+    grantPairs([AGENT, PROMOTE]);
+    expect(checkCheckpointSequence(PROMOTE_TOOL, undefined, [AGENT, AGENT])?.reason ?? null)
+      .not.toBe('not-granted');
+    expect(checkCheckpointSequence(PROMOTE_TOOL, undefined, [AGENT])?.reason ?? null)
+      .not.toBe('not-granted');
+  });
+
+  it('a single grantee passed as a bare string behaves exactly as before', () => {
+    grantPairs([AGENT, PROMOTE]);
+    expect(checkCheckpointSequence(PROMOTE_TOOL, undefined, AGENT)?.reason ?? null).not.toBe('not-granted');
+    expect(checkCheckpointSequence(PROMOTE_TOOL, undefined, CHAT_GRANTEE)?.reason).toBe('not-granted');
+  });
+
+  it('reads stay untouched on the cross-agent path too — the parity floor is per surface', () => {
+    expect(checkCheckpointSequence('nexus_list_sites', undefined, [CALLER, CONTRIBUTOR])).toBeNull();
+  });
+});

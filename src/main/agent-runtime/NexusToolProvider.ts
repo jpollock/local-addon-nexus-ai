@@ -5,6 +5,7 @@ import type { ProviderToolDefinition } from '../chat/providers/types';
 import type { EventLog } from '../logging/eventLog';
 import { getToolSafety, APPROVAL_REQUIRED_TOOLS } from '../mcp/safety';
 import { isMutatingTool, mutationTarget } from './toolEvents';
+import { agentNameFromActorId } from '../intelligence-host/agentTaskFrame';
 
 /** What an agent run needs in order for its tool calls to appear in the structured log. */
 export interface ToolEventContext {
@@ -327,8 +328,19 @@ export class NexusToolProvider implements ToolProvider {
       // full agent context for the contributing agent and executes the handler.
       const contributed = this.services.contributedRegistry?.list().find(t => t.toolName === name);
       if (contributed && this.services.dispatcher) {
+        // §D.7 · the caller is THIS run's agent, taken from the frame's actor
+        // (kind-gated, then inverted) — the same derivation ToolRegistry uses,
+        // so one identity reaches the gate by one route. Unframed means
+        // unattributable, which holds nothing: honest, and fail closed.
+        // The frame also goes through now, so a dispatched act joins the run
+        // that caused it instead of arriving detached.
+        const callerAgent = this.frame?.actor?.kind === 'agent'
+          ? agentNameFromActorId(this.frame.actor.id)
+          : undefined;
         const dispatchResult = await this.services.dispatcher.dispatch(
           contributed.agentName, contributed.toolName, args,
+          this.frame ? { id: this.frame.id } : undefined,
+          callerAgent,
         );
         const dispatchDuration = Date.now() - startTime;
         if (dispatchResult.isError) {

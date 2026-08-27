@@ -21,6 +21,7 @@ import {
   MCP_PROTOCOL_VERSION,
   MCP_CONNECTION_INFO_FILE,
 } from '../../common/constants';
+import { MCP_CLIENT_GRANTEE } from '../intelligence-host/capabilityGrants';
 
 export interface McpServerOptions {
   services: NexusServices;
@@ -370,7 +371,12 @@ export class McpServer {
             delete dispatchArgs._confirmationToken;
 
             const { agentName, toolName: agentToolName } = registered;
-            const result = await this.dispatcher.dispatch(agentName, agentToolName, dispatchArgs);
+            // §D.7 · this surface is the machine-interface class, never the
+            // agent whose tool it names. Crediting the contributor here let an
+            // external caller reach a capability granted to that agent.
+            const result = await this.dispatcher.dispatch(
+              agentName, agentToolName, dispatchArgs, undefined, MCP_CLIENT_GRANTEE,
+            );
             return this.jsonRpcResult(id, result);
           }
         }

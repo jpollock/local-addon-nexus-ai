@@ -487,6 +487,9 @@ export class ChatService {
           const result = await dispatcher.dispatch(
             registered.agentName, registered.toolName, toolCall.arguments ?? {},
             { id: taskId },
+            // §D.7 · chat asks as chat here, exactly as it does at its own
+            // guard call and at the registry — one identity, every route.
+            CHAT_GRANTEE,
           );
           const text = result.content.map((c: { text: string }) => c.text).join('\n');
           this.emit(sessionId(session), {

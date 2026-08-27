@@ -1074,7 +1074,11 @@ export function registerIpcHandlers(deps: IpcHandlerDeps): void {
     const dispatcher = (deps as any).nexusServices?.dispatcher;
     if (!dispatcher) return { content: [{ type: 'text', text: 'Agent runtime not ready.' }], isError: true };
     try {
-      return await dispatcher.dispatch(agentId, toolName, args ?? {});
+      // §D.7 · the workspace UI runs the agent's OWN tool — the registry
+      // requires the (agentId, toolName) pair to match, so caller and
+      // contributor coincide here and the conjunction collapses to the single
+      // check this path always had.
+      return await dispatcher.dispatch(agentId, toolName, args ?? {}, undefined, agentId);
     } catch (err) {
       localLogger.error(`[NexusAI] agent tool invoke failed (${agentId}/${toolName}):`, (err as Error).message);
       return { content: [{ type: 'text', text: `⚠ ${(err as Error).message}` }], isError: true };
