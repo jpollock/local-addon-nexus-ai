@@ -76,10 +76,24 @@ describe('Bootstrap System', () => {
     });
 
     it('should return false if Local.app does not exist', () => {
+      // Pin the platform, as the sibling case above does. This assertion is
+      // macOS-specific by name — Local.app — but without the pin it inherited
+      // the host's real platform and passed only on macOS and Windows.
+      //
+      // On Linux, isLocalInstalled() takes the `which local` branch
+      // (process.ts:140). This suite does jest.mock('child_process'), so the
+      // auto-mocked execSync returns undefined instead of throwing, the branch
+      // returns true unconditionally, and the mocked fs.existsSync below is
+      // never consulted. It failed on CI for exactly that reason.
+      const originalPlatform = process.platform;
+      Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+
       (fs.existsSync as jest.Mock).mockReturnValue(false);
 
       const result = isLocalInstalled();
       expect(result).toBe(false);
+
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
     });
   });
 
