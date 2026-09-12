@@ -44,6 +44,22 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    # SHARDED ACROSS FOUR RUNNERS. A single runner is 4 cores, so jest gets
+    # maxWorkers=3 against 698 suites and 1,570 TypeScript files that ts-jest
+    # compiles from cold on every run (only node_modules is cached, not jest's
+    # transform output). Measured 2026-09-12: serial 105 min (cancelled
+    # unfinished), single-runner parallel ~30 min. Four shards run concurrently
+    # on their own 4 cores each.
+    #
+    # Verified before adopting: --shard partitions 698 suites into
+    # 175/175/174/174 with zero overlap and no suite dropped.
+    #
+    # fail-fast: false so one failing shard does not cancel the other three —
+    # a partial failure list is how you end up fixing one bug per CI round.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (T-CI-HERMETIC: pinned to SHA)
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4 (T-CI-HERMETIC: pinned to SHA)
@@ -54,7 +70,7 @@ jobs:
       # Fast, fully-mocked unit + main suites (jest.ci.config.js excludes known-failing suites —
       # see that file and docs/planning/2026-08-12-p1-plan.md). GitHub sets CI=true, which
       # disables outbound telemetry so no test makes a real network call.
-      - run: npm run test:ci
+      - run: npm run test:ci -- --shard=${{ matrix.shard }}/4
 
   secret-scan:
     runs-on: ubuntu-latest
