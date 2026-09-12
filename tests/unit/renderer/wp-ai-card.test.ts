@@ -14,3 +14,28 @@ describe('WordPress AI card', () => {
   // deleted rather than updated for the two-connector world: a tautology that
   // tracks the implementation is worse than no test, because it reads as cover.
 });
+
+// v0.6.0 excision — permanent pin, added after the removal rather than driving
+// it (the removal was driven by Task 4's IW absence test, which this overlaps).
+// Non-vacuity was verified explicitly: these three assertions were run against
+// the pre-excision NexusSiteTab.tsx at 66becbe9 and the first two FAILED there.
+describe('connector picker offers two options (v0.6.0 excision)', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(
+    path.join(__dirname, '../../../src/renderer/components/NexusSiteTab.tsx'), 'utf8',
+  );
+
+  it("declares no 'power' connector", () => {
+    expect(src).not.toMatch(/'power'/);
+  });
+
+  it('names neither WP Engine Power nor the Hub Plugin', () => {
+    expect(src).not.toMatch(/WP Engine Power|Hub Plugin/);
+  });
+
+  it('still offers both retained connectors', () => {
+    expect(src).toMatch(/'local-gateway'/);
+    expect(src).toMatch(/'direct'/);
+  });
+});
