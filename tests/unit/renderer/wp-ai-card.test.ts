@@ -4,27 +4,13 @@
 import { IPC_CHANNELS } from '../../../src/common/constants';
 
 describe('WordPress AI card', () => {
-  it('SETUP_AI and IW_CONNECT channels exist for card actions', () => {
+  it('SETUP_AI channel exists for card actions', () => {
     expect(IPC_CHANNELS.SETUP_AI).toBe('nexus-ai:setup-ai');
-    expect(IPC_CHANNELS.IW_CONNECT).toBe('nexus-ai:iw:connect');
-    expect(IPC_CHANNELS.IW_DISCONNECT).toBe('nexus-ai:iw:disconnect');
   });
 
-  it('detectWpAiConnector precedence: power > local-gateway > direct > null', () => {
-    // Mirrors the pure function logic in NexusSiteTab.tsx
-    const cases: Array<[boolean, boolean, 'active' | 'inactive' | null, 'active' | 'inactive' | null, string]> = [
-      [true,  true,  'active', null,     'power'],
-      [false, false, 'active', 'active', 'local-gateway'],
-      [false, false, 'active', null,     'direct'],
-      [false, false, null,     null,     'null'],
-    ];
-    for (const [iwConn, wpApproved, aiPlugin, gateway, expected] of cases) {
-      // Mirror the logic from detectWpAiConnector
-      let result: string = 'null';
-      if (iwConn && wpApproved) result = 'power';
-      else if (gateway === 'active') result = 'local-gateway';
-      else if (aiPlugin === 'active') result = 'direct';
-      expect(result).toBe(expected);
-    }
-  });
+  // NOTE: this file previously also carried a "detectWpAiConnector precedence"
+  // case. It was vacuous — it re-implemented the precedence inline and asserted
+  // against its own copy, so it could never fail for a production change. It is
+  // deleted rather than updated for the two-connector world: a tautology that
+  // tracks the implementation is worse than no test, because it reads as cover.
 });

@@ -136,7 +136,7 @@ export const deepRefreshHandler: McpToolHandler = {
     const wpSettingsJsonStr = Object.keys(wpSettingsMap).length > 0
       ? JSON.stringify(wpSettingsMap) : null;
 
-    // Determine which post types to count. Use wpe_kb_settings_post_types (set by Hub Plugin)
+    // Determine which post types to count. Use wpe_kb_settings_post_types (set server-side)
     // if available — it lists the types the site actually uses. Fall back to built-in types.
     // We cannot use --post_type=any because WPE SSH runs with --skip-plugins, so WordPress
     // only knows about built-in types. Explicit type names query the DB directly and work.

@@ -2,8 +2,6 @@
 // and verify the logic by testing the expected state machine transitions.
 // Since it's a module-level function we test it indirectly via state expectations.
 
-import type { IwConnectionStatus } from '../../../src/common/types';
-
 // Simulate the detection logic (mirrors the implementation)
 type Connector = 'power' | 'local-gateway' | 'direct' | null;
 
@@ -47,5 +45,24 @@ describe('WP AI connector detection', () => {
 
   it('returns null when Hub connected but wpengine not yet approved', () => {
     expect(detect('active', undefined, true, false)).toBe('direct');
+  });
+});
+
+// v0.6.0 excision. The IW status read, connect and disconnect flows are gone
+// from the main process, so a renderer still invoking those channels would
+// fail SILENTLY at runtime — ipcRenderer.invoke on an unregistered channel
+// rejects, and both call sites here swallow with .catch(() => null). Asserted
+// against the source because these are React 16 class components whose IW
+// branches were only reachable with a live ipc mock.
+describe('Intelligent Web renderer surface is absent (v0.6.0 excision)', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const read = (rel: string) =>
+    fs.readFileSync(path.join(__dirname, '../../../src/renderer/components', rel), 'utf8');
+
+  it.each(['SiteNexusSection.tsx', 'NexusSiteTab.tsx'])('%s has no IW references', (file) => {
+    expect(read(file)).not.toMatch(
+      /iwStatus|iwConnecting|iwPollInterval|IwConnectionStatus|IW_GET_STATUS|IW_CONNECT|IW_DISCONNECT/,
+    );
   });
 });

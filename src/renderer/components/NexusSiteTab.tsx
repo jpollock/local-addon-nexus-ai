@@ -8,7 +8,7 @@
  */
 import * as React from 'react';
 import { IPC_CHANNELS, UI_COLORS } from '../../common/constants';
-import type { NexusSettings, SiteAIConfig, DbScanResult, IwConnectionStatus } from '../../common/types';
+import type { NexusSettings, SiteAIConfig, DbScanResult } from '../../common/types';
 
 export interface NexusSiteTabProps {
   site: { id: string; name: string; path: string; status?: string };
@@ -49,10 +49,10 @@ interface NexusSiteTabState {
   aiContextStatus: { exists: boolean; ageString?: string; filePath?: string } | null;
   generatingContext: boolean;
   siteAIConfig: SiteAIConfig | null;
-  /** Which WP AI connector is currently active — derived from aiStatus + iwStatus */
-  wpAiConnector: 'power' | 'local-gateway' | 'direct' | null;
+  /** Which WP AI connector is currently active — derived from aiStatus */
+  wpAiConnector: 'local-gateway' | 'direct' | null;
   /** User's pending connector choice in the picker (State 0) */
-  wpAiPickerChoice: 'power' | 'local-gateway' | 'direct' | null;
+  wpAiPickerChoice: 'local-gateway' | 'direct' | null;
   /** For Direct path: which AI provider the user picked */
   wpAiDirectProvider: 'anthropic' | 'openai' | 'google' | 'ollama' | null;
   /** True while any WP AI setup step is running */
@@ -65,10 +65,6 @@ interface NexusSiteTabState {
   keyStatus: Record<string, string>;
   dbScan: DbScanResult | null;
   dbScanning: boolean;
-  iwStatus: IwConnectionStatus | null;
-  iwConnecting: boolean;
-  iwPollInterval: ReturnType<typeof setInterval> | null;
-  iwError: string | null;
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -206,10 +202,8 @@ const styles = {
 
 function detectWpAiConnector(
   aiStatus: SiteAiStatus | null,
-  iwStatus: IwConnectionStatus | null,
-): 'power' | 'local-gateway' | 'direct' | null {
+): 'local-gateway' | 'direct' | null {
   if (!aiStatus) return null;
-  if (iwStatus?.connected && iwStatus?.wpEngineConnectorApproved) return 'power';
   if (aiStatus.gatewayProvider === 'active') return 'local-gateway';
   if (aiStatus.aiPlugin === 'active') return 'direct';
   return null;
@@ -244,10 +238,6 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     keyStatus: {},
     dbScan: null,
     dbScanning: false,
-    iwStatus: null,
-    iwConnecting: false,
-    iwPollInterval: null,
-    iwError: null,
   };
 
   componentDidMount(): void {
@@ -278,8 +268,8 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       this.fetchData();
     }
     // If connector changed (e.g. after setup completes), clear picker choice
-    const prevConnector = detectWpAiConnector(prevState.aiStatus ?? null, prevState.iwStatus ?? null);
-    const currConnector = detectWpAiConnector(this.state.aiStatus ?? null, this.state.iwStatus ?? null);
+    const prevConnector = detectWpAiConnector(prevState.aiStatus ?? null);
+    const currConnector = detectWpAiConnector(this.state.aiStatus ?? null);
     if (prevConnector !== currConnector && currConnector !== null) {
       this.setState({ wpAiPickerChoice: null, wpAiSetupError: null });
     }
@@ -293,7 +283,6 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     if (this._onIndexProgress) {
       this.props.electron.ipcRenderer.removeListener(IPC_CHANNELS.INDEX_PROGRESS, this._onIndexProgress);
     }
-    if (this.state.iwPollInterval) clearInterval(this.state.iwPollInterval);
   }
 
   fetchData = async (): Promise<void> => {
@@ -377,28 +366,22 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       // Non-fatal
     }
 
-    const [iwStatusResult, keyStatusResult] = await Promise.all([
-      ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null),
-      ipc.invoke(IPC_CHANNELS.GET_API_KEY_STATUS).catch(() => ({})),
-    ]);
+    const keyStatusResult = await ipc.invoke(IPC_CHANNELS.GET_API_KEY_STATUS).catch(() => ({}));
     if (!this.mounted) return;
-    const iwStatusTyped = (iwStatusResult as IwConnectionStatus | null) ?? null;
 
-    // For halted sites, live data (aiStatus, iwStatus) may be absent.
-    // Fall back to stored per-site SiteAIConfig so State 2 shows correctly.
-    const liveConnector = detectWpAiConnector(rawAiStatus, iwStatusTyped);
+    // For halted sites, live aiStatus may be absent. Fall back to the stored
+    // per-site SiteAIConfig so State 2 shows correctly.
+    const liveConnector = detectWpAiConnector(rawAiStatus);
     const storedCfg = this.state.siteAIConfig;
     const DIRECT_PROVIDERS = ['anthropic', 'openai', 'google', 'ollama'];
-    const fallbackConnector: 'power' | 'local-gateway' | 'direct' | null = liveConnector ?? (() => {
+    const fallbackConnector: 'local-gateway' | 'direct' | null = liveConnector ?? (() => {
       if (!storedCfg) return null;
-      if ((storedCfg as any).provider === 'power') return 'power';
       if ((storedCfg as any).useLocalGateway) return 'local-gateway';
       if (DIRECT_PROVIDERS.includes((storedCfg as any).provider ?? '')) return 'direct';
       return null;
     })();
 
     this.setState({
-      iwStatus: iwStatusTyped,
       wpAiConnector: fallbackConnector,
       keyStatus: (keyStatusResult as Record<string, string>) ?? {},
     });
@@ -726,16 +709,12 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
 
   renderWpAiCard(): React.ReactNode {
     const {
-      aiStatus, iwStatus, iwConnecting, wpAiPickerChoice, wpAiDirectProvider, wpAiSettingUp, wpAiSetupError,
+      aiStatus, wpAiPickerChoice, wpAiDirectProvider, wpAiSettingUp, wpAiSetupError,
       useLocalGateway, globalAIProvider, keyStatus,
     } = this.state;
 
     const activeConnector = this.state.wpAiConnector;
-    // If Hub is connected but WP AI isn't fully set up yet, auto-show Power steps
-    // without requiring the user to open the picker. Handles sites connected via
-    // WP Admin Hub onboarding independently of Nexus.
-    const autoWorkingConnector: 'power' | null = (iwStatus?.connected && !activeConnector) ? 'power' : null;
-    const workingConnector: 'power' | 'local-gateway' | 'direct' | null = wpAiPickerChoice ?? activeConnector ?? autoWorkingConnector;
+    const workingConnector: 'local-gateway' | 'direct' | null = wpAiPickerChoice ?? activeConnector;
     // isEditing = true only when CHANGING an existing connector, not during fresh setup
     const isEditing = wpAiPickerChoice !== null && activeConnector !== null;
 
@@ -835,9 +814,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     // ─── State 2 — active connector ───────────────────────────────────────────
     // State 2 only when truly active AND not in edit mode (user clicked "Change →")
     if (activeConnector !== null && !isEditing) {
-      const connectorBadge = activeConnector === 'power'
-        ? React.createElement('span', { style: { ...badgeBase, background: 'rgba(14,202,212,.12)', color: '#0ECAD4' } }, 'Power')
-        : activeConnector === 'local-gateway'
+      const connectorBadge = activeConnector === 'local-gateway'
           ? React.createElement('span', { style: { ...badgeBase, background: 'rgba(75,85,99,.3)', color: '#9ca3af' } }, 'Gateway')
           : React.createElement('span', { style: { ...badgeBase, background: 'rgba(37,99,235,.15)', color: '#60a5fa' } }, 'Direct');
 
@@ -881,26 +858,6 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
         }, 'WP Admin →'),
       );
 
-      const powerRow = activeConnector === 'power'
-        ? React.createElement('div', { style: activeRowStyle },
-            React.createElement('span', { style: dotGreen }),
-            React.createElement('div', { style: { flex: 1 } },
-              React.createElement('div', { style: { fontSize: 12, fontWeight: 600, color: '#e6edf3' } }, 'Hub Plugin connected'),
-              React.createElement('div', { style: { fontSize: 11, color: '#6b7280' } },
-                iwStatus?.projectId ? `Project: ${iwStatus.projectId}` : 'Power connected',
-              ),
-            ),
-            React.createElement('button', {
-              style: {
-                fontSize: 11, padding: '3px 10px', borderRadius: 4,
-                border: '1px solid #374151', background: 'none', color: '#9ca3af',
-                cursor: 'pointer', fontFamily: 'inherit',
-              },
-              onClick: () => this.handleIwDisconnect(),
-            }, 'Disconnect'),
-          )
-        : null;
-
       // Footer row: Change connector + Remove WP AI
       // Footer: Change / Remove — both disabled while any operation is running
       const footerRow = React.createElement('div', {
@@ -938,7 +895,6 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       return React.createElement('div', { style: { ...styles.cardFull, padding: 0, borderColor: '#1e4620' } },
         head,
         wpAiRow,
-        powerRow,
         footerRow,
       );
     }
@@ -950,8 +906,6 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       // the picker so they can choose a DIFFERENT connector, not the current one's steps.
       const anyStepProgress = !isEditing && !!(
         wpAiSettingUp ||
-        iwConnecting ||          // Hub connect in progress (Power path)
-        iwStatus?.connected ||
         (aiStatus?.aiPlugin && aiStatus.aiPlugin !== 'not_installed') ||
         (aiStatus?.gatewayProvider && aiStatus.gatewayProvider !== 'not_installed')
       );
@@ -975,9 +929,8 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
 
       // ── Picker view — connector not yet started ─────────────────────────────
       if (!anyStepProgress) {
-        const OPTIONS: Array<{ id: 'power' | 'local-gateway' | 'direct'; name: string; desc: string }> = [
-          { id: 'power', name: 'WP Engine Power', desc: 'Use your WPE account AI — no API key needed. Connect via Hub Plugin.' },
-          { id: 'local-gateway', name: 'Local AI Gateway', desc: 'Route through Nexus to your configured provider (Anthropic, OpenAI, Gemini, Ollama, Power).' },
+        const OPTIONS: Array<{ id: 'local-gateway' | 'direct'; name: string; desc: string }> = [
+          { id: 'local-gateway', name: 'Local AI Gateway', desc: 'Route through Nexus to your configured provider (Anthropic, OpenAI, Gemini, Ollama).' },
           { id: 'direct', name: 'Direct API', desc: 'Connect Anthropic, OpenAI, Google Gemini, or Ollama directly to this site.' },
         ];
 
@@ -1070,9 +1023,9 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
                   fontFamily: 'inherit', fontWeight: 500,
                   opacity: wpAiSettingUp ? 0.7 : 1,
                 },
-                disabled: !!wpAiSettingUp || !!iwConnecting,
-                onClick: (wpAiSettingUp || iwConnecting) ? undefined : () => this.handleWpAiConnect(),
-              }, (wpAiSettingUp || iwConnecting) ? 'Setting up…' : 'Set up →'),
+                disabled: !!wpAiSettingUp,
+                onClick: wpAiSettingUp ? undefined : () => this.handleWpAiConnect(),
+              }, wpAiSettingUp ? 'Setting up…' : 'Set up →'),
             ),
           ),
           errorEl,
@@ -1082,38 +1035,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       // ── Steps view — setup in progress or partially complete ───────────────
       let steps: React.ReactElement[] = [];
 
-      if (workingConnector === 'power') {
-        steps = [
-          renderStepRow(
-            1,
-            'Connect to WP Engine Power',
-            'Installs Hub Plugin, opens WP Admin to complete OAuth.',
-            iwStatus?.connected === true,
-            () => this.handleIwConnect(),
-            'Connect',
-            false,
-          ),
-          renderStepRow(
-            2,
-            'Install WP AI & enable features',
-            'WP AI plugin + all AI experiments. Power handles auth — no key needed.',
-            aiStatus?.aiPlugin === 'active',
-            () => this.handleWpAiSetup('power'),
-            'Setup',
-            !iwStatus?.connected,
-          ),
-          renderStepRow(
-            3,
-            'Authorise Power connector',
-            'Allows the WP Engine connector to serve AI requests.',
-            iwStatus?.wpEngineConnectorApproved === true,
-            undefined,
-            undefined,
-            aiStatus?.aiPlugin !== 'active',
-            'Completed automatically with step 2.',
-          ),
-        ];
-      } else if (workingConnector === 'local-gateway') {
+      if (workingConnector === 'local-gateway') {
         steps = [
           renderStepRow(
             1,
@@ -1169,8 +1091,8 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
         };
       }
       return {
-        label: 'Connect to Power',
-        onClick: () => this.setState({ wpAiPickerChoice: 'power' }),
+        label: 'Set up WordPress AI',
+        onClick: () => this.setState({ wpAiPickerChoice: 'local-gateway' }),
       };
     })();
 
@@ -1205,7 +1127,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
             border: '1px solid #374151', background: 'none',
             color: '#9ca3af', cursor: 'pointer', fontFamily: 'inherit',
           },
-          onClick: () => this.setState({ wpAiPickerChoice: 'power' }),
+          onClick: () => this.setState({ wpAiPickerChoice: 'local-gateway' }),
         }, 'Other options ↓'),
       ),
       wpAiSetupError ? React.createElement('div', {
@@ -1259,46 +1181,6 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
       ),
     );
   }
-
-  handleIwConnect = async (): Promise<void> => {
-    const ipc = this.props.electron.ipcRenderer;
-    this.setState({ iwConnecting: true, iwError: null });
-    try {
-      const connectResult = await ipc.invoke(IPC_CHANNELS.IW_CONNECT, this.props.site.id) as { ok: boolean; error?: string } | null;
-      if (!connectResult?.ok) {
-        if (this.mounted) this.setState({ iwConnecting: false, iwError: connectResult?.error ?? 'Connect failed' });
-        return;
-      }
-    } catch (err: any) {
-      if (this.mounted) this.setState({ iwConnecting: false, iwError: String(err?.message ?? err) });
-      return;
-    }
-    if (!this.mounted) return;
-    const started = Date.now();
-    const interval = setInterval(async () => {
-      if (!this.mounted) { clearInterval(interval); return; }
-      const status = await ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null) as IwConnectionStatus | null;
-      if (status?.connected || Date.now() - started > 180_000) {
-        clearInterval(interval);
-        this.setState({ iwStatus: status, iwConnecting: false, iwPollInterval: null });
-      } else if (status) {
-        this.setState({ iwStatus: status });
-      }
-    }, 2000);
-    this.setState({ iwPollInterval: interval });
-  };
-
-  handleIwDisconnect = async (): Promise<void> => {
-    const ipc = this.props.electron.ipcRenderer;
-    try {
-      await ipc.invoke(IPC_CHANNELS.IW_DISCONNECT, this.props.site.id);
-      const status = await ipc.invoke(IPC_CHANNELS.IW_GET_STATUS, this.props.site.id).catch(() => null) as IwConnectionStatus | null;
-      if (!this.mounted) return;
-      this.setState({ iwStatus: status });
-    } catch {
-      // Best-effort
-    }
-  };
 
   /** Fresh install (no existing config) — always uses SETUP_AI. */
   handleWpAiSetup = async (provider: string): Promise<void> => {
@@ -1358,10 +1240,7 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
     const { wpAiPickerChoice, wpAiDirectProvider, wpAiConnector } = this.state;
     const isSwitch = wpAiConnector !== null; // true = changing existing config
 
-    if (wpAiPickerChoice === 'power') {
-      // Power always uses the Hub connect + SETUP_AI flow regardless of switching
-      this.handleIwConnect();
-    } else if (wpAiPickerChoice === 'local-gateway') {
+    if (wpAiPickerChoice === 'local-gateway') {
       if (isSwitch) {
         await this.handleWpAiSwitch('local-gateway');
       } else {
@@ -1375,10 +1254,6 @@ export class NexusSiteTab extends React.Component<NexusSiteTabProps, NexusSiteTa
         await this.handleWpAiSetup(provider);
       }
     }
-  };
-
-  handleWpAiDisconnect = async (): Promise<void> => {
-    this.handleIwDisconnect();
   };
 
   handleWpAiChange = (): void => {
