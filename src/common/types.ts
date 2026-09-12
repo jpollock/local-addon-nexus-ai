@@ -329,7 +329,7 @@ export interface IpcResponse<T = unknown> {
 // Settings
 // ---------------------------------------------------------------------------
 
-export type AIProvider = 'anthropic' | 'openai' | 'google' | 'ollama' | 'local-gateway' | 'power';
+export type AIProvider = 'anthropic' | 'openai' | 'google' | 'ollama' | 'local-gateway';
 
 /** Per-environment on/off flags for one WPE operation type */
 export interface WpeEnvFlags {

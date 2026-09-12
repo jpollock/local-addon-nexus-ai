@@ -119,7 +119,8 @@ export function buildAgentContext(deps: AgentContextDeps): {
   // through a server built for a completely different caller. Routing agents through it anyway
   // meant every agent's AI calls broke the moment a user turned useLocalGateway on for their
   // sites: the gateway's own provider routing (AIGatewayRoutes.ts) only recognized a subset of
-  // providers, so an agent configured for e.g. 'power' 503'd with "No API key configured" even
+  // providers, so an agent configured for a provider it did not recognise 503'd with
+  // "No API key configured" even
   // though a real key was present — the gateway just isn't the right layer for this caller.
   const effectiveProvider = resolvedProvider.provider;
   const aiProvider = getProvider(effectiveProvider);

@@ -117,7 +117,7 @@ export type ChatStreamEvent =
  * Tokens a single model call consumed, as reported by the provider.
  *
  * Both fields are optional and must stay that way. Two adapters report nothing at all —
- * `local-gateway` because it never yields a `done` event for usage to ride on, and `power`
+ * `local-gateway` because it never yields a `done` event for usage to ride on
  * because its chunks carry no usage field and its request never asks for one — and a provider
  * may report one direction without the other. A missing count is missing: never coerce it to 0,
  * which reads as "this call was free" and is a lie about a real cost.

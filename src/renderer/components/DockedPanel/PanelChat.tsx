@@ -322,18 +322,6 @@ function truncateAtWord(text: string, maxLen: number): string {
 }
 
 /**
- * Provider labels for the P0-5 disclosure line.
- *
- * TYPED `Record<AIProvider, string>` ON PURPOSE. This map lost track of the
- * union once already: `power` was added to `AIProvider` and not to this
- * object, so `providerLabel` fell through to `?? id` and the disclosure read
- * "power · sends site data" — a config key on the one line whose job is
- * naming, recognisably, who receives the user's site data. A disclosure that
- * names nothing a person recognises is the failure the line exists to
- * prevent. With this type, the next provider added to the union is a COMPILE
- * ERROR here rather than a key on screen.
- */
-/**
  * The design system's stand-by lines — deliberately unhurried, which is the
  * right register for a thing that reads a fleet. The system ships five; the
  * three named on the new-chat sheet are used here, cycled. Ellipsis and the
@@ -351,7 +339,6 @@ const PROVIDER_LABELS: Record<AIProvider, string> = {
   google: 'Gemini',
   ollama: 'Ollama',
   'local-gateway': 'Gateway',
-  power: 'WP Engine Power',
 };
 
 /**

@@ -86,7 +86,7 @@ const CapabilityGrantSchema = z.object({
 export const UpdateSettingsSchema = z.object({
   autoIndex: z.boolean().optional(),
   excludedSiteIds: z.array(SiteIdSchema).optional(),
-  aiProvider: z.enum(['anthropic', 'openai', 'ollama', 'google', 'local-gateway', 'power']).optional(),
+  aiProvider: z.enum(['anthropic', 'openai', 'ollama', 'google', 'local-gateway']).optional(),
   aiModel: z.string().optional(),
   onboardingDismissed: z.boolean().optional(),
   useLocalGateway: z.boolean().optional(),

@@ -92,13 +92,16 @@ describe('UpdateSettingsSchema — known fields are accepted', () => {
     })).not.toThrow();
   });
 
-  it('accepts aiProvider "power" with a slashed model id (IW Phase 1)', () => {
+  it('accepts a slashed model id', () => {
+    // Was "accepts aiProvider 'power' with a slashed model id (IW Phase 1)".
+    // v0.6.0 removed 'power' from the enum, but the slash concern is unrelated
+    // to which provider is set and is still worth pinning: a `vendor/model` id
+    // must survive strict-mode parsing.
     const result = validateInput(UpdateSettingsSchema, {
-      aiProvider: 'power',
+      aiProvider: 'anthropic',
       aiModel: 'anthropic/claude-haiku-4-5',
     });
-    expect(result.aiProvider).toBe('power');
-    // The slash in a Power `provider/model` id must survive strict-mode parsing.
+    expect(result.aiProvider).toBe('anthropic');
     expect(result.aiModel).toBe('anthropic/claude-haiku-4-5');
   });
 
@@ -238,5 +241,17 @@ describe('Intelligent Web constants are absent (v0.6.0 excision)', () => {
 
   it('declares no IW storage key', () => {
     expect(Object.keys(constants.STORAGE_KEYS)).not.toContain('IW_SITE_BINDINGS');
+  });
+});
+
+describe("aiProvider no longer accepts 'power' (v0.6.0 excision)", () => {
+  it('rejects a write of power', () => {
+    expect(UpdateSettingsSchema.safeParse({ aiProvider: 'power' }).success).toBe(false);
+  });
+
+  it('still accepts every retained provider', () => {
+    for (const p of ['anthropic', 'openai', 'ollama', 'google', 'local-gateway']) {
+      expect(UpdateSettingsSchema.safeParse({ aiProvider: p }).success).toBe(true);
+    }
   });
 });

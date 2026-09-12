@@ -562,8 +562,7 @@ export default function main(context: any): void {
   // local-lightning.log (raw console.log goes nowhere under `open` — the
   // first verification grep proved it empty).
   localLogger.info(
-    `[NexusAI] chat providers: power=${process.env.NEXUS_POWER_AISDK === '0' ? 'hand-rolled' : 'ai-sdk'} ` +
-    `anthropic=${process.env.NEXUS_ANTHROPIC_AISDK === '0' ? 'hand-rolled' : 'ai-sdk'}`,
+    `[NexusAI] chat providers: anthropic=${process.env.NEXUS_ANTHROPIC_AISDK === '0' ? 'hand-rolled' : 'ai-sdk'}`,
   );
 
   const chatService = new ChatService({

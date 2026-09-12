@@ -65,7 +65,7 @@ describe('UPDATE_SETTINGS — cross-branch field tolerance', () => {
       [STORAGE_KEYS.SETTINGS]: {
         autoIndex: true,
         excludedSiteIds: [],
-        aiProvider: 'power',
+        aiProvider: 'anthropic',
         aiModel: 'anthropic/claude-haiku-4-5',
         // Written by a different branch's addon build sharing this settings file.
         enableHubBridge: true,

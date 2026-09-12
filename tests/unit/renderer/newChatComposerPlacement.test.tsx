@@ -193,12 +193,25 @@ describe('the scope row and the disclosure travel WITH the composer', () => {
 });
 
 describe('the disclosure never renders a raw config key', () => {
-  it('names WP Engine Power, not "power"', () => {
+  it('names the provider, not its config key', () => {
+    // Was "names WP Engine Power, not 'power'". v0.6.0 removed that provider;
+    // the property under test is unchanged, so it is re-pinned on a retained one.
+    const chat = makeChat([]);
+    Object.assign(chat.state, { providerId: 'anthropic', model: 'x' });
+    const joined = JSON.stringify(chat.render());
+    expect(joined).toMatch(/Claude · sends site data/);
+    expect(joined).not.toMatch(/"anthropic · sends site data"/);
+  });
+
+  it('does not render a raw key for a provider removed in v0.6.0', () => {
+    // An upgrading user can still have providerId 'power' in state. It is now
+    // outside the union, so it must take the friendly fallback below rather
+    // than surfacing the config key on the one line whose job is disclosure.
     const chat = makeChat([]);
     Object.assign(chat.state, { providerId: 'power', model: 'x' });
     const joined = JSON.stringify(chat.render());
-    expect(joined).toMatch(/WP Engine Power · sends site data/);
     expect(joined).not.toMatch(/"power · sends site data"/);
+    expect(joined).toMatch(/your configured AI provider · sends site data/);
   });
 
   it('falls back to a phrase a person recognises for an id outside the union', () => {

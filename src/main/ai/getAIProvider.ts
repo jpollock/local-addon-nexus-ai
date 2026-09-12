@@ -18,7 +18,7 @@ const DEFAULT_MODELS: Record<string, string> = {
 };
 
 export interface ResolvedAIProvider {
-  /** Provider ID (an AIProvider union value): 'anthropic' | 'openai' | 'google' | 'ollama' | 'local-gateway' | 'power' */
+  /** Provider ID (an AIProvider union value): 'anthropic' | 'openai' | 'google' | 'ollama' | 'local-gateway' */
   provider: string;
   /** Model ID to use */
   model: string;
@@ -41,11 +41,21 @@ export interface ResolvedAIProvider {
  * @param storage   RegistryStorage instance (Local's userData wrapper).
  * @param settings  NexusSettings object — pass null if not yet loaded.
  */
+const KNOWN_PROVIDERS = new Set<string>(['anthropic', 'openai', 'google', 'ollama', 'local-gateway']);
+
 export function getAIProvider(
   storage: RegistryStorage,
   settings: NexusSettings | null | undefined,
 ): ResolvedAIProvider {
-  const provider      = settings?.aiProvider || 'anthropic';
+  // A stored aiProvider is never re-validated on read — UpdateSettingsSchema
+  // guards writes only — so an id removed in a later version survives in
+  // settings and would resolve to a provider the registry cannot serve.
+  // buildAgentContext's null-provider branch then substitutes a stub client
+  // that logs "provider unavailable" and returns '' on every run: the agent
+  // does not crash, it runs on its cron forever doing nothing. v0.6.0 removed
+  // 'power', so coerce anything unrecognised to the default instead.
+  const stored        = settings?.aiProvider;
+  const provider      = stored && KNOWN_PROVIDERS.has(stored) ? stored : 'anthropic';
   const model         = settings?.aiModel    || DEFAULT_MODELS[provider] || 'llama3.2';
   const useLocalGateway = settings?.useLocalGateway ?? false;
   const apiKey        = getApiKey(storage, provider) ?? '';
