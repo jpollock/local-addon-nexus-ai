@@ -44,6 +44,11 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    # A hung job otherwise burns GitHub's 360-minute default. On 2026-09-12 two
+    # shards sat in jest's shutdown for ~2 hours before being cancelled by hand.
+    # A shard is ~172 suites and finishes in minutes; 15 turns a hang into a
+    # fast, explicit failure instead of a job that merely sits there.
+    timeout-minutes: 15
     # SHARDED ACROSS FOUR RUNNERS. A single runner is 4 cores, so jest gets
     # maxWorkers=3 against 698 suites and 1,570 TypeScript files that ts-jest
     # compiles from cold on every run (only node_modules is cached, not jest's

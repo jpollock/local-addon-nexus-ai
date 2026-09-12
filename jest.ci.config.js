@@ -15,26 +15,36 @@ const KNOWN_FAILING = [];
 
 module.exports = {
   ...base,
-  // PARALLELISM. The base config sets detectOpenHandles: true, and jest treats
-  // that as an implicit --runInBand (@jest/core testSchedulerHelper.js: "if
-  // (runInBand || detectOpenHandles) return true" — it cannot detect leaks
-  // inside workers). CI therefore ran all ~685 suites one at a time in a single
-  // process; the 2026-09-12 run on develop was still going at 65 minutes.
+  // SERIAL, DELIBERATELY — do not set detectOpenHandles: false here again.
   //
-  // Measured on this repo, cold cache, same command, 8,979 tests:
-  //   serial (detectOpenHandles: true)   151s
-  //   parallel (detectOpenHandles: false) 104s
-  // — and the gap is wider on a 4-core runner, where serial cannot use the
-  // other cores at all and one long-lived process accumulates heap across every
-  // suite instead of recycling workers.
+  // The base config sets detectOpenHandles: true, which jest treats as an
+  // implicit --runInBand (@jest/core testSchedulerHelper.js: "detectOpenHandles
+  // makes no sense without runInBand, because it cannot detect leaks in
+  // workers"). That is load-bearing for this repo, and 2026-09-12 proved why.
   //
-  // Local `npm test` keeps detectOpenHandles ON: that is where a new native
-  // module handle leak should surface, per the rationale in CLAUDE.md. forceExit
-  // (inherited from the base config) still prevents a hang here.
+  // Overriding it to false here did make jest parallel — and hung CI. Evidence
+  // from the shard-1 job on that run:
   //
-  // NOT also disabling ts-jest diagnostics: measured at only 4s of the 104s, and
-  // tsconfig.json excludes `tests`, so ts-jest is the ONLY type-checking the
-  // test files get — the typecheck job's `tsc --noEmit` does not cover them.
-  detectOpenHandles: false,
+  //     PASS ...  (the 174th and last suite of the shard)
+  //     ...36 minutes of silence...
+  //     The operation was canceled.
+  //     Terminate orphan process: pid 2495 (node)   <- jest main
+  //     Terminate orphan process: pid 2531 (node)   <- worker
+  //     Terminate orphan process: pid 2532 (node)   <- worker
+  //     Terminate orphan process: pid 2538 (node)   <- worker
+  //
+  // Every suite reported. No "Test Suites:" summary was ever printed. The hang
+  // is in jest's SHUTDOWN, not in any test: forceExit (inherited, still on)
+  // acts on the main process, and the main process never got far enough to
+  // invoke it while workers held native handles open. Serial has no workers, so
+  // forceExit does its job — which is exactly the rationale CLAUDE.md records
+  // for turning it on.
+  //
+  // It was nondeterministic: all four shards carry 32-47 suites that touch
+  // better-sqlite3 or intelligence-host, and only two of them hung.
+  //
+  // Speed comes from SHARDING instead (see ci.yml): ~172 suites per shard
+  // rather than 698, which is a far larger win than parallelism was and does
+  // not reintroduce workers.
   testPathIgnorePatterns: [...base.testPathIgnorePatterns, ...KNOWN_FAILING],
 };
