@@ -4,8 +4,6 @@ import { OpenAIProvider } from './openai';
 import { AnthropicProvider } from './anthropic';
 import { GoogleProvider } from './google';
 import { LocalGatewayProvider } from './local-gateway';
-import { PowerProvider } from './power';
-import { PowerAiSdkProvider } from './power-aisdk';
 import { AnthropicAiSdkProvider } from './anthropic-aisdk';
 
 // ---------------------------------------------------------------------------
@@ -25,11 +23,6 @@ export function initializeProviders(): void {
     new OpenAIProvider(),
     new GoogleProvider(),
     new LocalGatewayProvider(),
-    // FLIPPED 2026-08-26 after the live parity drive (streamed chat with
-    // tool calls against real Power): the AI SDK implementation is the
-    // DEFAULT. NEXUS_POWER_AISDK=0 is the escape hatch to the hand-rolled
-    // client, kept one release cycle then deleted.
-    process.env.NEXUS_POWER_AISDK === '0' ? new PowerProvider() : new PowerAiSdkProvider(),
   ];
   for (const p of all) {
     providers.set(p.id, p);

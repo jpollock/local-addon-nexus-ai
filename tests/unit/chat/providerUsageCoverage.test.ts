@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const PROVIDERS = ['ollama', 'local-gateway', 'power'];
+const PROVIDERS = ['ollama', 'local-gateway'];
 const dir = path.join(__dirname, '../../../src/main/chat/providers');
 
 describe('every provider states its usage-reporting position', () => {

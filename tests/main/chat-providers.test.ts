@@ -3,7 +3,6 @@ import { OpenAIProvider } from '../../src/main/chat/providers/openai';
 import { AnthropicProvider } from '../../src/main/chat/providers/anthropic';
 import { GoogleProvider } from '../../src/main/chat/providers/google';
 import { LocalGatewayProvider } from '../../src/main/chat/providers/local-gateway';
-import { PowerProvider } from '../../src/main/chat/providers/power';
 import { initializeProviders, getProvider, listProviders } from '../../src/main/chat/providers/index';
 
 // ---------------------------------------------------------------------------
@@ -15,9 +14,11 @@ describe('Provider Registry', () => {
     initializeProviders();
   });
 
-  test('initializes five user-facing providers (local-gateway excluded from list)', () => {
+  test('initializes four user-facing providers (local-gateway excluded from list)', () => {
+    // anthropic, openai, google, ollama. Was five until v0.6.0 removed WP Engine
+    // Power; local-gateway is a routing layer and is filtered out of the list.
     const providers = listProviders();
-    expect(providers.length).toBe(5);
+    expect(providers.map((p) => p.id).sort()).toEqual(['anthropic', 'google', 'ollama', 'openai']);
   });
 
   test('can retrieve each provider by id', () => {
@@ -25,7 +26,6 @@ describe('Provider Registry', () => {
     expect(getProvider('anthropic')).not.toBeNull();
     expect(getProvider('openai')).not.toBeNull();
     expect(getProvider('google')).not.toBeNull();
-    expect(getProvider('power')).not.toBeNull();
     expect(getProvider('local-gateway')).not.toBeNull(); // still in registry, just not in listProviders()
   });
 
@@ -41,7 +41,6 @@ describe('Provider Registry', () => {
     expect(byId['anthropic'].requiresApiKey).toBe(true);
     expect(byId['openai'].requiresApiKey).toBe(true);
     expect(byId['google'].requiresApiKey).toBe(true);
-    expect(byId['power'].requiresApiKey).toBe(true);
     // local-gateway is excluded from listProviders() — verify it's absent
     expect(byId['local-gateway']).toBeUndefined();
   });
@@ -165,7 +164,6 @@ describe('All providers implement AIProvider interface', () => {
     new AnthropicProvider(),
     new GoogleProvider(),
     new LocalGatewayProvider(),
-    new PowerProvider(),
   ];
 
   test.each(providers.map((p) => [p.id, p]))('%s has id string', (_id, provider: any) => {
@@ -196,5 +194,32 @@ describe('All providers implement AIProvider interface', () => {
 
   test.each(providers.map((p) => [p.id, p]))('%s has validateKey method', (_id, provider: any) => {
     expect(typeof provider.validateKey).toBe('function');
+  });
+});
+
+// v0.6.0 excision. WP Engine Power is an unreleased internal inference surface
+// (api.ai.wpengine.com) and must not ship in a public npm package.
+describe('Power provider is absent (v0.6.0 excision)', () => {
+  // Its OWN beforeAll, deliberately. The registry is populated by
+  // initializeProviders() in another describe's beforeAll, and jest does not run
+  // that hook when -t filtering skips every test in its block — so without this
+  // the registry is empty and getProvider('power') returns null for the wrong
+  // reason. Verified: an earlier version of this suite passed against a tree
+  // that still had PowerProvider registered.
+  beforeAll(() => { initializeProviders(); });
+
+  it('does not resolve a power provider', () => {
+    // getProvider is `(id: string) => AIProvider | null` — it returns null for
+    // an unknown id, it does not throw.
+    expect(getProvider('power')).toBeNull();
+  });
+
+  it('lists no provider named for WP Engine Power', () => {
+    // listProviders() returns {id, displayName, requiresApiKey} only — it never
+    // carries a base URL, so asserting on the endpoint would pass vacuously.
+    // displayName ('WP Engine Power') is what would actually leak.
+    const listed = listProviders();
+    expect(listed.map((p) => p.id)).not.toContain('power');
+    expect(JSON.stringify(listed)).not.toMatch(/WP Engine Power/);
   });
 });
