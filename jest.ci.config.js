@@ -15,5 +15,26 @@ const KNOWN_FAILING = [];
 
 module.exports = {
   ...base,
+  // PARALLELISM. The base config sets detectOpenHandles: true, and jest treats
+  // that as an implicit --runInBand (@jest/core testSchedulerHelper.js: "if
+  // (runInBand || detectOpenHandles) return true" — it cannot detect leaks
+  // inside workers). CI therefore ran all ~685 suites one at a time in a single
+  // process; the 2026-09-12 run on develop was still going at 65 minutes.
+  //
+  // Measured on this repo, cold cache, same command, 8,979 tests:
+  //   serial (detectOpenHandles: true)   151s
+  //   parallel (detectOpenHandles: false) 104s
+  // — and the gap is wider on a 4-core runner, where serial cannot use the
+  // other cores at all and one long-lived process accumulates heap across every
+  // suite instead of recycling workers.
+  //
+  // Local `npm test` keeps detectOpenHandles ON: that is where a new native
+  // module handle leak should surface, per the rationale in CLAUDE.md. forceExit
+  // (inherited from the base config) still prevents a hang here.
+  //
+  // NOT also disabling ts-jest diagnostics: measured at only 4s of the 104s, and
+  // tsconfig.json excludes `tests`, so ts-jest is the ONLY type-checking the
+  // test files get — the typecheck job's `tsc --noEmit` does not cover them.
+  detectOpenHandles: false,
   testPathIgnorePatterns: [...base.testPathIgnorePatterns, ...KNOWN_FAILING],
 };
