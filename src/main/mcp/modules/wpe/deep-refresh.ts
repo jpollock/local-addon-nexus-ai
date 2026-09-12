@@ -12,7 +12,6 @@ import { McpToolHandler } from '../../types';
 import { requireLocalServices } from './helpers';
 import { isOperationAllowed, getEffectiveSettings } from '../../utils/operation-permissions';
 import { STORAGE_KEYS } from '../../../../common/constants';
-import type { IwSiteBinding } from '../../../../common/types';
 
 export const deepRefreshHandler: McpToolHandler = {
   definition: {
@@ -121,7 +120,6 @@ export const deepRefreshHandler: McpToolHandler = {
       ['users_can_register',     'users_can_register'],
       ['default_role',           'default_role'],
       ['WPLANG',                 'WPLANG'],
-      // IW / Power / Hub Plugin — KB post types and connection state
       ['wpe_kb_settings_post_types', 'wpe_kb_settings_post_types'],
       ['wpe_auth_registered',    'wpe_auth_registered'],
       ['wpe_auth_client_id',     'wpe_auth_client_id'],
@@ -170,34 +168,6 @@ export const deepRefreshHandler: McpToolHandler = {
       totalContentCount += n;
     }
 
-    // Persist IW (Intelligent Web / Power / Hub) connection state to IW_SITE_BINDINGS.
-    // Keyed by install name so KB tools can look up project_id without a local site.
-    const iwRegistered = wpSettingsMap['wpe_auth_registered'];
-    const iwClientId   = wpSettingsMap['wpe_auth_client_id'] ?? '';
-    const iwProjectId  = wpSettingsMap['wpe_auth_project_id'] ?? '';
-    const iwAccountId  = wpSettingsMap['wpe_auth_account_id'] ?? '';
-    const iwCopyReset  = !!wpSettingsMap['wpe_auth_copy_detected'];
-    const iwConnected  = !!(iwRegistered && iwClientId && !iwCopyReset);
-
-    const registryStorage = (services as any).registryStorage;
-    if (registryStorage && iwConnected && iwClientId) {
-      const bindings = (registryStorage.get(STORAGE_KEYS.IW_SITE_BINDINGS) ?? {}) as Record<string, IwSiteBinding>;
-      bindings[installName] = {
-        siteId:       installName,   // WPE install name used as the key
-        clientId:     iwClientId,
-        projectId:    iwProjectId,
-        accountId:    iwAccountId,
-        connectedAt:  Date.now(),
-      };
-      registryStorage.set(STORAGE_KEYS.IW_SITE_BINDINGS, bindings);
-    } else if (registryStorage && !iwConnected) {
-      // Remove stale binding if Hub was disconnected since last refresh
-      const bindings = (registryStorage.get(STORAGE_KEYS.IW_SITE_BINDINGS) ?? {}) as Record<string, IwSiteBinding>;
-      if (bindings[installName]) {
-        delete bindings[installName];
-        registryStorage.set(STORAGE_KEYS.IW_SITE_BINDINGS, bindings);
-      }
-    }
 
     try {
       [
@@ -374,13 +344,6 @@ export const deepRefreshHandler: McpToolHandler = {
 
     const errorNote = errors.length > 0 ? `\n\n⚠️ Partial errors: ${errors.join('; ')}` : '';
 
-    const iwLine = iwConnected
-      ? `- Power: Connected (project: ${iwProjectId || 'unknown'})`
-      : iwCopyReset
-        ? '- Power: Hub installed, credentials cleared (copy detected)'
-        : iwClientId
-          ? '- Power: Registered but copy-reset or missing credentials'
-          : '- Power: Hub Plugin not connected';
 
     const summary = [
       `✅ **${installName}** refreshed via SSH`,
@@ -390,7 +353,6 @@ export const deepRefreshHandler: McpToolHandler = {
       `- Admin email: ${adminEmail}`,
       `- ${postCount} published posts`,
       `- Settings: ${wpSettingsJsonStr ? Object.keys(JSON.parse(wpSettingsJsonStr)).length + ' keys collected' : 'unavailable'}`,
-      iwLine,
     ].join('\n') + errorNote;
 
     return { content: [{ type: 'text' as const, text: summary }] };

@@ -185,21 +185,6 @@ export async function setupSiteForAI(
   const enableOllama = provider === 'ollama';
   const useLocalGateway = !!(settings.useLocalGateway) && provider !== 'ollama';
 
-  // Power path: verify Hub is connected before proceeding
-  if (provider === 'power') {
-    const { getConnectionStatus } = await import('../iw/hub-connect');
-    const iwStatus = await getConnectionStatus(siteId, localServices);
-    if (!iwStatus.connected) {
-      const msg = 'Hub Plugin is not connected to Power. Complete the Hub connect flow first.';
-      logger.error(`${tag} ${msg}`);
-      return {
-        success: false, aiPlugin: 'failed', connectorPlugin: 'failed',
-        providerPlugins: 'skipped', gatewayProvider: 'skipped', ollamaProvider: 'skipped',
-        aiFeatures: 'skipped', credentials: 'skipped', acfAbilities: 'skipped', message: msg,
-      };
-    }
-  }
-
   // Step 0: Check WordPress version (AI plugin requires WP 7.0+)
   let wpVersion: string | null;
   try {

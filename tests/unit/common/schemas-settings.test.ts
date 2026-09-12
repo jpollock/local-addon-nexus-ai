@@ -224,3 +224,19 @@ describe('capabilityGrants survives the strict schema (WP-20b)', () => {
     expect(() => UpdateSettingsSchema.parse({ capabilityGrants: [{ capability: '' }] })).toThrow();
   });
 });
+
+// v0.6.0 excision — see the IW-absence block in tests/main/safety.test.ts.
+// These pin the shared surface: an ipc channel and a storage key outlive the
+// module that used them, and a renderer calling a dead channel fails silently
+// at runtime rather than at build time.
+describe('Intelligent Web constants are absent (v0.6.0 excision)', () => {
+  const constants = require('../../../src/common/constants');
+
+  it('declares no IW ipc channels', () => {
+    expect(Object.keys(constants.IPC_CHANNELS).filter((k: string) => k.startsWith('IW_'))).toEqual([]);
+  });
+
+  it('declares no IW storage key', () => {
+    expect(Object.keys(constants.STORAGE_KEYS)).not.toContain('IW_SITE_BINDINGS');
+  });
+});

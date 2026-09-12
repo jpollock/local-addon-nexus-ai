@@ -24,7 +24,6 @@ import { registerSentinelScanTools } from '../../../src/main/mcp/modules/sentine
 import { registerWpConnectorTools } from '../../../src/main/mcp/modules/wp-connector/index';
 import { registerFleetIntelligenceTools } from '../../../src/main/mcp/modules/fleet-intelligence/index';
 import { registerFleetLinkTools } from '../../../src/main/mcp/modules/fleet-links/index';
-import { registerIwTools } from '../../../src/main/mcp/modules/iw/index';
 import { registerTelemetryTools } from '../../../src/main/mcp/modules/telemetry-tools';
 import { registerTelemetryControlTools } from '../../../src/main/mcp/modules/telemetry-control-tools';
 import { registerNexusSettingsTools } from '../../../src/main/mcp/modules/nexus-settings';
@@ -46,7 +45,6 @@ function buildFullRegistry(): ToolRegistry {
   registerWpConnectorTools(registry);
   registerFleetIntelligenceTools(registry);
   registerFleetLinkTools(registry);
-  registerIwTools(registry);
   registerTelemetryTools(registry);
   registerTelemetryControlTools(registry);
   registry.register(createSearchToolsHandler(registry, () => undefined));

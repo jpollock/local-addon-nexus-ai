@@ -504,34 +504,6 @@ export interface SiteAIConfig {
 
 // ===== WPE Hub Integration (IW) Types =====
 
-/** Live connection status read from a site's wp_options via wp eval. */
-export interface IwConnectionStatus {
-  /** True when wp-content/plugins/wpe-hub/ exists (filesystem check). */
-  hubInstalled: boolean;
-  /** True when wpe_auth_registered=true AND wpe_auth_client_id is non-empty. */
-  connected: boolean;
-  /** True when wpe_auth_copy_detected is non-empty — site was cloned, auth cleared. */
-  copyReset: boolean;
-  /** wpe_auth_client_id, or null if not connected. */
-  clientId: string | null;
-  /** wpe_auth_project_id, or null if project picker not complete. */
-  projectId: string | null;
-  /** wpe_auth_account_id, or null — lazy, written on first token use after connect. */
-  accountId: string | null;
-  /** True when 'wpengine' connector is approved in wpai_connector_approvals — WP AI is set up with Power. */
-  wpEngineConnectorApproved: boolean;
-}
-
-/** Persisted binding in Nexus storage, keyed by local site ID. */
-export interface IwSiteBinding {
-  siteId: string;
-  clientId: string;
-  projectId: string;
-  /** May be empty string initially; populated after first token use. */
-  accountId: string;
-  connectedAt: number;
-}
-
 // ===== Chat Session Types =====
 
 export interface ChatSession {
