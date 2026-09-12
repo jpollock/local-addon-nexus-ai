@@ -2,9 +2,17 @@ name: CI
 
 # Quality gate (P1-1): lint + typecheck + tests + secret scan on every push and PR. Before this,
 # nothing ran the suite in CI and a tag could publish untested.
+#
+# BOTH long-lived branches are listed, and `develop` is the load-bearing one.
+# `develop` is where work lands and `main` only ever receives a release, so a
+# main-only trigger would gate the branch that changes least and leave the one
+# that changes daily untested. A solo maintainer pushes straight to `develop`
+# rather than opening a PR to themselves, so the `pull_request` trigger below
+# does not cover it either — that combination is how v0.5.2 came to ship from a
+# commit no CI run had ever seen.
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
 
 concurrency:
