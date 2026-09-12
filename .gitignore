@@ -5,7 +5,18 @@ node_modules
 lib/
 coverage/
 dist/
-models/all-MiniLM-L6-v2-quantized/model.onnx
+# ONNX weights are fetched at build time (package.yml fetches from the R2 cache
+# or falls back to `npm run download-model`) and must never be committed: they
+# are ~127 MB, over GitHub's hard 100 MB per-file limit, so a commit carrying
+# one cannot be pushed at all.
+#
+# This is a GLOB, not a per-model path, deliberately. The rules below used to
+# name all-MiniLM-L6-v2-quantized literally; when af7cec44 swapped the model to
+# bge-small-en-v1.5 the paths stopped matching, the 127 MB blob was committed,
+# and it sat in history for 1,536 commits until the first push attempt was
+# rejected. A glob cannot be defeated by renaming the model.
+models/**/*.onnx
+
 models/all-MiniLM-L6-v2-quantized/vocab.txt
 models/all-MiniLM-L6-v2-quantized/tokenizer_config.json
 *.tgz
