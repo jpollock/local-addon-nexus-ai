@@ -1,3 +1,33 @@
+// HERMETIC CONNECTION INFO — do not remove.
+//
+// The wizard issues GraphQL through rendererGql, whose getConnectionInfo()
+// reads `~/Library/Application Support/Local/graphql-connection-info.json` off
+// the REAL filesystem and throws "Could not connect to Local" when it is
+// absent (rendererGql.ts:31-32), before ever reaching fetch.
+//
+// That made this suite pass only on a machine with Local installed. It passed
+// on every developer Mac and failed on CI, where five tests reported
+// "Expected number of calls: >= 1, Received: 0" against a mocked global.fetch
+// that rendererGql never got far enough to call. It went unnoticed because CI
+// ran the suite serially and every run was cancelled before finishing; the
+// first run that completed (2026-09-12) surfaced it immediately.
+//
+// Reproduce the failure by removing the file from the equation:
+//   HOME=/tmp/empty-home npx jest tests/unit/renderer/external-host-add-wizard.test.tsx
+//
+// Only the connection-info read is faked; every other fs call passes through,
+// so this cannot mask an unrelated filesystem dependency.
+jest.mock('fs', () => {
+  const actual = jest.requireActual('fs');
+  return {
+    ...actual,
+    readFileSync: (p: any, ...rest: any[]) =>
+      String(p).endsWith('graphql-connection-info.json')
+        ? JSON.stringify({ url: 'http://127.0.0.1:1/graphql', authToken: 'test-token' })
+        : actual.readFileSync(p, ...rest),
+  };
+});
+
 import * as React from 'react';
 import { ExternalHostAddWizard } from '../../../src/renderer/components/settings/ExternalHostAddWizard';
 import { IPC_CHANNELS } from '../../../src/common/constants';
