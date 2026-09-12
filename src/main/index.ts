@@ -25,7 +25,6 @@ import { registerSentinelScanTools } from './mcp/modules/sentinel-scan/index';
 import { registerWpConnectorTools } from './mcp/modules/wp-connector/index';
 import { registerFleetIntelligenceTools } from './mcp/modules/fleet-intelligence/index';
 import { registerFleetLinkTools } from './mcp/modules/fleet-links/index';
-import { registerIwTools } from './mcp/modules/iw/index';
 import { registerTelemetryTools } from './mcp/modules/telemetry-tools';
 import { getGatewayUsageHandler } from './mcp/modules/ai-gateway/get-gateway-usage';
 import { registerTelemetryControlTools } from './mcp/modules/telemetry-control-tools';
@@ -527,7 +526,6 @@ export default function main(context: any): void {
   registerWpConnectorTools(registry);
   registerFleetIntelligenceTools(registry);
   registerFleetLinkTools(registry);
-  registerIwTools(registry);
   registerTelemetryTools(registry);
   registry.register(getGatewayUsageHandler);
   registerTelemetryControlTools(registry);

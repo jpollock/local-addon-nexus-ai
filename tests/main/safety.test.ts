@@ -180,11 +180,6 @@ describe('Tier-1 backfill for read-only tools (F4)', () => {
     'get_metrics',
     'compare_sites',
     'detect_drift',
-    'iw_fleet_status',
-    'iw_get_connection_status',
-    'iw_get_kb_collection',
-    'iw_list_kb_collections',
-    'iw_search_kb',
     'ask_ollama',
     'list_ollama_models',
     'nexus_get_settings',
@@ -282,5 +277,31 @@ describe('ConfirmationManager', () => {
     expect(manager.pendingCount).toBe(1);
     manager.generate('local_wpe_push', { siteId: '2' });
     expect(manager.pendingCount).toBe(2);
+  });
+});
+
+// v0.6.0 excision. Intelligent Web is an unreleased WP Engine product surface
+// and must not ship in a public npm package. Pinned as ABSENT rather than
+// merely deleted, so a future merge that reintroduces the module fails here
+// instead of at publish time, where the only signal is a rejected push.
+describe('Intelligent Web surface is absent (v0.6.0 excision)', () => {
+  it('declares no iw_* tier overrides', () => {
+    // Asserted against the real exported object, not a source grep: a grep
+    // passes if the constant is renamed, this does not.
+    const iwKeys = Object.keys(TIER_OVERRIDES).filter((k) => k.startsWith('iw_'));
+    expect(iwKeys).toEqual([]);
+  });
+
+  it('has no iw module directory', () => {
+    const fs = require('fs');
+    const path = require('path');
+    expect(fs.existsSync(path.join(__dirname, '../../src/main/mcp/modules/iw'))).toBe(false);
+  });
+
+  it('is not registered in the main entrypoint', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const src = fs.readFileSync(path.join(__dirname, '../../src/main/index.ts'), 'utf8');
+    expect(src).not.toMatch(/registerIwTools/);
   });
 });
