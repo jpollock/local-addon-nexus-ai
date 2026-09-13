@@ -6,34 +6,34 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="WP Engine authentication flow">
+        <meta name="description" content="Bring any SSH-reachable WordPress site into the fleet">
       
       
         <meta name="author" content="Jeremy Pollock">
       
       
-        <link rel="canonical" href="https://jpollock.github.io/local-addon-nexus-ai/cli/authentication/">
+        <link rel="canonical" href="https://jpollock.github.io/local-addon-nexus-ai/features/external-hosts/">
       
       
-        <link rel="prev" href="../mcp-setup/">
+        <link rel="prev" href="../procedures/">
       
       
-        <link rel="next" href="../commands/">
+        <link rel="next" href="../semantic-search/">
       
       
         
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
-        <title>Authentication - Nexus AI Documentation</title>
+        <title>External SSH Hosts - Nexus AI Documentation</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#authentication" class="md-skip">
+        <a href="#external-ssh-hosts" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Authentication
+              External SSH Hosts
             
           </span>
         </div>
@@ -270,13 +270,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../cli/" class="md-tabs__link">
           
   
   
@@ -372,11 +370,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../features/semantic-search/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../docked-panel/" class="md-tabs__link">
           
   
   
@@ -416,7 +416,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../reference/cli-command-reference/" class="md-tabs__link">
+        <a href="../../reference/whats-new-august-2026/" class="md-tabs__link">
           
   
   
@@ -761,31 +761,28 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
             
   
   
@@ -803,7 +800,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -821,7 +818,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../" class="md-nav__link">
+      <a href="../../cli/" class="md-nav__link">
         
   
   
@@ -849,7 +846,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../installation/" class="md-nav__link">
+      <a href="../../cli/installation/" class="md-nav__link">
         
   
   
@@ -877,7 +874,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../mcp-setup/" class="md-nav__link">
+      <a href="../../cli/mcp-setup/" class="md-nav__link">
         
   
   
@@ -902,146 +899,10 @@
                 
   
   
-    
-  
-  
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Authentication
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Authentication
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick Start
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Next Steps
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
   
   
     <li class="md-nav__item">
-      <a href="../commands/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Commands
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../examples/" class="md-nav__link">
+      <a href="../../cli/examples/" class="md-nav__link">
         
   
   
@@ -1069,175 +930,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../local-sites/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Local Sites
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../wpe-sites/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    WPE Sites
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../wp-cli/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    WP-CLI Integration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../bulk-operations/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Bulk Operations
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../error-handling/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Error Handling
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../performance/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Performance
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../troubleshooting/" class="md-nav__link">
+      <a href="../../cli/troubleshooting/" class="md-nav__link">
         
   
   
@@ -1354,34 +1047,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../mcp-tools/local-sites/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Local Sites
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../mcp-tools/wpe-sites/" class="md-nav__link">
         
   
@@ -1438,34 +1103,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../mcp-tools/search/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Search
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../mcp-tools/fleet/" class="md-nav__link">
         
   
@@ -1494,34 +1131,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../mcp-tools/telemetry/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Telemetry
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../mcp-tools/tool-schemas/" class="md-nav__link">
         
   
@@ -1530,34 +1139,6 @@
     
   
     Tool Schemas
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../mcp-tools/tool-matrix/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Capability Matrix
   
 
     
@@ -1667,62 +1248,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ui-addon/fleet-overview/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Fleet Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../ui-addon/site-finder/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Site Finder
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../ui-addon/wpe-management/" class="md-nav__link">
         
   
@@ -1731,34 +1256,6 @@
     
   
     WPE Management
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../ui-addon/bulk-operations/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Bulk Operations
   
 
     
@@ -1807,14 +1304,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ui-addon/keyboard-shortcuts/" class="md-nav__link">
+      <a href="../../ui-addon/preferences-wpe-access/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Keyboard Shortcuts
+    WPE Access Preferences
   
 
     
@@ -2036,34 +1533,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/vector-database/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Vector Database
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../architecture/shared-core/" class="md-nav__link">
         
   
@@ -2100,6 +1569,34 @@
     
   
     Smart Search Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/wpe-sync-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WPE Sync Architecture
   
 
     
@@ -2325,28 +1822,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
-        
-          
-          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
             
   
   
@@ -2364,7 +1864,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2382,7 +1882,199 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/semantic-search/" class="md-nav__link">
+      <a href="../docked-panel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Docked Panel & Citations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../procedures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedures & Grants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External SSH Hosts
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External SSH Hosts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-guarantees" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The guarantees
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../semantic-search/" class="md-nav__link">
         
   
   
@@ -2410,7 +2102,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/content-extraction/" class="md-nav__link">
+      <a href="../content-extraction/" class="md-nav__link">
         
   
   
@@ -2438,7 +2130,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/wp-cli-integration/" class="md-nav__link">
+      <a href="../wp-cli-integration/" class="md-nav__link">
         
   
   
@@ -2466,7 +2158,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/safety-system/" class="md-nav__link">
+      <a href="../safety-system/" class="md-nav__link">
         
   
   
@@ -2494,7 +2186,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/database-health/" class="md-nav__link">
+      <a href="../database-health/" class="md-nav__link">
         
   
   
@@ -2528,19 +2220,22 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8_10" >
         
           
-          <label class="md-nav__link" for="__nav_8_6" id="__nav_8_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8_10" id="__nav_8_10_label" tabindex="">
             
   
   
@@ -2558,8 +2253,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_10">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2576,7 +2271,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/smart-search/" class="md-nav__link">
+      <a href="../smart-search/" class="md-nav__link">
         
   
   
@@ -2604,7 +2299,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/smart-search/getting-started/" class="md-nav__link">
+      <a href="../smart-search/getting-started/" class="md-nav__link">
         
   
   
@@ -2632,7 +2327,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/smart-search/limitations/" class="md-nav__link">
+      <a href="../smart-search/limitations/" class="md-nav__link">
         
   
   
@@ -2902,6 +2597,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../reference/whats-new-august-2026/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What's New (Aug 2026)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../reference/cli-command-reference/" class="md-nav__link">
         
   
@@ -2930,14 +2653,42 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/tool-reference/" class="md-nav__link">
+      <a href="../../reference/permissions-access-control-v2/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Tool Reference
+    Permissions & Access Control
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/model-catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Catalog
   
 
     
@@ -2966,62 +2717,6 @@
     
   
     Telemetry & Privacy
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/faq/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    FAQ
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/wpe-access-control/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    WPE Access Control
   
 
     
@@ -3069,10 +2764,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#the-guarantees" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        The guarantees
       
     </span>
   </a>
@@ -3080,10 +2775,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-start" class="md-nav__link">
+  <a href="#what-works" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Start
+        What works
       
     </span>
   </a>
@@ -3091,10 +2786,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
+  <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Next Steps
+        See also
       
     </span>
   </a>
@@ -3121,19 +2816,44 @@
   
 
 
-<h1 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h1>
-<div class="admonition warning">
-<p class="admonition-title">Work in Progress</p>
-<p>This page is under construction. Check back soon for complete documentation.</p>
-</div>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
-<p>TODO: Add overview content</p>
-<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
-<p>TODO: Add quick start guide</p>
-<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<h1 id="external-ssh-hosts">External SSH Hosts<a class="headerlink" href="#external-ssh-hosts" title="Permanent link">&para;</a></h1>
+<p>Sites that are neither Local nor WP Engine — a client's shared host, a VPS —
+can join the fleet through a <code>~/.ssh/config</code> alias.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>nexus<span class="w"> </span>host<span class="w"> </span><span class="nb">test</span><span class="w"> </span>&lt;alias&gt;<span class="w">     </span><span class="c1"># check the connection, nothing registered</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>nexus<span class="w"> </span>host<span class="w"> </span>add<span class="w"> </span>&lt;alias&gt;<span class="w">      </span><span class="c1"># probe, list the WordPress installs found, pick which to register</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>nexus<span class="w"> </span>host<span class="w"> </span>list<span class="w">             </span><span class="c1"># what's registered</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>nexus<span class="w"> </span>host<span class="w"> </span>refresh<span class="w"> </span>&lt;alias&gt;<span class="w">  </span><span class="c1"># collect WP/PHP/plugin/theme metadata now (read-only)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>nexus<span class="w"> </span>host<span class="w"> </span>index<span class="w"> </span>&lt;alias&gt;<span class="w">    </span><span class="c1"># content-index for semantic search (read-only)</span>
+</code></pre></div>
+<p>Registered sites appear in the <strong>Sites</strong> tab and in fleet tools alongside
+local and WPE sites, addressed as <code>ssh:&lt;alias&gt;/&lt;site&gt;@&lt;environment&gt;</code>.</p>
+<h2 id="the-guarantees">The guarantees<a class="headerlink" href="#the-guarantees" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../../">Home</a></li>
-<li><a href="../../getting-started/">Getting Started</a></li>
+<li><strong>An alias is a connection, not a site</strong> — one login can host many installs;
+  registration lets you pick which ones count.</li>
+<li><strong>Nexus stores no key material and never writes to your server.</strong> The probe
+  is read-only; if key-based login isn't set up, Nexus prints the
+  <code>ssh-copy-id</code> command for <em>you</em> to run.</li>
+<li><strong>The registered environment is a write gate.</strong> A host registered as
+  <code>production</code> refuses writes even when addressed with a different suffix —
+  a target string can tighten the gate, never loosen it. Re-register with
+  <code>--env development</code> to enable writes.</li>
+<li><strong>Schedules are opt-in.</strong> Automatic metadata refresh and content indexing
+  are off by default; enable them in Settings → Sync Schedule (or
+  <code>nexus settings set externalRefreshAutoEnabled true</code>).</li>
+<li><strong>Unknown stays unknown.</strong> On hosts where the PHP version can't be read,
+  it is reported as unknown — never guessed — and such a host isn't health-
+  scored on data it doesn't have.</li>
+</ul>
+<h2 id="what-works">What works<a class="headerlink" href="#what-works" title="Permanent link">&para;</a></h2>
+<p>18 of the 22 <code>nexus wp</code> subcommands reach a registered host (the exceptions:
+<code>db scan/clean/report</code> and <code>users</code>, which are local-only by design). Fleet
+views, search, and the chat treat external sites as first-class once refreshed
+and indexed.</p>
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li>The full CLI detail: <a href="../../reference/cli-command-reference/">CLI Command Reference</a></li>
+<li><a href="../../reference/permissions-access-control-v2/">Permissions &amp; Access Control</a></li>
 </ul>
 
 
@@ -3225,7 +2945,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>
