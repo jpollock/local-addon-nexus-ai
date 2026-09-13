@@ -217,7 +217,25 @@ describe('OperationAuditLog — redaction and rotation', () => {
   });
 
   it('does not throw when the log path is unwritable', () => {
-    const log = new OperationAuditLog('/proc/nope/audit.log');
+    // A FILE standing where a DIRECTORY must be. That is a type error, not a
+    // permission check, so it fails identically on every platform and is
+    // unaffected by running as root — which a chmod-based unwritable path is
+    // not, since root bypasses the mode bits.
+    //
+    // This was '/proc/nope/audit.log'. macOS has no /proc at all, so the write
+    // failed instantly and the test passed. On Linux /proc is real procfs and
+    //
+    //     fs.mkdirSync('/proc/nope', { recursive: true })
+    //
+    // BLOCKS FOREVER — it neither returns nor throws, so log()'s try/catch
+    // never fires. That one call stalled CI's shard 1 after six suites and hung
+    // the job until it was killed; it went unseen for months because every
+    // earlier CI run was cancelled before reaching this suite, and it can never
+    // fail on a developer's Mac. Verified on linux/arm64 as uid 0: the old path
+    // hangs indefinitely, this one throws EEXIST/ENOTDIR in 0ms.
+    const blocker = path.join(dir, 'not-a-dir');
+    fs.writeFileSync(blocker, 'x');
+    const log = new OperationAuditLog(path.join(blocker, 'audit.log'));
     expect(() => log.log({ operation: 'o', target: 't', parameters: {}, outcome: 'success' })).not.toThrow();
   });
 
