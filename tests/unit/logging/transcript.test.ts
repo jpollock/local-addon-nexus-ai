@@ -36,7 +36,16 @@ describe('TranscriptWriter', () => {
   });
 
   it('never throws when the directory cannot be written', () => {
-    const w = new TranscriptWriter({ root: '/proc/nonexistent-nexus', runId: 'r_abc' });
+    // A FILE standing where a DIRECTORY must be: a type error, not a permission
+    // check, so it fails identically on every platform and is unaffected by
+    // running as root.
+    //
+    // Was '/proc/nonexistent-nexus'. macOS has no /proc, so this failed fast.
+    // On Linux /proc is real procfs and mkdirSync(root, {recursive:true}) BLOCKS
+    // FOREVER, so the guard below never runs. This hung CI's shard 3.
+    const blocker = path.join(root, 'not-a-dir');
+    fs.writeFileSync(blocker, 'x');
+    const w = new TranscriptWriter({ root: path.join(blocker, 'nope'), runId: 'r_abc' });
     expect(() => w.append({ turn: 1, role: 'prompt', model: 'm', content: 'x' })).not.toThrow();
   });
 
@@ -243,7 +252,11 @@ describe('TranscriptWriter', () => {
     const w = new TranscriptWriter({ root, runId: 'r_robust' });
     // Pathological input should not crash
     expect(() => {
-      w.append({ turn: 1, role: 'prompt', model: 'm', content: ' ￿' });
+      w.append({ turn: 1, role: 'prompt', model: 'm', content: String.fromCharCode(0, 0xFFFF) });
+      // NUL + U+FFFF, constructed at runtime. Written as source escapes they
+      // materialised as REAL bytes in this file: `file` reported it as `data`,
+      // grep treated it as binary and printed no lines, and that is how the
+      // /proc bug a few lines up survived a repo-wide sweep for /proc paths.
     }).not.toThrow();
   });
 });

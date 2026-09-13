@@ -46,7 +46,15 @@ describe('rotateIfNeeded', () => {
   });
 
   it('never throws on an unwritable path', () => {
-    expect(() => rotateIfNeeded('/proc/definitely/not/writable.log', 1, 3)).not.toThrow();
+    // Not a /proc path. rotateIfNeeded happens to stat() first and returns
+    // early, so '/proc/...' did not hang here the way it did in
+    // eventLog.test.ts and OperationAuditLog.test.ts — but it is the same
+    // fragile assumption (that /proc is absent, which is true only on macOS)
+    // and it would hang the moment this function grew an mkdir.
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-rot-unwritable-'));
+    const blocker = path.join(base, 'not-a-dir');
+    fs.writeFileSync(blocker, 'x');
+    expect(() => rotateIfNeeded(path.join(blocker, 'writable.log'), 1, 3)).not.toThrow();
   });
 });
 

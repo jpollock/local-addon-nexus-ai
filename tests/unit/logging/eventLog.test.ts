@@ -80,7 +80,18 @@ describe('EventLog', () => {
     // Logging must never be able to fail a run.
     const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      const log = new EventLog({ root: '/proc/nonexistent/nope', now: () => AT });
+      // A FILE standing where a DIRECTORY must be: a type error, not a
+      // permission check, so it fails identically everywhere and is unaffected
+      // by running as root.
+      //
+      // Was '/proc/nonexistent/nope'. macOS has no /proc, so this failed fast.
+      // On Linux /proc is real procfs and mkdirSync(root, {recursive:true})
+      // BLOCKS FOREVER — never returns, never throws — so the guard below never
+      // runs and jest hangs. This is what stalled CI's shard 3; the identical
+      // mistake in OperationAuditLog.test.ts stalled shard 1.
+      const blocker = path.join(root, 'not-a-dir');
+      fs.writeFileSync(blocker, 'x');
+      const log = new EventLog({ root: path.join(blocker, 'nope'), now: () => AT });
       expect(() => log.write({ level: 'ERROR', source: 'a', message: 'x' })).not.toThrow();
     } finally { spy.mockRestore(); }
   });
