@@ -205,6 +205,28 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
+      # TRUSTED PUBLISHING. GitHub mints a short-lived OIDC token proving that
+      # THIS workflow, in THIS repo, on THIS ref is what is publishing; npm
+      # verifies it against a publisher registered on the package. There is no
+      # stored credential to expire, rotate or leak, and npm attaches provenance
+      # to the published package automatically.
+      #
+      # This replaces secrets.NPM_TOKEN, which had not been used since v0.5.2 on
+      # 2026-07-27 and failed the v0.6.0 publish seven weeks later:
+      #
+      #     npm error code E404
+      #     npm error 404 Not Found - PUT .../@local-labs-jpollock%2f...
+      #
+      # npm answers a bad credential on a scoped package with 404 rather than
+      # 401, so it reads as "package missing" when it means "auth rejected".
+      # Everything else in that release succeeded - the tarballs were built,
+      # signed and uploaded, and the GitHub release published.
+      #
+      # REQUIRES a one-time registration on npmjs.com that cannot be done from
+      # here: package Settings -> Trusted Publisher -> GitHub Actions, naming
+      # this repository and this workflow file. The workflow filename must match
+      # package.yml exactly.
+      id-token: write
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -229,7 +251,16 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Trusted publishing needs a recent npm; the one bundled with the pinned
+      # Node 22 runtime predates OIDC support. Pinned rather than @latest so a
+      # release is not silently affected by an npm release the same day.
+      - name: Use an npm that supports trusted publishing
+        run: |
+          npm install -g npm@11
+          npm --version
+
       - name: Publish to npm
+        # No NODE_AUTH_TOKEN: authentication is the OIDC token granted by the
+        # id-token: write permission above. If this fails with E404, the trusted
+        # publisher is not registered on npmjs.com (see the note on permissions).
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
