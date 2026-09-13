@@ -5,11 +5,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased] — merged to main 2026-08-25
+## [0.6.0] — 2026-09-13
 
-The intelligence-spine chain (`poc/nexintelligence` → `-ux` → `-data`, 644
-commits) fast-forwarded onto main. Verified at merge: 675 test suites /
-9,317 tests green; eval registry 50 PASS / 0 FAIL.
+The first release since 0.5.2 (2026-07-27) — roughly 2,050 commits. Adds the
+intelligence layer, external SSH hosts, the agent runtime and the structured
+event log; removes two unreleased WP Engine surfaces that must not ship in a
+public package.
+
+**Upgrading:** if your AI provider was set to WP Engine Power it is reset to
+Anthropic on first launch — see *Removed* and *Notes*.
+
+### Removed
+- **WP Engine Intelligent Web (IW)** — seven MCP tools (`iw_connect_site`,
+  `iw_disconnect_site`, `iw_get_connection_status`, `iw_fleet_status`,
+  `iw_list_kb_collections`, `iw_get_kb_collection`, `iw_search_kb`), three IPC
+  channels, the Hub Plugin connect/disconnect flow and its site-tab status row.
+- **WP Engine Power as an AI provider** — the `power` provider, its gateway
+  route and its entry in the WP AI connector picker. **The picker now offers
+  two options, Local AI Gateway and Direct API**, where it previously offered
+  three. A site set up through Power shows the empty state and needs
+  reconfiguring on one of the remaining connectors.
+
+  Both are unreleased WP Engine product surfaces, and this addon is published
+  publicly on npm. A publish-time guard now inspects the packed tarball's
+  contents and refuses to publish if either reappears.
 
 ### Added
 - **Intelligence layer** — every fleet observation becomes a provenance-stamped
@@ -31,12 +50,33 @@ commits) fast-forwarded onto main. Verified at merge: 675 test suites /
 - **External SSH hosts** — `nexus host add` registers arbitrary SSH-reachable
   WordPress sites (`ssh:<alias>/<site>@<env>`), with opt-in metadata refresh
   and content indexing.
+- **Structured event log** — `nexus-YYYY-MM-DD.log` plus a per-agent slice
+  under `logs/agents/`, mode 0600, rotated by size. Answers "did my agent run,
+  what did it do, and why not" — a case that previously produced no output at
+  all. Times and filenames are local, so `tail -f nexus-$(date +%F).log`
+  follows the file being written.
+- **Agent inbox and auto-pause** — agent findings and failures become inbox
+  items, deduplicated per site; an agent that fails repeatedly without an
+  intervening success is paused rather than left running on its schedule.
+- **Daily LLM spend ceiling** — optional `dailyUsdBudget`, off by default.
+  Agent and chat calls record estimated cost and are refused once the day's
+  total reaches the limit. Rolls over at local midnight with no carry-over.
+- **Backup precondition for destructive operations** — a fresh backup is taken
+  before an overwrite proceeds, so "backup is newer than the last mutation"
+  holds by construction.
 - **Platform benchmark harness** (`tests/platform-bench/`) — comparative MCP
   evaluation with ground-truth keys and drift-refusing runs.
 
 ### Changed
 - **Vector store migrated LanceDB → sqlite-vec** (`vectors.db`); 13× faster at
   p50 with identical results.
+- **Fleet health scoring is honest about what it can measure.** A factor is
+  scored only where its inputs exist for that target, and the weights are
+  renormalised over the factors actually used; `factorsEvaluated` reports the
+  basis. Remote sites no longer score 0 on Local-only factors, and an unknown
+  PHP version is no longer defaulted to `8.0` — it reads as unknown and earns
+  no credit. Fleet-wide outdated counts report `null` rather than `0`, because
+  update availability is not persisted and a `0` reads as an all-clear.
 - **security-sentinel schedule honesty** — daily 03:00 cron (the 15-minute
   interval and `wpe:sync.completed` trigger were removed as the cause of
   overlapping fleet sweeps); settings UI no longer offers dead controls.
@@ -45,11 +85,35 @@ commits) fast-forwarded onto main. Verified at merge: 675 test suites /
   post counts, honest per-category bulk outcomes.
 - `js-yaml` moved to runtime dependencies (law/runbook loading).
 
+### Security
+- **`graph.db` and `vectors.db` are now 0600.** They were created
+  world-readable while holding customer emails, indexed site content and chat
+  transcripts.
+- **DNS-rebinding protection on every loopback server.** All three local HTTP
+  servers now require a loopback `Host` header and never echo a wildcard CORS
+  origin; two of the three previously did neither.
+
+### Fixed
+- **Audit trail records mutations again.** `operationAuditLog` was declared in
+  the service types but never assigned, so every `?.log()` call silently
+  no-opped and no audit file was ever written. The in-memory audit buffer was
+  likewise never flushed and was discarded on exit.
+
 ### Notes
 - New database `ledger.db` is created on startup (non-fatal if it fails); a
   one-shot graph backfill runs on first launch after upgrade.
+- **A stored `aiProvider` of `power` is coerced to `anthropic` on read.**
+  Settings are not re-validated on load, so without this an upgraded install
+  would resolve to a provider that no longer exists and every agent run would
+  quietly do nothing.
 - `post_count_by_type` values change on next refresh (now counts all public
   post types, not only `post`).
+
+---
+
+## [Unreleased]
+
+_Nothing yet._
 
 ---
 
