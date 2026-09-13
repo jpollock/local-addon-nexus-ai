@@ -27,6 +27,11 @@ jobs:
   package:
     needs: verify
     strategy:
+      # Without this, the first platform to fail cancels the other three and the
+      # run reports one problem instead of all of them. On 2026-09-13 the Windows
+      # checkout failure cancelled both macOS builds and Linux, so a dry run that
+      # existed to prove all four platforms build proved only that one did not.
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest

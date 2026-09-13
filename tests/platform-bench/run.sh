@@ -119,7 +119,13 @@ if [ -z "$EVAL_ID" ]; then
   echo "WARNING: no evalId in promptfoo output — run NOT archived (promptfoo exit $EVAL_EXIT)." >&2
   exit "$EVAL_EXIT"
 fi
-RUN_DIR="$BENCH_DIR/results/$EVAL_ID"
+# Colons are legal on macOS and Linux but ILLEGAL in Windows filenames, and
+# promptfoo mints evalIds carrying an ISO timestamp (eval-63x-2026-08-25T17:16:50).
+# Five such directories made `git checkout` abort outright on windows-2022 with
+# "error: invalid path", which failed the Windows leg of the release build before
+# it ran a single step. Sanitise the directory name; evalId itself is unchanged
+# inside results.json and manifest.json.
+RUN_DIR="$BENCH_DIR/results/$(echo "$EVAL_ID" | tr ':' '-')"
 mkdir -p "$RUN_DIR"
 cp "$OUT_JSON" "$RUN_DIR/results.json"
 node "$BENCH_DIR/manifest.js" "$EVAL_ID" "$RUN_DIR" "$GT_SNAPSHOT"

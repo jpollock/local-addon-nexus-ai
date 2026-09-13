@@ -1,6 +1,6 @@
 {
-  "evalId": "eval-cFK-2026-08-25T17:07:33",
-  "createdAt": "2026-08-25T17:10:18.793Z",
+  "evalId": "eval-63x-2026-08-25T17-16-50",
+  "createdAt": "2026-08-25T17:23:01.436Z",
   "harnessGitSha": "6c71086d38be2d6ef912d68fc356ca2d56bced9b",
   "harnessDirty": true,
   "benchModel": "claude-opus-5",
@@ -10,7 +10,7 @@
   "repeat": 3,
   "keysSha256": "32d59629ecee302d35514ca815694bbfa9365fb2f1e85242780aace86f86cd9e",
   "substrateSnapshot": {
-    "measuredAt": "2026-08-25T17:07:30.884Z",
+    "measuredAt": "2026-08-25T17:16:47.130Z",
     "sites": {
       "cedarvalehealt": {
         "providers_total": 60,
