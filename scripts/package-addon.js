@@ -124,6 +124,26 @@ fs.copyFileSync(
   path.join(stagingDir, 'package-lock.json'),
 );
 
+// Copy .npmrc alongside the lock file. Without it the `npm ci` below runs in a
+// bare temp directory with none of this repo's npm configuration, and this repo
+// sets `legacy-peer-deps=true`. package-lock.json was RESOLVED under that
+// setting, so a strict-peer `npm ci` reads the very same lock as out of sync:
+//
+//     npm ci can only install packages when your package.json and
+//     package-lock.json are in sync.
+//     Missing: react-dom@19.3.0 from lock file
+//     Invalid: lock file's react@19.2.5 does not satisfy react@19.3.0
+//
+// Nothing was wrong with the lock; the staging copy was just missing the config
+// that generated it. This failed every platform of the release build on
+// 2026-09-13 and is why v0.6.0 could not be packaged. Copying the file rather
+// than hardcoding --legacy-peer-deps keeps staging in step with the repo if that
+// configuration ever changes.
+const npmrcPath = path.join(projectRoot, '.npmrc');
+if (fs.existsSync(npmrcPath)) {
+  fs.copyFileSync(npmrcPath, path.join(stagingDir, '.npmrc'));
+}
+
 // Copy README.md if exists
 const readmePath = path.join(projectRoot, 'README.md');
 if (fs.existsSync(readmePath)) {
