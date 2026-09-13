@@ -297,6 +297,24 @@ npm run test:integration
 
 ### Writing Tests
 
+**Tests must not depend on the machine running them.** CI runs on Linux; most
+contributors are on macOS. A test that reads the developer's home directory,
+inherits the host's `process.platform`, or uses a path that exists on only one
+OS will pass locally and fail — or hang — in CI. Real examples from this
+repository, all of which passed on macOS for months:
+
+- reading `~/Library/Application Support/...` for a file that exists only
+  because Local is installed — mock the module that reads it
+- calling a function that branches on `process.platform` without pinning the
+  platform, so the assertion silently tested the other branch
+- using `/proc/nonexistent` as an "unwritable path" — macOS has no `/proc`, so
+  it fails fast, while on Linux `fs.mkdirSync('/proc/...', {recursive: true})`
+  **blocks forever** and hangs the whole suite
+
+For an unwritable path, put a *file* where a directory must be: that is a type
+error rather than a permission check, so it behaves identically everywhere and
+is unaffected by running as root (which CI containers often do).
+
 ```typescript
 describe('MyFeature', () => {
   describe('validation', () => {
@@ -380,6 +398,21 @@ that target the same site simultaneously.
 Closes #123
 ```
 
+### Branches
+
+This repository runs **develop / main**, adopted 2026-09-12:
+
+| branch | what it is |
+|---|---|
+| `develop` | Integration branch, and the repository default. All work lands here. |
+| `main` | The released line. Only ever receives a merge from `develop`, and every commit on it corresponds to a published version. |
+
+**Branch from `develop` and open PRs against `develop`.** Because it is the
+default branch, GitHub selects it automatically — you would have to change the
+base deliberately to target `main`.
+
+Releases are tagged on `main`. See *Release Process* below.
+
 ### Branch Naming
 
 - `feat/my-feature` - New feature
@@ -389,7 +422,7 @@ Closes #123
 
 ### Pull Requests
 
-1. **Create feature branch** from `main`
+1. **Create feature branch** from `develop`
 2. **Make changes** with clear commits
 3. **Add tests** for new functionality
 4. **Update documentation** if needed
@@ -433,15 +466,34 @@ Email security@wpengine.com with:
 
 ## Release Process
 
-1. **Update version in `package.json`**
-2. **Update `CHANGELOG.md`**
-3. **Run full test suite:** `npm test`
-4. **Build:** `npm run build`
-5. **Test in Local** with real sites
-6. **Commit:** `git commit -m "Release v1.2.0"`
-7. **Tag:** `git tag v1.2.0`
-8. **Push:** `git push && git push --tags`
-9. **Create GitHub Release** with changelog
+Pushing a `v*` tag is the release. `.github/workflows/package.yml` then builds
+four platform tarballs, signs them, uploads to R2, creates the GitHub Release
+and publishes to npm — **do not do those steps by hand.** Everything in the
+workflow is gated on `startsWith(github.ref, 'refs/tags/v')`, so nothing
+publishes until the tag exists.
+
+1. **Update `CHANGELOG.md`** on `develop` — move `[Unreleased]` into a dated
+   version heading and leave a fresh empty `[Unreleased]`.
+2. **Rehearse the build first:** run `package.yml` via `workflow_dispatch`
+   against `develop`. Every publishing step is tag-gated, so this builds all
+   four platforms and publishes nothing. It is the only way to find a
+   packaging problem *before* a tag exists — and it has earned its keep:
+   colon-bearing paths that Windows cannot check out, a missing `.npmrc` in the
+   staging copy, and Unix-only commands in the build scripts were each caught
+   this way, and each would otherwise have failed a release after the tag was
+   already pushed.
+3. **Bump the version** with `npm version <x.y.z> --no-git-tag-version`. The
+   `--no-git-tag-version` matters: the tag belongs on `main`, not on `develop`
+   where the bump is committed.
+4. **Push `develop`** and let CI pass.
+5. **Fast-forward `main`:** `git checkout main && git merge --ff-only develop`,
+   then push. `main` should equal `develop` exactly.
+6. **Tag on `main`** and push the tag:
+   `git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`
+7. **Watch the run.** If `publish-npm` fails, the tarballs, signatures, GitHub
+   Release and `latest.json` have all already succeeded — in-app updates work
+   and only the npm copy is missing. Re-running that one job is enough; no
+   re-tag, no rebuild.
 
 ## Getting Help
 
