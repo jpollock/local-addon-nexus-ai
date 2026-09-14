@@ -6,6 +6,7 @@ import { createLogger } from '../logging/Logger';
 import { AgentDbManager } from './AgentDbManager';
 import type { AgentDefinition } from '../agent-sdk/types';
 import type { ContributedToolRegistry, ContributedManifestEntry } from './ContributedToolRegistry';
+import { buildToolUniverse, collectAgentToolWarnings } from './agentToolValidation';
 
 const logger = createLogger('AgentRegistry');
 
@@ -90,6 +91,7 @@ export class AgentRegistry {
     private readonly contributedRegistry?: ContributedToolRegistry,
     private readonly dispatcher?: { clearCache(name: string): void },
     dbManager?: AgentDbManager,
+    private readonly toolRegistry?: { allToolNames(): string[] },
   ) {
     this.agentsDir = agentsDir;
     this.dbManager = dbManager ?? new AgentDbManager(agentsDir);
@@ -184,6 +186,20 @@ export class AgentRegistry {
     }
 
     logger.info(`AgentRegistry: loaded ${this.agents.size} agent(s)`);
+
+    // GH-47 — load-time validation of tools[] declarations. Warn-only: an agent with an
+    // unresolvable tool still loads; the warning names the fix before ctx.tools.invoke() fails
+    // at runtime with a generic error. Runs after ALL agents load so contributed tools
+    // registered by earlier loadManifest() calls are visible in the universe.
+    this.warnUnresolvedTools();
+  }
+
+  private warnUnresolvedTools(): void {
+    if (!this.toolRegistry && !this.contributedRegistry) return;
+    const universe = buildToolUniverse(this.toolRegistry, this.contributedRegistry);
+    for (const warning of collectAgentToolWarnings(this.list(), universe)) {
+      logger.warn(warning);
+    }
   }
 
   private async loadAgent(agentDir: string): Promise<void> {

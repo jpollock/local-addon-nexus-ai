@@ -972,7 +972,7 @@ export default function main(context: any): void {
           agentDbManager,
           eventLog,
         );
-        const agentRegistry = new AgentRegistry(AGENTS_DIR, contributedRegistry, dispatcher, agentDbManager);
+        const agentRegistry = new AgentRegistry(AGENTS_DIR, contributedRegistry, dispatcher, agentDbManager, registry);
 
         // AgentRunner constructs a per-agent NexusToolProvider in run() to enforce tool scope
         const agentRunner = new AgentRunner(

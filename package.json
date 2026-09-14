@@ -36,6 +36,8 @@
     "compile": "tsc -p .",
     "fixtures:procedures": "ts-node scripts/generate-procedure-fixtures.ts",
     "fixtures:procedures:check": "ts-node scripts/generate-procedure-fixtures.ts --check",
+    "generate:built-in-tools": "ts-node --transpile-only scripts/generate-built-in-tools.ts",
+    "generate:built-in-tools:check": "ts-node --transpile-only scripts/generate-built-in-tools.ts --check",
     "fixtures:citations": "ts-node scripts/generate-citation-fixtures.ts",
     "fixtures:citations:check": "ts-node scripts/generate-citation-fixtures.ts --check",
     "fixtures:return-copy": "ts-node scripts/generate-return-copy.ts",

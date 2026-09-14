@@ -6,6 +6,7 @@
  * an agent that never reads `ctx.contextBundle` is unaffected in every way.
  */
 import type { ContextBundle } from '../../intelligence';
+import type { BuiltInTool } from './built-in-tools';
 
 export interface CronTrigger {
   type: 'cron';
@@ -161,7 +162,10 @@ export interface AgentDefinition {
   version: string;
   description?: string;
   triggers: Trigger[];
-  tools?: string[];           // declared tool names; undefined/empty = no tool access
+  // GH-50: BuiltInTool gives IDE autocomplete + a compile-time hint for built-ins, while
+  // `string & {}` keeps arbitrary contributed-tool strings legal WITHOUT collapsing literal
+  // completions the way plain `string` would.
+  tools?: Array<BuiltInTool | (string & {})>;  // declared tool names; undefined/empty = no tool access
   model?: string;             // default: inherits from Nexus settings
   timeoutMs?: number;         // default: 300_000 (5 min)
   contributes?: AgentContributes;  // contributed tools for function/daemon dispatch
