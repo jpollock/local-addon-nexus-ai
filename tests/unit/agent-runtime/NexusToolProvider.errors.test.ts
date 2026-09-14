@@ -24,18 +24,34 @@ describe('agent tool invoke error messages (GH-49)', () => {
     expect(registry.call).not.toHaveBeenCalled();
   });
 
-  it('contributed tool with no dispatcher says which agent contributes it and what is missing', async () => {
-    const registry = makeRegistry();
+  it('contributed tool with no dispatcher: audit entry kept, built-in failure surfaced (QA F1/F2)', async () => {
+    const registry = {
+      call: jest.fn(async () => ({
+        content: [{ type: 'text', text: 'prerequisites not met: site offline' }],
+        isError: true,
+      })),
+    };
+    const auditEntries: any[] = [];
     const services = {
       contributedRegistry: {
-        list: () => [{ toolName: 'get_log_aggregates', agentName: 'log-processor', permissionTier: 1 }],
+        list: () => [{ toolName: 'get_log_aggregates', agentName: 'log-processor', permissionTier: 2 }],
       },
       dispatcher: null,
+      auditLogger: { log: (e: any) => auditEntries.push(e) },
     };
     const provider = new NexusToolProvider(registry as never, services as never, undefined);
-    await expect(provider.invoke('get_log_aggregates', {})).rejects.toThrow(
-      /contributed by log-processor and cannot be called — dispatcher not available in this context/,
+    await expect(provider.invoke('get_log_aggregates', { siteId: 's1' })).rejects.toThrow(
+      /contributed by log-processor and cannot be called — dispatcher not available in this context\. \(built-in call failed: prerequisites not met: site offline\)/,
     );
+    // QA F1: the refusal must keep the error-audit entry the old generic path wrote —
+    // exactly one, carrying the refusal, tool identity, params, and duration.
+    expect(auditEntries).toHaveLength(1);
+    expect(auditEntries[0].result).toBe('error');
+    expect(auditEntries[0].toolName).toBe('log-processor/get_log_aggregates');
+    expect(auditEntries[0].tier).toBe(2);
+    expect(auditEntries[0].params).toEqual({ siteId: 's1' });
+    expect(auditEntries[0].error).toMatch(/dispatcher not available/);
+    expect(typeof auditEntries[0].duration_ms).toBe('number');
   });
 
   it('contributed tool WITH a dispatcher still routes (no false refusal)', async () => {
@@ -82,9 +98,25 @@ describe('ToolRegistry unknown-tool hint (GH-49)', () => {
     expect(result.isError).toBe(true);
     const text = result.content.find((c: any) => c.type === 'text')?.text ?? '';
     expect(text).toMatch(/^Unknown tool: "alpha_read_toll"\./);
+    expect(text).toContain('Registered tools:');
+    expect(text).not.toContain('Available tools:');
     expect(text).toContain('alpha_read_tool');
     expect(text).toContain('beta_search_tool');
     expect(text).not.toContain('wpe_delete_install');
+  });
+
+  it('caps suggestions at 15 with a +N suffix at the boundary (QA F3)', async () => {
+    const registry = new ToolRegistry();
+    for (let i = 0; i < 16; i++) {
+      registry.register({
+        definition: { name: `cap_tool_${String(i).padStart(2, '0')}`, description: 'd', inputSchema: { type: 'object' } },
+        execute: async () => ({ content: [{ type: 'text', text: 'ok' }], isError: false }),
+      } as never);
+    }
+    const result = await registry.call('cap_tool_typo', {}, noopServices); // typo has no digits: the echoed name must not pollute the count
+    const text = result.content.find((c: any) => c.type === 'text')?.text ?? '';
+    expect(text.match(/cap_tool_\d+/g)).toHaveLength(15); // exactly 15 suggested names
+    expect(text).toContain('(+1 more)');
   });
 
   it('keeps the "Unknown tool:" prefix the safety wrapper classifies on', async () => {

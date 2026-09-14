@@ -208,7 +208,10 @@ export class ToolRegistry {
       const shown = available.slice(0, MAX_SHOWN);
       const more = available.length - shown.length;
       const hint = shown.length
-        ? ` Available tools: ${shown.join(', ')}${more > 0 ? ` (+${more} more)` : ''}.`
+        // "Registered", not "Available": allToolNames() includes tools whose prerequisites are
+        // currently unmet, which list(services) would filter out. Naming it honestly beats
+        // suggesting a tool that cannot run right now.
+        ? ` Registered tools: ${shown.join(', ')}${more > 0 ? ` (+${more} more)` : ''}.`
         : '';
       return {
         content: [{ type: 'text', text: `Unknown tool: "${name}".${hint}` }],
