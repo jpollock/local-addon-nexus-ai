@@ -357,8 +357,11 @@ export async function handleAgentInstall(
 
   // Validate the package name before shell interpolation to prevent injection attacks.
   // Accepts: plain names (e.g. "my-agent"), scoped names ("@scope/my-agent"),
-  // and optionally a version specifier ("my-agent@1.0.0", "@scope/pkg@^2").
-  if (!/^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*(@[^\s'"`;|&<>]+)?$/.test(pkg)) {
+  // and optionally a version specifier ("my-agent@1.0.0", "@scope/pkg@^2"). The version suffix
+  // is restricted to npm-range characters ONLY — no shell metacharacters ($ ( ) ` ; | & < >),
+  // because pkg is interpolated into a shell command below. "example@$(id)" must be REJECTED
+  // here, not passed to the shell.
+  if (!/^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*(@[A-Za-z0-9._~^><=,*+-]+)?$/.test(pkg)) {
     console.error(`Invalid package name: ${pkg}`);
     process.exit(1);
     return;
@@ -1142,11 +1145,12 @@ export async function handleAgentToolsBuild(agentPath?: string, checkOnly = fals
   const agentTsPath = pathMod.join(resolvedPath, 'agent.ts');
   const manifestPath = pathMod.join(resolvedPath, 'nexus.agent.yaml');
 
-  // Determine which file to load — prefer .js, fall back to .ts via ts-node
+  // Determine which file to load. AgentRegistry.loadAgent() prefers agent.ts when both exist —
+  // the build MUST read the same definition the runtime executes, or --check can certify a
+  // stale agent.js while the runtime loads a newer agent.ts. Same preference order as the
+  // registry: .ts first.
   let agentModulePath: string;
-  if (fsMod.existsSync(agentJsPath)) {
-    agentModulePath = agentJsPath;
-  } else if (fsMod.existsSync(agentTsPath)) {
+  if (fsMod.existsSync(agentTsPath)) {
     // Register ts-node using the same SDK alias as AgentRegistry
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1174,6 +1178,8 @@ export async function handleAgentToolsBuild(agentPath?: string, checkOnly = fals
       process.exit(1);
     }
     agentModulePath = agentTsPath;
+  } else if (fsMod.existsSync(agentJsPath)) {
+    agentModulePath = agentJsPath;
   } else {
     console.error(`No agent file found at ${agentJsPath} or ${agentTsPath}`);
     process.exit(1);
@@ -1189,12 +1195,18 @@ export async function handleAgentToolsBuild(agentPath?: string, checkOnly = fals
       contributes?: {
         tools?: Record<
           string,
-          { description: string; schema?: unknown; inputSchema?: Record<string, unknown>; executionMode?: string }
+          { description: string; schema?: unknown; inputSchema?: Record<string, unknown>; executionMode?: string; permissionTier?: number }
         >;
       };
     };
   };
   const def = mod.default ?? (mod as unknown as typeof mod.default);
+
+  if (!fsMod.existsSync(manifestPath) && checkOnly) {
+    console.error(`No nexus.agent.yaml at ${manifestPath} — nothing to check. Run: nexus agent tools build`);
+    process.exit(1);
+    return;
+  }
 
   if (!fsMod.existsSync(manifestPath)) {
     // Create a minimal manifest from the agent definition
@@ -1225,6 +1237,9 @@ export async function handleAgentToolsBuild(agentPath?: string, checkOnly = fals
     inputSchema: tool.schema
       ? zodToJsonSchema(tool.schema as any, { target: 'openApi3' })
       : (tool.inputSchema ?? {}),
+    // GH-54 QA F1: the per-tool tier override is load-bearing (AgentRegistry falls back to the
+    // agent tier when absent — a tier-2 tool silently becoming tier 1). Carry it when declared.
+    ...(tool.permissionTier !== undefined ? { permissionTier: tool.permissionTier } : {}),
   }));
 
   const raw = fsMod.readFileSync(manifestPath, 'utf8');

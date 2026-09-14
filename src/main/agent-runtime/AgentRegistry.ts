@@ -115,8 +115,6 @@ export class AgentRegistry {
   }
 
   private loadManifest(agentDir: string, def?: AgentDefinition): void {
-    if (!this.contributedRegistry) return;
-
     const manifestPath = path.join(agentDir, 'nexus.agent.yaml');
     if (!fs.existsSync(manifestPath)) return;
 
@@ -157,6 +155,10 @@ export class AgentRegistry {
 
     const tools = manifest.contributes?.tools;
     if (!tools?.length) return;
+    // The contributed registry is optional — but it is only needed for REGISTRATION. Manifest
+    // validation and the tools: drift warning above must run even without it (GH-54 QA F4), or
+    // an AgentRegistry built without a contributed registry would never drift-check.
+    if (!this.contributedRegistry) return;
 
     this.contributedRegistry.unregisterAgent(manifest.name);
     const agentTier = manifest.permissions?.tier ?? 1;
