@@ -65,7 +65,7 @@ describe('buildAgentContext', () => {
       // An empty tools list must not fall through to "undefined = unrestricted".
       expect((ctx.tools as any).getProviderToolDefinitions()).toEqual([]);
       await expect(ctx.tools.invoke('nexus_list_sites', {})).rejects.toThrow(
-        'Tool "nexus_list_sites" is not declared in this agent\'s tools list'
+        'Tool "nexus_list_sites" is not in this agent\'s tools[] declaration'
       );
     });
 

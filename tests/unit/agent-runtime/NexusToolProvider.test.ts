@@ -30,8 +30,9 @@ describe('NexusToolProvider', () => {
   it('throws for an undeclared tool', async () => {
     const registry = makeRegistry({ nexus_list_sites: () => [] });
     const provider = new NexusToolProvider(registry as any, fakeServices, ['nexus_list_sites']);
+    // GH-49: the refusal names the fix instead of a bare status.
     await expect(provider.invoke('wp_eval', {})).rejects.toThrow(
-      'Tool "wp_eval" is not declared in this agent\'s tools list'
+      'Tool "wp_eval" is not in this agent\'s tools[] declaration'
     );
     expect(registry.call).not.toHaveBeenCalled();
   });
@@ -113,7 +114,7 @@ describe('NexusToolProvider — empty allowedTools denies everything', () => {
     const registry = makeRegistry({ nexus_list_sites: () => [{ name: 'mysite' }] });
     const provider = new NexusToolProvider(registry as any, fakeServices, []);
     await expect(provider.invoke('nexus_list_sites', {})).rejects.toThrow(
-      'Tool "nexus_list_sites" is not declared in this agent\'s tools list'
+      'Tool "nexus_list_sites" is not in this agent\'s tools[] declaration'
     );
     expect(registry.call).not.toHaveBeenCalled();
   });
