@@ -58,3 +58,27 @@ export function collectAgentToolWarnings(
   }
   return warnings;
 }
+
+/** Difference between the yaml `tools:` list and the source `def.tools` list (GH-48). */
+export interface ManifestToolsDiff {
+  missingInYaml: string[];
+  extraInYaml: string[];
+}
+
+/**
+ * Compare a manifest's declared tools against the agent definition's. `null` = no drift, which
+ * includes an absent yaml list: older manifests legitimately omit `tools:`, and inventing a
+ * diff against an empty list would warn on every one of them.
+ */
+export function manifestToolsDrift(
+  manifestTools: readonly string[] | undefined,
+  defTools: readonly string[] | undefined,
+): ManifestToolsDiff | null {
+  if (manifestTools === undefined) return null;
+  const yamlSet = new Set(manifestTools);
+  const defSet = new Set(defTools ?? []);
+  const missingInYaml = (defTools ?? []).filter((t) => !yamlSet.has(t));
+  const extraInYaml = manifestTools.filter((t) => !defSet.has(t));
+  if (missingInYaml.length === 0 && extraInYaml.length === 0) return null;
+  return { missingInYaml, extraInYaml };
+}

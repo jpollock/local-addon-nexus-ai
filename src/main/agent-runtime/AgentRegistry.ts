@@ -6,7 +6,7 @@ import { createLogger } from '../logging/Logger';
 import { AgentDbManager } from './AgentDbManager';
 import type { AgentDefinition } from '../agent-sdk/types';
 import type { ContributedToolRegistry, ContributedManifestEntry } from './ContributedToolRegistry';
-import { buildToolUniverse, collectAgentToolWarnings } from './agentToolValidation';
+import { buildToolUniverse, collectAgentToolWarnings, manifestToolsDrift } from './agentToolValidation';
 
 const logger = createLogger('AgentRegistry');
 
@@ -16,6 +16,7 @@ const VALID_AGENT_NAME = /^[a-z0-9](?:[a-z0-9]|_(?!_)|-)*[a-z0-9]$|^[a-z0-9]$/;
 type AgentManifestWithContributes = {
   name: string;
   version?: string;
+  tools?: string[];
   contributes?: {
     tools?: ContributedManifestEntry[];
   };
@@ -113,7 +114,7 @@ export class AgentRegistry {
     }
   }
 
-  private loadManifest(agentDir: string): void {
+  private loadManifest(agentDir: string, def?: AgentDefinition): void {
     if (!this.contributedRegistry) return;
 
     const manifestPath = path.join(agentDir, 'nexus.agent.yaml');
@@ -135,6 +136,23 @@ export class AgentRegistry {
     if (!VALID_AGENT_NAME.test(manifest.name)) {
       logger.warn(`AgentRegistry: manifest name "${manifest.name}" is invalid — skipping (double underscore and uppercase are not allowed)`);
       return;
+    }
+
+    // GH-48 — yaml/source drift warning. The runtime allowlist comes from def.tools (source);
+    // the yaml `tools:` list is generated documentation. A divergence means the deployed yaml
+    // no longer describes the code that runs. Checked BEFORE the contributes early-return so
+    // agents with no contributed tools still get drift-checked. Absent yaml list = legacy
+    // manifest, not drift.
+    if (def) {
+      const drift = manifestToolsDrift(manifest.tools, def.tools);
+      if (drift) {
+        logger.warn(
+          `AgentRegistry: agent "${manifest.name}" nexus.agent.yaml tools: drift — ` +
+          `in source but not yaml: [${drift.missingInYaml.join(', ')}]; ` +
+          `in yaml but not source: [${drift.extraInYaml.join(', ')}]. ` +
+          `Regenerate: nexus agent tools build ${manifest.name}`,
+        );
+      }
     }
 
     const tools = manifest.contributes?.tools;
@@ -224,8 +242,9 @@ export class AgentRegistry {
       }
       this.agents.set(def.name, def);
       logger.info(`AgentRegistry: registered "${def.name}" v${def.version}`);
-      // Also load contributed tools from YAML manifest if present
-      this.loadManifest(agentDir);
+      // Also load contributed tools from YAML manifest if present — and compare its tools:
+      // list against the definition we just loaded (GH-48 drift warning)
+      this.loadManifest(agentDir, def);
     } catch (err: any) {
       logger.error(`AgentRegistry: failed to load agent at ${agentDir}: ${err.message}`);
     }
