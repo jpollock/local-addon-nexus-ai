@@ -84,8 +84,47 @@ describe('agentToolValidation (GH-47)', () => {
         tmpDir, stubContributed, undefined, undefined, stubToolRegistry,
       );
       await registry.load();
-      expect(spy.mock.results[0]?.value ?? []).toEqual([]);
+      // Non-vacuous: the collector MUST have run over the loaded agent and returned [].
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0][0].map((d: { name: string }) => d.name)).toEqual(['clean-agent']);
+      expect(spy.mock.results[0].value).toEqual([]);
+      expect(registry.list()).toHaveLength(1);
       spy.mockRestore();
+    });
+
+    it('a malformed non-array tools declaration degrades to a diagnostic, never rejects load()', async () => {
+      writeAgent(tmpDir, 'bad-tools-agent', `
+        module.exports = { default: {
+          name: 'bad-tools-agent', version: '1.0.0', triggers: [],
+          tools: 'local_list_sites',
+          run: async () => {},
+        } };
+      `);
+      writeAgent(tmpDir, 'healthy-agent', `
+        module.exports = { default: {
+          name: 'healthy-agent', version: '1.0.0', triggers: [],
+          tools: ['local_list_sites'],
+          run: async () => {},
+        } };
+      `);
+      const spy = jest.spyOn(validation, 'collectAgentToolWarnings');
+      const registry = new AgentRegistry(
+        tmpDir, undefined, undefined, undefined, stubToolRegistry,
+      );
+      await expect(registry.load()).resolves.toBeUndefined();
+      expect(registry.list()).toHaveLength(2); // BOTH agents still loaded — warn-only holds
+      const warnings = spy.mock.results[0].value as string[];
+      expect(warnings.some((w) => w.includes('malformed tools declaration'))).toBe(true);
+      spy.mockRestore();
+    });
+
+    it('duplicate unknown declarations yield ONE warning', () => {
+      const universe = validation.buildToolUniverse(stubToolRegistry, stubContributed);
+      const warnings = validation.collectAgentToolWarnings(
+        [{ name: 'dup', version: '1', triggers: [], tools: ['fleet_sqll', 'fleet_sqll'], run: async () => {} } as never],
+        universe,
+      );
+      expect(warnings).toHaveLength(1);
     });
 
     it('skips validation entirely when no registry is wired', async () => {
