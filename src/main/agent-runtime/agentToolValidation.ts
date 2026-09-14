@@ -36,18 +36,37 @@ export function unresolvedTools(
   tools: readonly string[] | undefined,
   universe: ToolUniverse,
 ): string[] {
-  if (!tools || tools.length === 0) return [];
+  // A malformed declaration (tools: 'fleet_sql' — a string, not an array) degrades to
+  // "nothing resolvable here" instead of throwing: agents.load() must stay warn-only even for
+  // declarations that fail AgentRegistry's name/run shape check. AgentRegistry warns about the
+  // malformed shape separately.
+  if (!tools || !Array.isArray(tools) || tools.length === 0) return [];
   return tools.filter((name) => !universe.builtIn.has(name) && !universe.contributed.has(name));
 }
 
-/** One warning line per agent with unresolvable tools; empty array when everyone resolves. */
+/**
+ * One warning line per DISTINCT unknown tool per agent, in first-declaration order; empty array
+ * when everyone resolves. Malformed declarations (non-array tools) produce one diagnostic each
+ * instead of throwing — a bad agent must never reject the whole load.
+ */
 export function collectAgentToolWarnings(
   agents: readonly AgentDefinition[],
   universe: ToolUniverse,
 ): string[] {
   const warnings: string[] = [];
   for (const def of agents) {
+    if (def.tools !== undefined && !Array.isArray(def.tools)) {
+      warnings.push(
+        `AgentRegistry: agent "${def.name}" has a malformed tools declaration (expected an array, ` +
+        `got ${typeof def.tools}) — treating as no tools. Fix tools[] in defineAgent().`,
+      );
+      continue;
+    }
+    // F6: a name declared twice yields ONE warning, at its first occurrence's position.
+    const seen = new Set<string>();
     for (const name of unresolvedTools(def.tools, universe)) {
+      if (seen.has(name)) continue;
+      seen.add(name);
       warnings.push(
         `AgentRegistry: agent "${def.name}" declares unknown tool "${name}" — found in neither ` +
         `ToolRegistry (${universe.builtIn.size} built-ins) nor ContributedToolRegistry ` +
