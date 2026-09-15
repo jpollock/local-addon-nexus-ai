@@ -357,8 +357,11 @@ export async function handleAgentInstall(
 
   // Validate the package name before shell interpolation to prevent injection attacks.
   // Accepts: plain names (e.g. "my-agent"), scoped names ("@scope/my-agent"),
-  // and optionally a version specifier ("my-agent@1.0.0", "@scope/pkg@^2").
-  if (!/^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*(@[^\s'"`;|&<>]+)?$/.test(pkg)) {
+  // and optionally a version specifier ("my-agent@1.0.0", "@scope/pkg@^2"). The version suffix
+  // is restricted to npm-range characters ONLY — no shell metacharacters ($ ( ) ` ; | & < >),
+  // because pkg is interpolated into a shell command below. "example@$(id)" must be REJECTED
+  // here, not passed to the shell.
+  if (!/^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*(@[A-Za-z0-9._~^><=,*+-]+)?$/.test(pkg)) {
     console.error(`Invalid package name: ${pkg}`);
     process.exit(1);
     return;
@@ -1122,6 +1125,16 @@ agentToolsCommand
     }
   });
 
+/** JSON.stringify with object keys recursively sorted — key-order-independent deep equality. */
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : 1));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
 export async function handleAgentToolsBuild(agentPath?: string, checkOnly = false): Promise<void> {
   const fsMod = await import('fs');
   const pathMod = await import('path');
@@ -1132,11 +1145,12 @@ export async function handleAgentToolsBuild(agentPath?: string, checkOnly = fals
   const agentTsPath = pathMod.join(resolvedPath, 'agent.ts');
   const manifestPath = pathMod.join(resolvedPath, 'nexus.agent.yaml');
 
-  // Determine which file to load — prefer .js, fall back to .ts via ts-node
+  // Determine which file to load. AgentRegistry.loadAgent() prefers agent.ts when both exist —
+  // the build MUST read the same definition the runtime executes, or --check can certify a
+  // stale agent.js while the runtime loads a newer agent.ts. Same preference order as the
+  // registry: .ts first.
   let agentModulePath: string;
-  if (fsMod.existsSync(agentJsPath)) {
-    agentModulePath = agentJsPath;
-  } else if (fsMod.existsSync(agentTsPath)) {
+  if (fsMod.existsSync(agentTsPath)) {
     // Register ts-node using the same SDK alias as AgentRegistry
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1164,6 +1178,8 @@ export async function handleAgentToolsBuild(agentPath?: string, checkOnly = fals
       process.exit(1);
     }
     agentModulePath = agentTsPath;
+  } else if (fsMod.existsSync(agentJsPath)) {
+    agentModulePath = agentJsPath;
   } else {
     console.error(`No agent file found at ${agentJsPath} or ${agentTsPath}`);
     process.exit(1);
@@ -1175,15 +1191,22 @@ export async function handleAgentToolsBuild(agentPath?: string, checkOnly = fals
       name?: string;
       version?: string;
       description?: string;
+      tools?: string[];
       contributes?: {
         tools?: Record<
           string,
-          { description: string; schema?: unknown; inputSchema?: Record<string, unknown>; executionMode?: string }
+          { description: string; schema?: unknown; inputSchema?: Record<string, unknown>; executionMode?: string; permissionTier?: number }
         >;
       };
     };
   };
   const def = mod.default ?? (mod as unknown as typeof mod.default);
+
+  if (!fsMod.existsSync(manifestPath) && checkOnly) {
+    console.error(`No nexus.agent.yaml at ${manifestPath} — nothing to check. Run: nexus agent tools build`);
+    process.exit(1);
+    return;
+  }
 
   if (!fsMod.existsSync(manifestPath)) {
     // Create a minimal manifest from the agent definition
@@ -1214,18 +1237,31 @@ export async function handleAgentToolsBuild(agentPath?: string, checkOnly = fals
     inputSchema: tool.schema
       ? zodToJsonSchema(tool.schema as any, { target: 'openApi3' })
       : (tool.inputSchema ?? {}),
+    // GH-54 QA F1: the per-tool tier override is load-bearing (AgentRegistry falls back to the
+    // agent tier when absent — a tier-2 tool silently becoming tier 1). Carry it when declared.
+    ...(tool.permissionTier !== undefined ? { permissionTier: tool.permissionTier } : {}),
   }));
 
   const raw = fsMod.readFileSync(manifestPath, 'utf8');
   const manifest = yaml.load(raw) as Record<string, unknown>;
   manifest.contributes = { tools: toolEntries };
+  // GH-48: the top-level `tools:` list is generated from def.tools too — the agent SOURCE is the
+  // truth; yaml stays documentation. Before this, only `contributes` was regenerated, so the
+  // declared allowlist in the yaml could drift from the code that actually runs.
+  manifest.tools = def?.tools ?? [];
 
   const generated = `# AUTO-GENERATED by nexus agent tools build — do not edit this section manually\n${yaml.dump(manifest)}`;
 
   if (checkOnly) {
-    const existingRaw = fsMod.readFileSync(manifestPath, 'utf8');
-    if (existingRaw.trim() !== generated.trim()) {
-      console.error('nexus.agent.yaml contributes section is out of date. Run: nexus agent tools build');
+    // Compare SEMANTICS, not raw text: hand-annotated manifests carry header comments and key
+    // ordering the builder does not own, and a raw-text compare failed on those even with no
+    // drift. Only the fields this command generates — `contributes` and `tools` — are checked,
+    // deep-equal via a key-order-independent stable stringify.
+    const existing = yaml.load(raw) as Record<string, unknown>;
+    const expectedOwned = { contributes: { tools: toolEntries }, tools: def?.tools ?? [] };
+    const actualOwned = { contributes: existing.contributes ?? null, tools: existing.tools ?? [] };
+    if (stableStringify(actualOwned) !== stableStringify(expectedOwned)) {
+      console.error('nexus.agent.yaml is out of date (contributes and/or tools). Run: nexus agent tools build');
       process.exit(1);
     }
     console.log('nexus.agent.yaml is up to date.');
@@ -1233,7 +1269,7 @@ export async function handleAgentToolsBuild(agentPath?: string, checkOnly = fals
   }
 
   fsMod.writeFileSync(manifestPath, generated, 'utf8');
-  console.log(`Updated ${manifestPath} with ${toolEntries.length} contributed tool(s).`);
+  console.log(`Updated ${manifestPath} with ${toolEntries.length} contributed tool(s) and ${def?.tools?.length ?? 0} declared tool(s).`);
 }
 
 agentToolsCommand
