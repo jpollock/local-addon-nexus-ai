@@ -327,12 +327,18 @@ export class NexusToolProvider implements ToolProvider {
     // Audit log the invocation (mirrors McpSafetyWrapper.auditLog for the agent path)
     const duration_ms = Date.now() - startTime;
     if (result.isError) {
-      // Built-in registry didn't find the tool — try contributed tool routing.
+      // Only an explicitly absent built-in may enter contributed routing. `isError` also covers
+      // real built-in execution failures, which must be returned without invoking a second
+      // handler. The undefined branch keeps older structural test doubles/callers compatible;
+      // ToolRegistry itself now always returns a boolean marker.
       // Agents can call contributed tools from other agents (e.g. get_log_aggregates from
       // log-processor) by declaring them in their tools[] list. The dispatcher builds a
       // full agent context for the contributing agent and executes the handler.
       const errorText = result.content.find((c: any) => c.type === 'text')?.text ?? 'Tool error';
-      const contributed = this.services.contributedRegistry?.list().find(t => t.toolName === name);
+      const mayRouteContributed = result.notFound !== false;
+      const contributed = mayRouteContributed
+        ? this.services.contributedRegistry?.list().find(t => t.toolName === name)
+        : undefined;
       if (contributed && !this.services.dispatcher) {
         // GH-49 — distinguish "tool exists but its execution route is absent" from "unknown
         // tool": the developer declared a real contributed tool; what's missing is the

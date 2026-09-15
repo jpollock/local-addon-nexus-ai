@@ -1,5 +1,10 @@
 import type { McpToolDefinition } from '../mcp/types';
 import type { ExecutionMode } from '../agent-sdk/types';
+import { BUILT_IN_TOOL_NAMES } from '../agent-sdk/built-in-tools';
+import { createLogger } from '../logging/Logger';
+
+const logger = createLogger('ContributedToolRegistry');
+const builtInToolNames = new Set<string>(BUILT_IN_TOOL_NAMES);
 
 export type ContributedManifestEntry = {
   name: string;
@@ -21,6 +26,13 @@ export class ContributedToolRegistry {
   private tools = new Map<string, RegisteredTool>();
 
   register(agentName: string, entry: ContributedManifestEntry, permissionTier = 1): void {
+    if (builtInToolNames.has(entry.name)) {
+      logger.warn(
+        `ContributedToolRegistry: refusing tool "${agentName}/${entry.name}" because ` +
+        `"${entry.name}" is already registered as a built-in tool`,
+      );
+      return;
+    }
     const key = `${agentName}/${entry.name}`;
     this.tools.set(key, {
       agentName,
