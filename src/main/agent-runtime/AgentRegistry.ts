@@ -84,6 +84,7 @@ function ensureTsNodeRegistered(): void {
 
 export class AgentRegistry {
   private agents = new Map<string, AgentDefinition>();
+  private contributedAgentNames = new Set<string>();
   private agentsDir: string;
   readonly dbManager: AgentDbManager;
 
@@ -105,6 +106,7 @@ export class AgentRegistry {
    * Does NOT load agent code — use load() for that.
    */
   scan(): void {
+    this.clearContributedTools();
     if (!fs.existsSync(this.agentsDir)) return;
 
     const entries = fs.readdirSync(this.agentsDir, { withFileTypes: true });
@@ -112,6 +114,20 @@ export class AgentRegistry {
       if (!entry.isDirectory() || entry.name === 'node_modules') continue;
       this.loadManifest(path.join(this.agentsDir, entry.name));
     }
+  }
+
+  private clearContributedTools(): void {
+    if (!this.contributedRegistry) return;
+
+    for (const agentName of this.contributedAgentNames) {
+      this.unregisterContributedTools(agentName);
+    }
+  }
+
+  private unregisterContributedTools(agentName: string): void {
+    this.contributedRegistry?.unregisterAgent(agentName);
+    this.contributedAgentNames.delete(agentName);
+    this.dispatcher?.clearCache(agentName);
   }
 
   private loadManifest(agentDir: string, def?: AgentDefinition): void {
@@ -168,12 +184,14 @@ export class AgentRegistry {
       const toolTier = (tool as any).permissionTier ?? agentTier;
       this.contributedRegistry.register(manifest.name, tool, toolTier);
     }
+    this.contributedAgentNames.add(manifest.name);
     this.dispatcher?.clearCache(manifest.name);
     logger.info(`AgentRegistry: registered ${tools.length} contributed tool(s) for "${manifest.name}"`);
   }
 
   async load(): Promise<void> {
     this.agents.clear();
+    this.clearContributedTools();
     if (!fs.existsSync(this.agentsDir)) {
       fs.mkdirSync(this.agentsDir, { recursive: true });
       return;
@@ -284,13 +302,16 @@ export class AgentRegistry {
         logger.info(`AgentRegistry: change detected in "${agentName}" — reloading`);
 
         const agentDir = path.join(this.agentsDir, agentName);
+        // Hot reload is authoritative for this agent. Clear its old contribution snapshot before
+        // attempting to read the new manifest so missing, invalid, or empty manifests cannot leave
+        // stale tools (or their dispatch cache) behind.
+        this.unregisterContributedTools(agentName);
         if (!fs.existsSync(agentDir)) {
           // Directory removed — just unload
           if (this.agents.has(agentName)) {
             this.agents.delete(agentName);
             onUnload(agentName);
           }
-          this.contributedRegistry?.unregisterAgent(agentName);
           this.dbManager.closeAgent(agentName);
           return;
         }
