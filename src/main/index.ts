@@ -95,6 +95,7 @@ import { DaemonManager } from './agent-runtime/DaemonManager';
 import { ContributedToolRegistry } from './agent-runtime/ContributedToolRegistry';
 import { AgentDispatcher } from './agent-runtime/AgentDispatcher';
 import { AgentDbManager } from './agent-runtime/AgentDbManager';
+import { refreshAgentProvider } from './agent-runtime/refreshAgentProvider';
 import { AgentEventBus } from './agent-event-bus/AgentEventBus';
 import { InboxStore } from './inbox/InboxStore';
 import { CredentialManager } from './credentials/CredentialManager';
@@ -700,6 +701,11 @@ export default function main(context: any): void {
       syncCapabilityGrants({ core: intelligenceCore, storage: intelligenceStorage, logger: localLogger });
     }
 
+    // Provider changes are configuration, not background work. Refresh before the
+    // pause branch so both agent execution paths receive key/provider updates even
+    // while schedulers remain stopped.
+    refreshAgentProvider(registryStorage, nexusServices);
+
     const paused = isBackgroundWorkPaused();
 
     if (paused) {
@@ -773,19 +779,6 @@ export default function main(context: any): void {
     if (wpeContentIndexTimer) clearInterval(wpeContentIndexTimer);
     wpeContentIndexTimer = null;
     if (newContentEnabled) startWpeContentIndexScheduler(newContentHours);
-
-    // Re-resolve agent provider when settings change (API key rotation, provider switch).
-    // agentRunner/dispatcher are stored on nexusServices so they're accessible here even
-    // though both were declared in the conditional if (agentDb) block above. Both need this:
-    // AgentRunner.run() (the "Run Now" / scheduled path) and AgentDispatcher.dispatch() (the
-    // contributed-tool path, e.g. security-sentinel's Tier-3-gated `scan` MCP tool) each hold
-    // their own independent snapshot from construction time.
-    if (nexusServices.agentRunner || nexusServices.dispatcher) {
-      const updatedSettings = registryStorage.get(STORAGE_KEYS.SETTINGS) as import('../common/types').NexusSettings | null;
-      const updatedProvider = getAIProvider(registryStorage, updatedSettings);
-      nexusServices.agentRunner?.setProvider(updatedProvider);
-      nexusServices.dispatcher?.setProvider(updatedProvider);
-    }
   };
 
   // Exposed on the service container so the GraphQL resolver module — which
