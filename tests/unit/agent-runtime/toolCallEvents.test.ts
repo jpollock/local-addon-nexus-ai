@@ -78,7 +78,7 @@ describe('what counts as a mutation', () => {
     const call = eventsOf(lines, 'tool.call')[0];
     expect(call.fields.ok).toBe(false);
     expect(call.level).toBe('WARN');
-    expect(call.message).toMatch(/not declared/);
+    expect(call.message).toMatch(/tools\[\] declaration/);
   });
 
   it('DOES record a mutation when the tool ran and failed', async () => {

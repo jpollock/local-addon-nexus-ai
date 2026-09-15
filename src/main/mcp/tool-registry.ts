@@ -198,8 +198,23 @@ export class ToolRegistry {
     const handler = this.handlers.get(name);
     if (!handler) {
       logger.error(`Unknown tool: "${name}"`);
+      // GH-49 — keep the "Unknown tool:" prefix (mcp-safety-wrapper classifies errors by it),
+      // then tell the caller what IS callable. Tier 3 is never suggested: this hint must not
+      // advertise destructive tools to a caller that just mistyped one.
+      const available = this.allToolNames()
+        .filter(candidate => candidate !== name && getToolSafety(candidate).tier !== 3)
+        .sort();
+      const MAX_SHOWN = 15;
+      const shown = available.slice(0, MAX_SHOWN);
+      const more = available.length - shown.length;
+      const hint = shown.length
+        // "Registered", not "Available": allToolNames() includes tools whose prerequisites are
+        // currently unmet, which list(services) would filter out. Naming it honestly beats
+        // suggesting a tool that cannot run right now.
+        ? ` Registered tools: ${shown.join(', ')}${more > 0 ? ` (+${more} more)` : ''}.`
+        : '';
       return {
-        content: [{ type: 'text', text: `Unknown tool: "${name}"` }],
+        content: [{ type: 'text', text: `Unknown tool: "${name}".${hint}` }],
         isError: true,
       };
     }

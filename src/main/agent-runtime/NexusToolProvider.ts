@@ -212,7 +212,12 @@ export class NexusToolProvider implements ToolProvider {
   ): Promise<unknown> {
     // Enforce tool scope: if allowedTools is defined, only those tools are permitted
     if (this.allowedTools && !this.allowedTools.has(name)) {
-      throw new Error(`Tool "${name}" is not declared in this agent's tools list`);
+      // GH-49 — the message names the FIX, not just the refusal: the developer controls tools[]
+      // in defineAgent(), so the error should say exactly that.
+      throw new Error(
+        `Tool "${name}" is not in this agent's tools[] declaration. ` +
+        `Add it to tools[] in defineAgent() to allow access.`,
+      );
     }
 
     // Refuse Tier 3 (destructive) tools outright for agent callers. The Tier-3 confirmation
@@ -326,7 +331,32 @@ export class NexusToolProvider implements ToolProvider {
       // Agents can call contributed tools from other agents (e.g. get_log_aggregates from
       // log-processor) by declaring them in their tools[] list. The dispatcher builds a
       // full agent context for the contributing agent and executes the handler.
+      const errorText = result.content.find((c: any) => c.type === 'text')?.text ?? 'Tool error';
       const contributed = this.services.contributedRegistry?.list().find(t => t.toolName === name);
+      if (contributed && !this.services.dispatcher) {
+        // GH-49 — distinguish "tool exists but its execution route is absent" from "unknown
+        // tool": the developer declared a real contributed tool; what's missing is the
+        // dispatcher service in this context. QA F1: this refusal previously reached the
+        // generic error-audit below; the actionable message must keep that audit entry, so it
+        // is written HERE before throwing. QA F2: the built-in may have failed for its own
+        // real reason (unavailable prerequisites, handler error) — surface it instead of
+        // letting the dispatcher complaint bury it.
+        const refusal =
+          `Tool "${name}" is contributed by ${contributed.agentName} and cannot be called — ` +
+          `dispatcher not available in this context.` +
+          (errorText !== 'Tool error' ? ` (built-in call failed: ${errorText})` : '');
+        this.services.auditLogger?.log({
+          timestamp: new Date().toISOString(),
+          toolName: `${contributed.agentName}/${name}`,
+          tier: (contributed.permissionTier ?? 1) as 1 | 2 | 3,
+          params: args,
+          confirmed: null,
+          result: 'error',
+          error: refusal,
+          duration_ms,
+        });
+        throw new Error(refusal);
+      }
       if (contributed && this.services.dispatcher) {
         // §D.7 · the caller is THIS run's agent, taken from the frame's actor
         // (kind-gated, then inverted) — the same derivation ToolRegistry uses,
@@ -362,7 +392,6 @@ export class NexusToolProvider implements ToolProvider {
         try { return JSON.parse(dispatchText); } catch { return dispatchText; }
       }
 
-      const errorText = result.content.find((c: any) => c.type === 'text')?.text ?? 'Tool error';
       this.services.auditLogger?.log({
         timestamp: new Date().toISOString(),
         toolName: name,
