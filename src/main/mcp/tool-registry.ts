@@ -14,6 +14,9 @@ import { upsertExternalProfile } from '../external/externalSiteStore';
 const logger = createLogger('ToolRegistry');
 const metrics = getMetrics();
 
+/** A registry response always says whether dispatch failed because the name was absent. */
+export type ToolCallResult = McpToolResult & { notFound: boolean };
+
 /**
  * Map a tool failure to a coarse telemetry category (P1-7). Category-only, never the message —
  * so no PII/secret reaches telemetry — turning previously-invisible tool failures into a signal
@@ -191,7 +194,7 @@ export class ToolRegistry {
      * collapsed-actor gap.
      */
     task?: { id?: string; causation?: string; actor?: { id: string; kind: 'agent' } },
-  ): Promise<McpToolResult> {
+  ): Promise<ToolCallResult> {
     const startTime = Date.now();
     logger.debug(`call: name="${name}" via ${accessMethod || 'unknown'}`, { args });
 
@@ -216,6 +219,7 @@ export class ToolRegistry {
       return {
         content: [{ type: 'text', text: `Unknown tool: "${name}".${hint}` }],
         isError: true,
+        notFound: true,
       };
     }
 
@@ -225,6 +229,7 @@ export class ToolRegistry {
       return {
         content: [{ type: 'text', text: `Tool "${name}" is not currently available (prerequisites not met)` }],
         isError: true,
+        notFound: false,
       };
     }
 
@@ -251,7 +256,7 @@ export class ToolRegistry {
               : 'blocked: tier-3 confirmation required, no valid _confirmationToken provided',
           });
         } catch { /* never throw from an audit path */ }
-        return gate.response!;
+        return { ...gate.response!, notFound: false };
       }
       handlerArgs = gate.cleanedArgs!;
     }
@@ -291,7 +296,7 @@ export class ToolRegistry {
       } catch { /* never throw from an audit path */ }
       // Deliberately NO `task.action.executed`: the call did not execute, and
       // WP-19's producer says a refusal is not an act.
-      return { content: [{ type: 'text', text: sequence.message }], isError: true };
+      return { content: [{ type: 'text', text: sequence.message }], isError: true, notFound: false };
     }
 
     // Execute handler (Tier 3 confirmation, if required, already gated above)
@@ -358,7 +363,7 @@ export class ToolRegistry {
       );
 
       logger.debug(`Handler "${name}" completed in ${duration}ms`, { isError: result.isError });
-      return result;
+      return { ...result, notFound: false };
     } catch (err) {
       const duration = Date.now() - startTime;
       const message = err instanceof Error ? err.message : String(err);
@@ -415,6 +420,7 @@ export class ToolRegistry {
       return {
         content: [{ type: 'text', text: `Tool error: ${message}` }],
         isError: true,
+        notFound: false,
       };
     }
   }
