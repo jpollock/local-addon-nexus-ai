@@ -42,3 +42,7 @@ until you explicitly approve a push.
 
 - [Procedures & Grants](procedures.md)
 - CLI: `nexus agent --help`
+
+## Build your own
+
+See [Agent SDK](agent-sdk.md) for writing and testing your own agent.

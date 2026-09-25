@@ -161,6 +161,7 @@ nav:
   - Features:
     - Docked Panel & Citations: features/docked-panel.md
     - Agents: features/agents.md
+    - Agent SDK: features/agent-sdk.md
     - Procedures & Grants: features/procedures.md
     - External SSH Hosts: features/external-hosts.md
     - Semantic Search: features/semantic-search.md
