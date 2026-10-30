@@ -31,6 +31,8 @@ export interface AIProvider {
   readonly displayName: string;
   readonly requiresApiKey: boolean;
   readonly defaultModels: string[];
+  /** Maximum number of tools the provider accepts in one chat request. */
+  readonly maxTools?: number;
 
   streamChat(
     messages: ChatMessage[],
