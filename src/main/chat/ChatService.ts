@@ -141,6 +141,7 @@ export class ChatService {
       this.emit(sessionId, { type: 'error', message: `Unknown provider: ${providerConfig.providerId}` });
       return;
     }
+    const toolLimit = provider.maxTools;
 
     let session = this.sessions.get(sessionId);
 
@@ -171,7 +172,7 @@ export class ChatService {
     // unrestricted set: today only a grants list can withhold; any future
     // bound must flow through the same count or it reintroduces the silent
     // 2026-08-25 failure.
-    const sentTools = adaptToolsForChat(this.registry, this.services, assembly?.grants);
+    const sentTools = adaptToolsForChat(this.registry, this.services, assembly?.grants, toolLimit);
     const fullCount = adaptToolsForChat(this.registry, this.services).length;
     const toolInfo = {
       toolNames: new Set(sentTools.map((t) => t.name)),
@@ -251,7 +252,7 @@ export class ChatService {
     // gated act this turn produces joins the assembly manifest on one
     // `WHERE correlation = ?`. Undefined whenever the layer contributed
     // nothing, which is the pre-WP-19 behaviour exactly.
-    await this.runAgentLoop(session, providerConfig.providerId, config, assembly?.grants, assembly?.taskId, assembly);
+    await this.runAgentLoop(session, providerConfig.providerId, config, assembly?.grants, assembly?.taskId, assembly, toolLimit);
   }
 
   /**
@@ -265,6 +266,7 @@ export class ChatService {
     grants?: string[],
     taskId?: string,
     assembly?: ChatAssemblyResult | null,
+    toolLimit?: number,
   ): Promise<void> {
     const provider = getProvider(providerId);
     if (!provider) return;
@@ -299,20 +301,10 @@ export class ChatService {
       // grant set could change mid-task without touching the message array.
       // Signature only in v0 — `grants` is always undefined (unrestricted),
       // which is today's behaviour exactly.
-      // Power gets the full toolset like every other provider. A 128-tool cap
-      // lived here for one day (502d3554) on the hypothesis that Power's
-      // Vertex-fronted route capped tools per request; three live probes
-      // (2026-08-25/26, spike-power-*-probe.mjs) exonerated count, content,
-      // bytes, request shape and model — the route accepts all 207 real
-      // schemas in the exact chat shape on sonnet-4-5 and sonnet-5. The cap's
-      // cost was silent and severe: the dropped registration-order tail held
-      // every agent__* tool, fleet_overview, and search_tools itself, so the
-      // model denied capabilities it had. If the route ever regresses, the
-      // failure is the actionable "incompatible with the selected model"
-      // sentence in power.ts — loud, not a silent amputation. History and
-      // probe results: powerToolCap.test.ts header,
-      // docs/planning/2026-08-26-chat-harness-plan.md (P1).
-      const tools = adaptToolsForChat(this.registry, this.services, turnGrants);
+      // Provider-specific bounds are applied after search_tools is pinned to
+      // the front, so OpenAI stays within its 128-tool request limit without
+      // losing the discovery escape hatch.
+      const tools = adaptToolsForChat(this.registry, this.services, turnGrants, toolLimit);
 
       // Stream the LLM response
       let assistantContent = '';

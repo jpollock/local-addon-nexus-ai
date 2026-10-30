@@ -3,6 +3,7 @@ import type { AIProvider, ChatProviderConfig, ProviderToolDefinition } from './t
 import { streamingRequest, apiRequest } from './http-utils';
 
 const OPENAI_BASE = 'https://api.openai.com/v1';
+export const MAX_OPENAI_TOOLS = 128;
 
 const finiteNumber = (v: unknown): number | undefined =>
   (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
@@ -26,6 +27,7 @@ export class OpenAIProvider implements AIProvider {
   readonly id = 'openai';
   readonly displayName = 'OpenAI';
   readonly requiresApiKey = true;
+  readonly maxTools = MAX_OPENAI_TOOLS;
   readonly defaultModels = ['gpt-5.6', 'gpt-5.5', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'o4-mini', 'o3'];
 
   async *streamChat(
@@ -62,7 +64,10 @@ export class OpenAIProvider implements AIProvider {
       return { role: m.role, content: m.content };
     });
 
-    const openaiTools = tools.length > 0 ? tools.map((t) => ({
+    // Keep a defensive bound here as well as in ChatService. Providers can be
+    // called directly in tests or by future integrations, and OpenAI rejects
+    // requests containing more than 128 tools before model execution begins.
+    const openaiTools = tools.length > 0 ? tools.slice(0, MAX_OPENAI_TOOLS).map((t) => ({
       type: 'function' as const,
       function: {
         name: t.name,
