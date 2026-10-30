@@ -21,6 +21,7 @@ export function adaptToolsForChat(
   registry: ToolRegistry,
   services: NexusServices,
   grants?: string[],
+  maxTools?: number,
 ): ProviderToolDefinition[] {
   const mcpTools: McpToolDefinition[] = registry.list(services);
 
@@ -60,7 +61,12 @@ export function adaptToolsForChat(
     ? [searchTool, ...granted.filter((t) => t.name !== 'search_tools')]
     : granted;
 
-  return withDiscovery.map((tool) => {
+  // Provider limits apply after discovery is pinned so `search_tools` remains
+  // available when a provider cannot accept the entire registry.
+  const limit = Number.isFinite(maxTools) ? Math.max(1, Math.floor(maxTools!)) : undefined;
+  const bounded = limit ? withDiscovery.slice(0, limit) : withDiscovery;
+
+  return bounded.map((tool) => {
     // Deep-clone the schema to avoid mutating the original
     const parameters = JSON.parse(JSON.stringify(tool.inputSchema));
 
