@@ -148,11 +148,11 @@ else
   echo "✓ Dependencies installed"
 
   # CRITICAL: Rebuild native modules for Electron
-  # better-sqlite3 must be compiled for Electron's Node (MODULE_VERSION 136)
+  # better-sqlite3 must be compiled for Electron's Node (MODULE_VERSION 146)
   # Use electron-rebuild from project root (it's a devDependency)
   echo "Rebuilding native modules for Electron..."
   cd "$PROJECT_ROOT"
-  npx electron-rebuild -v 37.8.0 -f -w better-sqlite3 --module-dir "$TEST_DIR/mock-addon" > /dev/null 2>&1
+  npx electron-rebuild -v 42.2.0 -f -w better-sqlite3 --module-dir "$TEST_DIR/mock-addon" > /dev/null 2>&1
   echo "✓ Native modules rebuilt for Electron"
 fi
 
