@@ -13,7 +13,7 @@ jest.mock('../../../src/main/chat/providers/http-utils', () => ({
 }));
 
 import { streamingRequest } from '../../../src/main/chat/providers/http-utils';
-import { OpenAIProvider } from '../../../src/main/chat/providers/openai';
+import { MAX_OPENAI_TOOLS, OpenAIProvider } from '../../../src/main/chat/providers/openai';
 import type { ChatMessage, ProviderStreamEvent } from '../../../src/common/chat-types';
 import type { ChatProviderConfig } from '../../../src/main/chat/providers/types';
 
@@ -67,5 +67,24 @@ describe('OpenAIProvider.streamChat — usage accumulation across chunks', () =>
 
     expect(done).toBeDefined();
     expect(done!.type === 'done' && done!.usage).toBeUndefined();
+  });
+
+  it('caps the OpenAI request at the provider tool limit', async () => {
+    mockStreamingRequest.mockReturnValue(linesFrom([
+      JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }),
+    ]));
+
+    const tools = Array.from({ length: MAX_OPENAI_TOOLS + 20 }, (_, index) => ({
+      name: index === 0 ? 'search_tools' : `tool_${index}`,
+      description: 'd',
+      parameters: { type: 'object', properties: {} },
+    }));
+
+    await drain(provider.streamChat(messages, tools, config, new AbortController().signal));
+
+    const request = mockStreamingRequest.mock.calls[0][0];
+    const body = JSON.parse(request.body);
+    expect(body.tools).toHaveLength(MAX_OPENAI_TOOLS);
+    expect(body.tools[0].function.name).toBe('search_tools');
   });
 });

@@ -50,6 +50,16 @@ describe('adaptToolsForChat · search_tools invariant', () => {
     const tools = adaptToolsForChat(makeRegistry(['alpha']), {} as any);
     expect(tools.map((t) => t.name)).toEqual(['alpha']);
   });
+
+  it('applies a provider cap after pinning search_tools', () => {
+    const tools = adaptToolsForChat(
+      makeRegistry(['alpha', 'search_tools', 'beta', 'gamma']),
+      {} as any,
+      undefined,
+      3,
+    );
+    expect(tools.map((t) => t.name)).toEqual(['search_tools', 'alpha', 'beta']);
+  });
 });
 
 // ── (b) + (c) — the prompt is honest about the payload ──────────────────────
