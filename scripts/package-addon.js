@@ -13,6 +13,10 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// Local 9.x embeds Electron 42.2.0 (NODE_MODULE_VERSION 146). The packaged
+// better-sqlite3 binary must target the same runtime or GraphService cannot boot.
+const ELECTRON_VERSION = '42.2.0';
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -192,7 +196,7 @@ console.log('Rebuilding native modules for Electron...');
 // Run from project root (where electron-rebuild is installed as devDep)
 // but target the staging directory
 // Windows: npx is a .cmd file and requires shell:true; args are hardcoded so no injection risk
-run('npx', ['electron-rebuild', '-v', '37.8.0', '-f', '-w', 'better-sqlite3', '--module-dir', stagingDir],
+run('npx', ['electron-rebuild', '-v', ELECTRON_VERSION, '-f', '-w', 'better-sqlite3', '--module-dir', stagingDir],
   { cwd: projectRoot, shell: process.platform === 'win32' });
 
 // ---------------------------------------------------------------------------
